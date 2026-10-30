@@ -5,6 +5,12 @@ import { z } from 'zod'
 import type { PoolClient } from 'pg'
 import type { Env } from './auth.js'
 import { pool } from './db.js'
+import { dnsGrantsSchema } from '@dedi-dash/protocol/dns'
+import { saveDnsGrants } from './dns.js'
+import {
+  serviceGrantsSchema,
+  normalizeServiceGrants,
+} from './service-permissions.js'
 import { digest, token, publicOrigin } from './security.js'
 import {
   administratorState,
@@ -20,6 +26,8 @@ export const projectPermissions = new Hono<Env>()
 export const memberBody = z
   .object({
     role: z.enum(['member', 'admin']),
+    service_grants: serviceGrantsSchema.optional(),
+    dns_grants: dnsGrantsSchema.optional(),
     grants: z
       .array(grantSchema)
       .max(200)
@@ -66,12 +74,46 @@ async function saveGrants(
     )
 }
 
+async function saveServiceGrants(
+  db: PoolClient,
+  user: string,
+  project: string,
+  grants: z.infer<typeof serviceGrantsSchema> | undefined,
+) {
+  if (grants === undefined) return
+  for (const g of grants) {
+    if (
+      g.service !== null &&
+      !(
+        await db.query(
+          'SELECT 1 FROM services WHERE project_slug=$1 AND slug=$2',
+          [project, g.service],
+        )
+      ).rowCount
+    )
+      throw new HTTPException(400, {
+        message: 'Service does not belong to this project',
+      })
+  }
+  await db.query(
+    'DELETE FROM service_grants WHERE user_id=$1 AND project_slug=$2',
+    [user, project],
+  )
+  for (const g of normalizeServiceGrants(grants))
+    await db.query(
+      'INSERT INTO service_grants(user_id,project_slug,capability,service) VALUES($1,$2,$3,$4)',
+      [user, project, g.capability, g.service],
+    )
+}
+
 projectPermissions.get('/projects/:project/access', async (c) => {
   const project = c.req.param('project')
   const settings = await demandProjectAdmin(c.get('user'), project)
   const members = (
     await pool.query(
       `SELECT u.id,u.username,u.disabled,m.role,
+    COALESCE((SELECT json_agg(dg.rule) FROM dns_member_grants dg WHERE dg.user_id=u.id AND dg.project_slug=m.project_slug),'[]') AS dns_grants,
+    COALESCE((SELECT json_agg(json_build_object('capability',sg.capability,'service',sg.service) ORDER BY sg.capability,sg.service) FROM service_grants sg WHERE sg.user_id=u.id AND sg.project_slug=m.project_slug),'[]') AS service_grants,
     COALESCE((SELECT json_agg(json_build_object('capability',g.capability,'kind',g.kind,'connector_id',g.connector_id,'target',g.target) ORDER BY g.capability,g.kind,g.target)
       FROM container_grants g WHERE g.user_id=u.id AND g.project_slug=m.project_slug),'[]') AS grants
     FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.project_slug=$1 ORDER BY u.username`,
@@ -142,6 +184,8 @@ projectPermissions.post('/projects/:project/access/members', async (c) => {
         [user.id, project, body.role],
       )
       await saveGrants(db, user.id, project, body.grants)
+      await saveServiceGrants(db, user.id, project, body.service_grants)
+      await saveDnsGrants(db, actor, user.id, project, body.dns_grants)
       return { ok: true, ...(enrollmentUrl ? { enrollmentUrl } : {}) }
     },
   )
@@ -162,6 +206,8 @@ projectPermissions.put('/projects/:project/access/members/:id', async (c) => {
     if (!updated.rowCount)
       throw new HTTPException(404, { message: 'Member not found' })
     await saveGrants(db, id, project, body.grants)
+    await saveServiceGrants(db, id, project, body.service_grants)
+    await saveDnsGrants(db, actor, id, project, body.dns_grants)
     await protectAdministrators(db, before)
   })
   return c.json({ ok: true })

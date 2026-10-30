@@ -1,30 +1,37 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { projectSession, api } from '../api'
-import { Shell, Notice } from '../components'
+import { Shell } from '../components'
+import { DeploymentSettings } from '../deployments'
 export const Route = createFileRoute(
   '/projects/$projectSlug/applications/$appSlug',
 )({
   loader: async ({ params }) => {
     const context = await projectSession(params.projectSlug)
-    await api(`/projects/${params.projectSlug}/applications/${params.appSlug}`)
-    return context
+    const service = await api<{
+      name?: string
+      type?: 'application' | 'compose'
+      can_deploy?: boolean
+    }>(`/projects/${params.projectSlug}/applications/${params.appSlug}`)
+    return { ...context, service }
   },
   component: Page,
 })
 function Page() {
   const { projectSlug, appSlug } = Route.useParams()
+  const context = Route.useLoaderData()
   return (
     <Shell
-      {...Route.useLoaderData()}
+      {...context}
       project={projectSlug}
-      title={`Applications / ${appSlug}`}
+      active="services"
+      title={`Services / ${context.service.name ?? appSlug}`}
     >
-      <Notice title={appSlug}>
-        Application details are coming in a later update.{' '}
-        <a href={`/projects/${projectSlug}/compute/containers`}>
-          Back to containers
-        </a>
-      </Notice>
+      <DeploymentSettings
+        project={projectSlug}
+        application={appSlug}
+        canDeploy={context.user.admin || !!context.service.can_deploy}
+        serviceType={context.service.type}
+      />
     </Shell>
   )
 }

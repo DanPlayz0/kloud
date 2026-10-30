@@ -5,21 +5,34 @@ import { auth, requireUser, type Env } from './auth.js'
 import { dashboard } from './dashboard.js'
 import { publicOrigin } from './security.js'
 import { registerContracts } from './contracts.js'
+import { deploymentHooks, deployments } from './deployments.js'
 
 export const app = new OpenAPIHono<Env>()
-app.use(
-  '*',
+app.use('*', (c, next) =>
   bodyLimit({
-    maxSize: 65536,
+    maxSize: c.req.path.startsWith('/hooks/github/')
+      ? 2 * 1024 * 1024
+      : c.req.path.startsWith('/connectors/deployments/')
+        ? 350000
+        : 65536,
     onError: (c) => c.json({ error: 'Request too large' }, 413),
-  }),
+  })(c, next),
 )
 app.use('*', async (c, next) => {
   c.header('X-Content-Type-Options', 'nosniff')
   c.header('Cache-Control', 'no-store')
   if (
     !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
-    c.req.header('origin') !== publicOrigin
+    c.req.header('origin') !== publicOrigin &&
+    !(
+      /^\/hooks\/github\/[0-9a-f-]+$/.test(c.req.path) &&
+      c.req.method === 'POST'
+    ) &&
+    !(
+      /^\/connectors\/deployments\/(claim|[0-9a-f-]+\/result)$/.test(
+        c.req.path,
+      ) && c.req.method === 'POST'
+    )
   )
     return c.json({ error: 'Invalid request origin' }, 403)
   await next()
@@ -65,6 +78,8 @@ const healthRoute = createRoute({
 })
 
 app.openapi(healthRoute, (c) => c.json({ status: 'ok' as const }, 200))
+app.route('/', deploymentHooks)
+app.route('/', deployments)
 app.route('/', dashboard)
 
 app.use('/openapi.json', requireUser)

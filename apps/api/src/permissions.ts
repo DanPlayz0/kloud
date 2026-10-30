@@ -5,6 +5,7 @@ import { pool, transaction } from './db.js'
 import type { User } from './auth.js'
 
 export const serverCapabilities = [
+  'dns.manage',
   'users.manage',
   'projects.create',
   'projects.manage',
@@ -97,7 +98,9 @@ export const visibleContainer = `($2::boolean OR EXISTS (
   ) OR EXISTS (SELECT 1 FROM container_grants g
     WHERE g.user_id=$3 AND g.project_slug=inventory.project AND g.capability='view' AND
     (g.kind='all' OR (g.connector_id=inventory.connector_id AND
-      ((g.kind='id' AND g.target=inventory.container_id) OR (g.kind='name' AND g.target=inventory.data->>'name'))))))`
+      ((g.kind='id' AND g.target=inventory.container_id) OR (g.kind='name' AND g.target=inventory.data->>'name')))))
+    OR EXISTS (SELECT 1 FROM service_grants sg JOIN services s ON s.project_slug=sg.project_slug AND s.slug=inventory.application
+      WHERE sg.user_id=$3 AND sg.project_slug=inventory.project AND sg.capability='read' AND (sg.service IS NULL OR sg.service=s.slug)))`
 
 // All permission/account mutations share this lock. Re-read the actor after locking,
 // so a request waiting behind a revocation cannot use stale authority.

@@ -5,7 +5,7 @@ export const Route = createFileRoute('/admin/$section')({
   loader: async ({ params }) => {
     const user = await adminSession(params.section)
     if (
-      !['projects', 'users', 'connectors', 'containers'].includes(
+      !['projects', 'users', 'connectors', 'containers', 'dns'].includes(
         params.section,
       )
     )

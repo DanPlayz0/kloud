@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./dns": { "types": "./dns.d.ts", "default": "./dns.js" },
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"

@@ -5,6 +5,12 @@ export interface ConnectorConfig {
   token: string
   dockerSocket: string
   host: string
+  deploymentsEnabled: boolean
+  deploymentsDir: string
+  buildHelperImage: string
+  buildkitImage: string
+  buildMemoryMb: number
+  githubToken: string | undefined
 }
 
 function integer(
@@ -39,6 +45,19 @@ export function readConfig(
   if (!apiUrl.pathname.endsWith('/')) apiUrl.pathname += '/'
 
   return {
+    deploymentsEnabled: env.DEPLOYMENTS_ENABLED === 'true',
+    deploymentsDir: env.DEPLOYMENTS_DIR ?? './deployments',
+    buildHelperImage:
+      env.DEPLOYMENTS_HELPER_IMAGE ?? 'dedi-dash-build-helper:local',
+    buildkitImage:
+      env.DEPLOYMENTS_BUILDKIT_IMAGE ?? 'moby/buildkit:v0.28.0-rootless',
+    buildMemoryMb: integer(
+      env.DEPLOYMENTS_BUILD_MEMORY_MB,
+      2048,
+      'DEPLOYMENTS_BUILD_MEMORY_MB',
+      65536,
+    ),
+    githubToken: env.DEPLOYMENTS_GITHUB_TOKEN,
     apiUrl,
     pollIntervalMs: integer(
       env.POLL_INTERVAL_MS,

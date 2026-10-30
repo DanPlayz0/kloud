@@ -6,6 +6,7 @@ export interface User {
   capabilities?: ServerCapability[]
 }
 export const serverCapabilities = [
+  'dns.manage',
   'users.manage',
   'projects.create',
   'projects.manage',
@@ -14,6 +15,7 @@ export const serverCapabilities = [
 ] as const
 export type ServerCapability = (typeof serverCapabilities)[number]
 export const serverCapabilityLabels: Record<ServerCapability, string> = {
+  'dns.manage': 'Manage shared DNS providers and project delegations',
   'users.manage': 'Manage users',
   'projects.create': 'Create projects',
   'projects.manage': 'Manage all projects and project access',
@@ -23,6 +25,7 @@ export const serverCapabilityLabels: Record<ServerCapability, string> = {
 export const hasServer = (user: User, capability: ServerCapability) =>
   user.admin || !!user.capabilities?.includes(capability)
 export const adminCapabilities: Record<string, ServerCapability> = {
+  dns: 'dns.manage',
   users: 'users.manage',
   projects: 'projects.manage',
   connectors: 'connectors.manage',
@@ -43,11 +46,41 @@ export interface Grant {
   target: string | null
 }
 export interface ProjectMember {
+  dns_grants?: import('@dedi-dash/protocol/dns').DnsGrant[]
   id: string
   username: string
   disabled: boolean
   role: 'member' | 'admin'
   grants: Grant[]
+  service_grants?: ServiceGrant[]
+}
+export const serviceCapabilities = [
+  'read',
+  'create',
+  'update',
+  'delete',
+  'deploy',
+] as const
+export interface ServiceGrant {
+  capability: (typeof serviceCapabilities)[number]
+  service: string | null
+}
+export interface Service {
+  repository?: string | null
+  branch?: string | null
+  deployment_status?: 'queued' | 'running' | 'succeeded' | 'failed' | null
+  last_deployment?: string | null
+  slug: string
+  name: string
+  description: string
+  type: 'application' | 'compose'
+  can_update: boolean
+  can_delete: boolean
+  can_deploy: boolean
+}
+export interface ServiceList {
+  can_create: boolean
+  services: Service[]
 }
 export interface ProjectAccess {
   grant_mode: 'id' | 'name'

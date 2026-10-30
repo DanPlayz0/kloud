@@ -16,6 +16,7 @@ import {
 } from './api'
 import { Shell, usePolling, ErrorMessage, Notice, Icon } from './components'
 import { Users } from './components/users'
+import { DnsProviders } from './dns'
 type Connector = {
   id: string
   name: string
@@ -76,6 +77,7 @@ export function Admin({
     users: 'Users',
     connectors: 'Connectors',
     containers: 'Container inventory',
+    dns: 'DNS providers',
   }
   return (
     <Shell
@@ -101,7 +103,7 @@ export function Admin({
           </div>
         )}
         <fieldset className="admin-controls" disabled={busy}>
-          {section === 'projects' ? (
+          {section === 'dns' ? <DnsProviders projects={projectList} /> : section === 'projects' ? (
             <Projects
               revision={revision}
               action={action}

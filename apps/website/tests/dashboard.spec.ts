@@ -283,7 +283,7 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
     await member.getByLabel('Miki', { exact: true }).check()
     await member.getByRole('button', { name: 'Save access' }).click()
     await expect(page.getByRole('status')).toContainText('Changes saved')
-    await page.getByRole('button', { name: new RegExp(username) }).click()
+    await page.locator('.account-button').click()
     await page.getByRole('button', { name: 'Sign out', exact: true }).click()
     await expect(page).toHaveURL(/\/login/)
     expect(browserErrors).toEqual([])

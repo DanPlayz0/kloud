@@ -184,3 +184,101 @@ replacement transaction. Server receipt time defines freshness. Container IDs ar
 contain at most 5,000 unique containers and reject unknown fields. Environments,
 arbitrary Docker labels, credentials, and internal containers are never transmitted.
 The shared `@dedi-dash/protocol` package defines validation for both endpoints.
+
+## Services
+
+Migration 6 adds persistent Dockerfile application (`application`) and Compose
+(`compose`) services. All endpoints require a project session and mutations require
+the normal same-origin header.
+
+- `GET /projects/:project/services`: `{can_create,services}`. Rows include
+  `slug,name,description,type,project_slug,created,can_update,can_delete,can_deploy`;
+  `repository,branch,deployment_status,last_deployment` summarize its configured
+  source and latest deployment (nullable before configuration/deployment).
+  only services with effective read access are returned.
+- `POST /projects/:project/services`: `{slug,name,description?,type}`; requires
+  project-wide service create. Creators gain read/update/delete for their service.
+- `PUT /projects/:project/services/:service`: `{name,description?}`; requires
+  service update. Slugs and types are immutable.
+- `DELETE /projects/:project/services/:service`: requires service delete. Removes
+  the record, specific grants, deployment configuration, and builds. Running builds
+  return 409. Containers and volumes remain on the host.
+- `GET /projects/:project/services/:service/connectors`: `{id,name}[]` of active
+  connectors; requires service deploy.
+
+Project access responses include `service_grants` on each member. Member invitations
+and updates accept optional `service_grants: [{capability,service}]`, where capability
+is `read|create|update|delete|deploy` and service is a slug or `null` for project-wide
+access. Create requires `null`. Omission preserves existing service grants; `[]`
+clears them. Update/delete/deploy imply read for the same target. Unknown or
+cross-project service targets are rejected. Project administrators inherit all.
+
+## Deployments
+
+See [deployment setup](DEPLOYMENTS.md). Session endpoints require service read
+permission for GET, service deploy permission for mutations (administrators
+inherit these permissions), and normal same-origin protection:
+
+- `GET /projects/:project/applications/:application/deployment`: `null` or
+  `{id,config,webhook_url,builds}` with the latest 30 builds. Secrets are omitted.
+- `PUT` at the same path: validated deployment configuration (see shared
+  `deploymentSchema`); returns `{id,webhook_url,webhook_secret?}`. The secret is
+  returned only on creation. Active builds block edits with 409. Queued builds
+  are cancelled by edits.
+- `POST` at the same path with an empty body: rotate and return `{webhook_secret}`.
+  With `{commit: '<40-character SHA>'}`: enqueue a manual build and return
+  `{queued:true}`. Disabled deployment configurations return 409.
+
+Deployment configuration accepts optional `managed: true` for new service runtime
+creation. Managed targets require a registered service and reserved
+`container_name: dedi-<project>-<service>`; build kind must match the service type.
+Omitting `managed` preserves existing-container deployment behavior.
+
+Machine endpoints bypass browser origin/session checks and authenticate separately:
+
+- `POST /hooks/github/:id`: original GitHub JSON payload and
+  `X-Hub-Signature-256`; push events require `X-GitHub-Delivery`. Returns 202 with
+  `{queued}` for verified pushes (including duplicate deliveries), 200 for other
+  verified events, or 401 for invalid signatures. Maximum payload: 2 MiB.
+- `POST /connectors/deployments/claim`: connector Bearer token. Returns `{job}`
+  or `{job:null}`. Job contains `id,deployment_id,project,application,commit,config`.
+  Claims serialize per connector; queued builds survive API restarts.
+- `POST /connectors/deployments/:id/result`: same connector Bearer token;
+  body `{status:'succeeded'|'failed',log:string}` (48,000 character maximum).
+  Only that connector's running build can be finalized; returns `{ok:boolean}`.
+
+Connector revocation is checked against PostgreSQL on every claim/result.
+Inventory credentials now permit deployment claims when an administrator has
+configured a deployment for that connector. Keep connector credentials private.
+## Cloud DNS
+
+See [DNS setup and permission semantics](DNS.md). All routes require an authenticated
+session and mutations require the configured request origin. Tokens are write-only.
+
+| Route | Methods | Purpose |
+| --- | --- | --- |
+| `/admin/dns/providers` | GET, POST | List/create shared connections (`dns.manage`) |
+| `/admin/dns/projects` | GET | List all project choices for DNS delegation (`dns.manage`) |
+| `/projects/:project/dns/providers` | GET, POST | List/create private connections (project admin) |
+| Either provider base + `/:id` | PUT, DELETE | Rename, replace token, enable/disable, disconnect |
+| Either provider base + `/:id/test` | POST | Check provider credentials |
+| Either provider base + `/:id/discover` | POST | Import zone choices without granting access |
+| Either provider base + `/:id/zones` | GET | Zones and project delegations |
+| Either provider base + `/:id/zones/:zone/records` | GET | Owner-only record choices for delegation |
+| Either provider base + `/:id/zones/:zone/projects/:target` | PUT | Replace `{rules}`; `[]` revokes access |
+| `/projects/:project/dns` | GET | Accessible zones and `can_manage_providers` |
+| `/projects/:project/dns/access-scopes` | GET | Project-admin delegation limits |
+| `/projects/:project/dns/zones/:zone/records` | GET, POST | Authorized records/creation scopes; create |
+| Record base + `/:record` | GET, PUT, DELETE | Read/update/delete authorized record |
+
+Connection creation accepts `{name,token}`; updates accept optional `name`, `token`,
+and `enabled`. Rules contain `kind`, `target`, `types`, and `actions`. Member
+`dns_grants` add `zone_id` (the dashboard UUID, not Cloudflare's zone ID).
+Omitting `dns_grants` on member updates preserves them; `[]` clears them.
+Record responses include effective `actions`; list responses include
+`creation_scopes`. Record writes use `type`, fully qualified `name`, `ttl`,
+and typed `content`/`data` fields; structured URI priority lives in `data` in the
+dashboard contract. Complete schemas are in authenticated `/openapi.json`.
+Hidden resources return 404; forbidden actions on visible records return 403.
+Provider errors are sanitized. After an uncertain write, refresh before retrying.
+

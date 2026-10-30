@@ -1,6 +1,14 @@
 import { z, type OpenAPIHono } from '@hono/zod-openapi'
-import { slug } from '@dedi-dash/protocol'
+import {
+  slug,
+  deploymentSchema,
+  deploymentJobSchema,
+} from '@dedi-dash/protocol'
 import { serverCapabilities, grantSchema } from './permissions.js'
+import { serviceGrantsSchema } from './service-permissions.js'
+import { dnsGrantsSchema, dnsRecordSchema } from '@dedi-dash/protocol/dns'
+import { dnsProviderBody, dnsProviderUpdate, dnsDelegationBody } from './dns.js'
+import { serviceBody, serviceUpdateBody } from './services.js'
 import {
   memberBody,
   projectInviteBody,
@@ -85,7 +93,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
         ...(input
           ? {
               body: {
-                required: true,
+                required: !input.isOptional(),
                 content: { 'application/json': { schema: input } },
               },
             }
@@ -309,6 +317,8 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
           disabled: z.boolean(),
           role: z.enum(['admin', 'member']),
           grants: z.array(grantSchema),
+          service_grants: serviceGrantsSchema,
+          dns_grants: dnsGrantsSchema,
         }),
       ),
     }),
@@ -342,4 +352,255 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     'Remove membership and grants (Project Administrator or projects.manage)',
     ok,
   )
+  const servicePath = '/projects/{project}/services'
+  const serviceRow = serviceBody.extend({
+    project_slug: slug,
+    created: z.string(),
+    can_update: z.boolean(),
+    can_delete: z.boolean(),
+    can_deploy: z.boolean(),
+    repository: z.string().nullable().optional(),
+    branch: z.string().nullable().optional(),
+    deployment_status: z
+      .enum(['queued', 'running', 'succeeded', 'failed'])
+      .nullable()
+      .optional(),
+    last_deployment: z.string().nullable().optional(),
+  })
+  route(
+    'get',
+    servicePath,
+    'List visible services and effective permissions',
+    z.object({ can_create: z.boolean(), services: z.array(serviceRow) }),
+  )
+  route(
+    'post',
+    servicePath,
+    'Create a Dockerfile application or Compose service (service create)',
+    ok,
+    serviceBody,
+    true,
+    201,
+  )
+  route(
+    'put',
+    `${servicePath}/{service}`,
+    'Edit service details (service update)',
+    ok,
+    serviceUpdateBody,
+  )
+  route(
+    'delete',
+    `${servicePath}/{service}`,
+    'Remove service and deployment configuration; retain running containers (service delete)',
+    ok,
+  )
+  route(
+    'get',
+    `${servicePath}/{service}/connectors`,
+    'List active deployment hosts (service deploy)',
+    z.array(z.object({ id: z.string().uuid(), name: z.string() })),
+  )
+  const deploymentPath =
+    '/projects/{project}/applications/{application}/deployment'
+  route(
+    'get',
+    deploymentPath,
+    'Read deployment and latest build history (service read or Server Administrator)',
+    flexible.nullable(),
+  )
+  route(
+    'put',
+    deploymentPath,
+    'Save deployment; creation returns a one-time webhook secret (service deploy or Server Administrator)',
+    z.object({
+      id: z.string().uuid(),
+      webhook_url: z.string(),
+      webhook_secret: z.string().optional(),
+    }),
+    deploymentSchema,
+  )
+  route(
+    'post',
+    deploymentPath,
+    'Queue a commit build with JSON body; rotate webhook secret with empty body (service deploy or Server Administrator)',
+    z.union([
+      z.object({ webhook_secret: z.string() }),
+      z.object({ queued: z.literal(true) }),
+    ]),
+    z
+      .object({ commit: z.string().regex(/^[a-f0-9]{40}$/) })
+      .strict()
+      .optional(),
+  )
+  registry.registerComponent('securitySchemes', 'connector', {
+    type: 'http',
+    scheme: 'bearer',
+  })
+  for (const [path, summary, output, input] of [
+    [
+      '/connectors/deployments/claim',
+      'Claim the next build for this connector',
+      z.object({ job: deploymentJobSchema.nullable() }),
+      z.object({}),
+    ],
+    [
+      '/connectors/deployments/{id}/result',
+      'Finalize a running build owned by this connector',
+      z.object({ ok: z.boolean() }),
+      z.object({
+        status: z.enum(['succeeded', 'failed']),
+        log: z.string().max(48000),
+      }),
+    ],
+  ] as const) {
+    registry.registerPath({
+      method: 'post',
+      path,
+      summary,
+      tags: ['Deployments'],
+      security: [{ connector: [] }],
+      request: {
+        ...(path.includes('{id}')
+          ? { params: z.object({ id: z.string().uuid() }) }
+          : {}),
+        body: { content: { 'application/json': { schema: input } } },
+      },
+      responses: {
+        200: {
+          description: 'Success',
+          content: { 'application/json': { schema: output } },
+        },
+        401: { description: 'Invalid or revoked connector credential' },
+      },
+    })
+  }
+  for (const base of [
+    '/admin/dns/providers',
+    '/projects/{project}/dns/providers',
+  ]) {
+    route(
+      'get',
+      base,
+      'List DNS provider connections (tokens never returned)',
+      z.array(flexible),
+    )
+    route(
+      'post',
+      base,
+      'Connect a Cloudflare provider',
+      z.object({ id: z.string().uuid() }),
+      dnsProviderBody,
+      true,
+      201,
+    )
+    route(
+      'put',
+      `${base}/{id}`,
+      'Rename, replace token, enable or disable DNS provider',
+      ok,
+      dnsProviderUpdate,
+    )
+    route(
+      'delete',
+      `${base}/{id}`,
+      'Disconnect provider; leave live DNS unchanged',
+      ok,
+    )
+    route('post', `${base}/{id}/test`, 'Test provider credentials', ok)
+    route(
+      'post',
+      `${base}/{id}/discover`,
+      'Discover zones without granting project access',
+      z.array(flexible),
+    )
+    route(
+      'get',
+      `${base}/{id}/zones`,
+      'List discovered zones and project delegations',
+      z.array(flexible),
+    )
+    route(
+      'get',
+      `${base}/{id}/zones/{zone}/records`,
+      'List records for delegation selection (provider owner only)',
+      z.array(flexible),
+    )
+    route(
+      'put',
+      `${base}/{id}/zones/{zone}/projects/{target}`,
+      'Replace project delegation; empty rules revoke access',
+      ok,
+      dnsDelegationBody,
+    )
+  }
+  route(
+    'get',
+    '/admin/dns/projects',
+    'List project choices for DNS delegation (dns.manage)',
+    z.array(project),
+  )
+  route(
+    'get',
+    '/projects/{project}/dns',
+    'List accessible project DNS zones',
+    flexible,
+  )
+  route(
+    'get',
+    '/projects/{project}/dns/access-scopes',
+    'List project DNS delegation limits (Project Administrator)',
+    flexible,
+  )
+  const recordsPath = '/projects/{project}/dns/zones/{zone}/records'
+  route(
+    'get',
+    recordsPath,
+    'List authorized records and effective creation scopes',
+    flexible,
+  )
+  route(
+    'post',
+    recordsPath,
+    'Create authorized DNS record',
+    flexible,
+    dnsRecordSchema,
+    true,
+    201,
+  )
+  route(
+    'get',
+    `${recordsPath}/{record}`,
+    'Read authorized DNS record',
+    flexible,
+  )
+  route(
+    'put',
+    `${recordsPath}/{record}`,
+    'Update DNS record after checking old and new scope',
+    flexible,
+    dnsRecordSchema,
+  )
+  route('delete', `${recordsPath}/{record}`, 'Delete authorized DNS record', ok)
+  registry.registerPath({
+    method: 'post',
+    path: '/hooks/github/{id}',
+    summary: 'Receive a GitHub webhook signed over the raw body',
+    tags: ['Deployments'],
+    security: [],
+    request: {
+      params: z.object({ id: z.string().uuid() }),
+      headers: z.object({
+        'x-hub-signature-256': z.string(),
+        'x-github-event': z.string(),
+        'x-github-delivery': z.string().optional(),
+      }),
+      body: { content: { 'application/json': { schema: flexible } } },
+    },
+    responses: {
+      200: { description: 'Ignored non-push event' },
+      202: { description: 'Verified push processed' },
+      401: { description: 'Invalid webhook signature' },
+    },
+  })
 }

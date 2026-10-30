@@ -102,9 +102,13 @@ test('project administrator configures matching, mixed grants, invitations and m
   await page.getByLabel('Default matching mode').selectOption('name')
   await page.getByRole('button', { name: 'Save default' }).click()
   await expect(page.getByRole('status')).toContainText('Changes saved')
-  const member = page
-    .locator('form')
-    .filter({ has: page.getByText(`member-${suffix}`, { exact: true }) })
+  await page
+    .getByRole('button', { name: `Edit member-${suffix}`, exact: true })
+    .click()
+  const member = page.getByRole('dialog', {
+    name: `Edit member-${suffix}`,
+    exact: true,
+  })
   await expect(member.getByLabel('Grant target')).toHaveValue('name')
   await member
     .getByLabel('Container', { exact: true })
@@ -112,14 +116,24 @@ test('project administrator configures matching, mixed grants, invitations and m
   await member.getByText('logs (planned)', { exact: true }).click()
   await member.getByRole('button', { name: 'Add grant' }).click()
   await member.getByRole('button', { name: 'Save member access' }).click()
+  await expect(member).not.toBeVisible()
+  await page
+    .getByRole('button', { name: `Edit member-${suffix}`, exact: true })
+    .click()
   await expect(member.getByText(/name: allowed-web/).first()).toBeVisible()
+  await member.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page.getByLabel('Default matching mode').selectOption('id')
   await page.getByRole('button', { name: 'Save default' }).click()
+  await page
+    .getByRole('button', { name: `Edit member-${suffix}`, exact: true })
+    .click()
   await expect(member.getByLabel('Grant target')).toHaveValue('id')
   await expect(member.getByText(/name: allowed-web/).first()).toBeVisible()
-  const invite = page
-    .locator('form')
-    .filter({ has: page.getByRole('button', { name: 'Invite or add member' }) })
+  await member.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Invite or add member', exact: true })
+    .click()
+  const invite = page.getByRole('dialog')
   await invite.getByLabel('Username').fill(`delegate-${suffix}`)
   await invite.getByRole('button', { name: 'Invite or add member' }).click()
   await expect(page.getByRole('status')).toHaveText('Changes saved.')

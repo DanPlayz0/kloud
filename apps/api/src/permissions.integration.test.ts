@@ -468,6 +468,8 @@ test(
                 disabled: false,
                 role: 'admin',
                 grants: [],
+                service_grants: [],
+                dns_grants: [],
               },
             ])
             await status(

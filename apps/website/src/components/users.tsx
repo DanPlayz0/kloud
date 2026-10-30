@@ -73,7 +73,7 @@ export function Users({
         <UserDialog current={current} projects={projects} action={action} />
       </div>
       <ErrorMessage message={error} />
-      <div className="overflow-x-auto rounded-lg border border-border bg-card">
+      <div className="relative overflow-x-auto rounded-lg border border-border bg-card">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-border bg-background text-muted-foreground">
             <tr>
@@ -117,7 +117,7 @@ export function Users({
                       : 'Member'}
                 </td>
                 <td className="p-4 text-muted-foreground">
-                  {user.admin
+                  {hasServer(user, 'projects.manage')
                     ? 'All projects'
                     : `${user.projects.length} project${user.projects.length === 1 ? '' : 's'}`}
                 </td>
@@ -275,6 +275,7 @@ function UserForm({
     user?.capabilities ?? [],
   )
   const [error, setError] = useState('')
+  const allProjects = admin || capabilities.includes('projects.manage')
   const changed =
     !user ||
     disabled !== user.disabled ||
@@ -338,10 +339,12 @@ function UserForm({
         {user && hasServer(current, 'projects.manage') && (
           <section className="space-y-2">
             <h3 className="text-sm font-medium">Project access</h3>
-            {admin && (
+            {allProjects && (
               <p className="text-sm text-muted-foreground">
-                Server Administrators can access every project. Saved
-                memberships are retained.
+                {admin
+                  ? 'Server Administrators'
+                  : 'Users with Manage all projects and project access'}{' '}
+                can access every project. Saved memberships are retained.
               </p>
             )}
             {projects.map((project) => (
@@ -350,7 +353,8 @@ function UserForm({
                 key={project.slug}
               >
                 <Checkbox
-                  checked={selected.includes(project.slug)}
+                  checked={allProjects || selected.includes(project.slug)}
+                  disabled={allProjects}
                   onCheckedChange={(checked) =>
                     setSelected(
                       checked === true

@@ -2,6 +2,7 @@ x-api-environment: &api-environment
   DATABASE_URL: ${DATABASE_URL:-postgres://dedi_dash:dedi_dash_local@postgres:5432/dedi_dash}
   PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
   WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+  DNS_ENCRYPTION_KEY: ${DNS_ENCRYPTION_KEY:-}
 
 services:
   postgres:
@@ -46,6 +47,8 @@ services:
       CONNECTOR_TOKEN: ${CONNECTOR_TOKEN:-}
       CONNECTOR_HOST: ${CONNECTOR_HOST:-docker-host}
       DOCKER_SOCKET: /var/run/docker.sock
+      DEPLOYMENTS_ENABLED: ${DEPLOYMENTS_ENABLED:-false}
+      DEPLOYMENTS_DIR: /var/lib/dedi-dash/deployments
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     # The socket-owning group must be supplied for the non-root connector.

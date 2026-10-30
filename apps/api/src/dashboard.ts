@@ -17,9 +17,13 @@ import {
   protectAdministrators,
 } from './permissions.js'
 import { projectPermissions } from './project-permissions.js'
+import { services } from './services.js'
+import { serviceAccess } from './service-permissions.js'
+import { dns } from './dns.js'
 
 export const dashboard = new Hono<Env>()
 dashboard.use('*', requireUser)
+dashboard.route('/', dns)
 dashboard.use('/admin/*', async (c, next) => {
   const section = c.req.path.split('/')[2]
   const capability = {
@@ -83,6 +87,19 @@ dashboard.get('/projects/:project/containers', async (c) => {
   return c.json(result.rows)
 })
 dashboard.get('/projects/:project/applications/:application', async (c) => {
+  const service = (
+    await pool.query(
+      'SELECT slug,name,type FROM services WHERE project_slug=$1 AND slug=$2',
+      [c.req.param('project'), c.req.param('application')],
+    )
+  ).rows[0]
+  const access = await serviceAccess(c.get('user'), c.req.param('project'))
+  if (service && access.allows('read', service.slug))
+    return c.json({
+      ...service,
+      can_update: access.allows('update', service.slug),
+      can_deploy: access.allows('deploy', service.slug),
+    })
   const found = (
     await pool.query(
       `SELECT 1 FROM (${inventoryQuery}) inventory WHERE project=$1 AND ${visibleContainer} AND application=$4 LIMIT 1`,
@@ -100,6 +117,7 @@ dashboard.get('/projects/:project/applications/:application', async (c) => {
 })
 
 dashboard.route('/', projectPermissions)
+dashboard.route('/', services)
 dashboard.get('/admin/projects', async (c) =>
   c.json((await pool.query('SELECT * FROM projects ORDER BY name')).rows),
 )

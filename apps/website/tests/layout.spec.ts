@@ -115,6 +115,13 @@ for (const width of [320, 390, 768, 1280]) {
     await expectContained(page, '.auth-card')
     for (const section of ['projects', 'users', 'connectors', 'containers']) {
       await page.goto(`/admin/${section}`)
+      if (section === 'users') {
+        await expect(page.getByRole('table')).toBeVisible()
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth),
+        ).toBeLessThanOrEqual(width)
+        continue
+      }
       await expect(page.locator('.admin-row').first()).toBeVisible()
       await expectContained(page, '.admin-row,.inline-form')
       if (section === 'containers') {

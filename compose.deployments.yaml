@@ -1,0 +1,26 @@
+# Use with: docker compose -f compose.yaml -f compose.deployments.yaml --profile connector up --build -d
+services:
+  build-helper:
+    build:
+      context: .
+      dockerfile: apps/connector/Dockerfile
+      target: build-helper
+    image: ${DEPLOYMENTS_HELPER_IMAGE:-dedi-dash-build-helper:local}
+    labels:
+      dedi-dash.internal: 'true'
+    command: [node, -e, 'process.exit(0)']
+    network_mode: none
+    restart: 'no'
+  connector:
+    depends_on:
+      build-helper:
+        condition: service_completed_successfully
+    environment:
+      DEPLOYMENTS_ENABLED: 'true'
+      DEPLOYMENTS_HELPER_IMAGE: ${DEPLOYMENTS_HELPER_IMAGE:-dedi-dash-build-helper:local}
+      DEPLOYMENTS_BUILDKIT_IMAGE: ${DEPLOYMENTS_BUILDKIT_IMAGE:-moby/buildkit:v0.28.0-rootless}
+      DEPLOYMENTS_BUILD_MEMORY_MB: ${DEPLOYMENTS_BUILD_MEMORY_MB:-2048}
+      DEPLOYMENTS_GITHUB_TOKEN: ${DEPLOYMENTS_GITHUB_TOKEN:-}
+    volumes:
+      # Must have the same absolute path on the Docker host and in the connector.
+      - /var/lib/dedi-dash/deployments:/var/lib/dedi-dash/deployments

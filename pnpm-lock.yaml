@@ -237,6 +237,9 @@ importers:
 
   apps/website:
     dependencies:
+      '@dedi-dash/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@radix-ui/react-checkbox':
         specifier: ^1.4.1
         version: 1.4.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)

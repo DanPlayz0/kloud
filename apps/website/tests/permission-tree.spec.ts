@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
 const capabilities = [
+  'dns.manage',
   'users.manage',
   'projects.create',
   'projects.manage',
@@ -29,6 +30,7 @@ async function fixtures(page: Page) {
         },
       ],
       '/api/projects/demo/access': { grant_mode: 'id', members: [] },
+      '/api/projects/demo/dns/access-scopes': { zones: [] },
       '/api/projects/demo/containers': [],
     }
     return route.fulfill({ json: data[path] ?? { ok: true } })
@@ -50,7 +52,7 @@ test('users table searches, dialogs reset drafts, and failed saves preserve proj
   await expect(page.getByRole('checkbox')).toHaveCount(0)
   await expect(
     page.getByRole('row').filter({ hasText: 'member' }),
-  ).toContainText('5 permissions')
+  ).toContainText(`${capabilities.length} permissions`)
   await page.screenshot({
     path: testInfo.outputPath('users-desktop.png'),
     fullPage: true,
@@ -63,9 +65,21 @@ test('users table searches, dialogs reset drafts, and failed saves preserve proj
   await expect(
     dialog.getByRole('button', { name: 'Save access' }),
   ).toBeDisabled()
+  await dialog
+    .getByRole('checkbox', {
+      name: 'Manage all projects and project access',
+      exact: true,
+    })
+    .uncheck()
   await dialog.getByRole('checkbox', { name: 'Demo', exact: true }).check()
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   await page.getByRole('button', { name: 'Edit member', exact: true }).click()
+  await dialog
+    .getByRole('checkbox', {
+      name: 'Manage all projects and project access',
+      exact: true,
+    })
+    .uncheck()
   await expect(
     dialog.getByRole('checkbox', { name: 'Demo', exact: true }),
   ).not.toBeChecked()
@@ -86,7 +100,9 @@ test('users table searches, dialogs reset drafts, and failed saves preserve proj
     projects: ['demo'],
     disabled: false,
     admin: false,
-    capabilities,
+    capabilities: capabilities.filter(
+      (capability) => capability !== 'projects.manage',
+    ),
   })
   await expect(dialog).toHaveCount(0)
   await expect(
@@ -122,6 +138,52 @@ test('users table searches, dialogs reset drafts, and failed saves preserve proj
     capabilities: [],
   })
   await expect(invite).toHaveCount(0)
+})
+
+test('all-project access locks project selections and preserves saved memberships', async ({
+  page,
+}) => {
+  await fixtures(page)
+  await page.goto('/admin/users')
+  await expect(
+    page.getByRole('row').filter({ hasText: 'member' }),
+  ).toContainText('All projects')
+  await page.getByRole('button', { name: 'Edit member', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  const project = dialog.getByRole('checkbox', { name: 'Demo', exact: true })
+  const manage = dialog.getByRole('checkbox', {
+    name: 'Manage all projects and project access',
+    exact: true,
+  })
+  await expect(project).toBeChecked()
+  await expect(project).toBeDisabled()
+  await manage.uncheck()
+  await expect(project).toBeEnabled()
+  await expect(project).not.toBeChecked()
+  await project.check()
+  await manage.check()
+  await expect(project).toBeDisabled()
+  await manage.uncheck()
+  await expect(project).toBeChecked()
+  await project.uncheck()
+  await manage.check()
+  await dialog.getByRole('checkbox', { name: 'Disabled', exact: true }).check()
+  const request = page.waitForRequest(
+    (request) =>
+      request.method() === 'PUT' &&
+      request.url().endsWith('/admin/users/member'),
+  )
+  await dialog.getByRole('button', { name: 'Save access' }).click()
+  expect((await request).postDataJSON()).toMatchObject({
+    projects: [],
+    capabilities,
+  })
+  await page.getByRole('button', { name: 'Edit owner', exact: true }).click()
+  await expect(
+    page
+      .getByRole('dialog')
+      .getByRole('checkbox', { name: 'Demo', exact: true }),
+  ).toBeDisabled()
 })
 
 test('delegated user management protects privileged users and omits administrator fields', async ({
@@ -348,7 +410,11 @@ test('member dialog discards drafts, preserves failed saves, and closes after su
       request.url().endsWith('/access/members/member'),
   )
   await dialog.getByRole('button', { name: 'Save member access' }).click()
-  expect((await request).postDataJSON()).toEqual({ role: 'admin', grants: [] })
+  expect((await request).postDataJSON()).toEqual({
+    role: 'admin',
+    grants: [],
+    service_grants: [],
+  })
   await expect(dialog).toHaveCount(0)
   await expect(
     page.getByRole('button', { name: 'Edit member', exact: true }),

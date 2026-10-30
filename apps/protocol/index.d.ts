@@ -1,4 +1,29 @@
 import { z } from 'zod'
+export const buildArtifactSchema: z.ZodType<{
+  images: { tag: string; file: string }[]
+}>
+export interface DeploymentConfig {
+  connector_id: string
+  container_name: string
+  repository: string
+  branch: string
+  kind: 'dockerfile' | 'compose'
+  build_file: string
+  context: string
+  service: string
+  enabled: boolean
+  managed?: boolean
+}
+export interface DeploymentJob {
+  id: string
+  deployment_id: string
+  project: string
+  application: string
+  commit: string
+  config: DeploymentConfig
+}
+export const deploymentSchema: z.ZodType<DeploymentConfig>
+export const deploymentJobSchema: z.ZodType<DeploymentJob>
 export interface Container {
   id: string
   name: string

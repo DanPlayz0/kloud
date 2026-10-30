@@ -74,6 +74,88 @@ export async function migrate() {
       `)
       await db.query('INSERT INTO migrations(version) VALUES(4)')
     }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=5'))
+        .rowCount
+    ) {
+      await db.query(`
+        CREATE TABLE deployments (
+          id uuid PRIMARY KEY, project text NOT NULL REFERENCES projects(slug) ON DELETE CASCADE,
+          application text NOT NULL, connector_id uuid NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
+          config jsonb NOT NULL, webhook_secret text NOT NULL,
+          UNIQUE(project, application)
+        );
+        CREATE UNIQUE INDEX deployment_container ON deployments(connector_id, (config->>'container_name'));
+        CREATE TABLE deployment_builds (
+          id uuid PRIMARY KEY, deployment_id uuid NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+          delivery text NOT NULL, commit text NOT NULL, config jsonb NOT NULL,
+          status text NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','running','succeeded','failed')),
+          created timestamptz NOT NULL DEFAULT now(), started timestamptz, finished timestamptz,
+          log text NOT NULL DEFAULT '', UNIQUE(deployment_id, delivery)
+        );
+        CREATE INDEX deployment_builds_queue ON deployment_builds(status, created);
+      `)
+      await db.query('INSERT INTO migrations(version) VALUES(5)')
+    }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=6'))
+        .rowCount
+    ) {
+      await db.query(`
+        CREATE TABLE services (
+          project_slug text NOT NULL REFERENCES projects(slug) ON DELETE CASCADE,
+          slug text NOT NULL CHECK(slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+          name text NOT NULL, description text NOT NULL DEFAULT '',
+          type text NOT NULL CHECK(type IN ('application','compose')),
+          created timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(project_slug,slug)
+        );
+        CREATE TABLE service_grants (
+          user_id uuid NOT NULL, project_slug text NOT NULL,
+          capability text NOT NULL CHECK(capability IN ('read','create','update','delete','deploy')),
+          service text, FOREIGN KEY(user_id,project_slug) REFERENCES memberships ON DELETE CASCADE,
+          CHECK(capability != 'create' OR service IS NULL),
+          UNIQUE NULLS NOT DISTINCT(user_id,project_slug,capability,service)
+        );
+        INSERT INTO services(project_slug,slug,name,type)
+          SELECT DISTINCT p.slug,i.data->>'application',i.data->>'application','application'
+          FROM inventory i JOIN projects p ON p.slug=i.data->>'project'
+          WHERE i.data->>'application' ~ '^[a-z0-9]+(-[a-z0-9]+)*$' ON CONFLICT DO NOTHING;
+        INSERT INTO services(project_slug,slug,name,type)
+          SELECT DISTINCT project_slug,application,application,'application' FROM assignments ON CONFLICT DO NOTHING;
+        INSERT INTO services(project_slug,slug,name,type)
+          SELECT project,application,application,CASE WHEN config->>'kind'='compose' THEN 'compose' ELSE 'application' END FROM deployments
+          ON CONFLICT(project_slug,slug) DO UPDATE SET type=EXCLUDED.type;
+      `)
+      await db.query('INSERT INTO migrations(version) VALUES(6)')
+    }
+    if (!(await db.query('SELECT version FROM migrations WHERE version=7')).rowCount) {
+      await db.query(`
+        ALTER TABLE users DROP CONSTRAINT users_capabilities_check;
+        ALTER TABLE users ADD CONSTRAINT users_capabilities_check CHECK
+          (capabilities <@ ARRAY['dns.manage','users.manage','projects.create','projects.manage','connectors.manage','inventory.manage']::text[]);
+        CREATE TABLE dns_providers (
+          id uuid PRIMARY KEY, name text NOT NULL, type text NOT NULL DEFAULT 'cloudflare' CHECK(type='cloudflare'),
+          owner_project text REFERENCES projects(slug) ON DELETE CASCADE,
+          encrypted_token text NOT NULL, enabled boolean NOT NULL DEFAULT true
+        );
+        CREATE TABLE dns_zones (
+          id uuid PRIMARY KEY, provider_id uuid NOT NULL REFERENCES dns_providers ON DELETE CASCADE,
+          external_id text NOT NULL, name text NOT NULL, UNIQUE(provider_id,external_id)
+        );
+        CREATE TABLE dns_delegations (
+          zone_id uuid NOT NULL REFERENCES dns_zones ON DELETE CASCADE,
+          project_slug text NOT NULL REFERENCES projects(slug) ON DELETE CASCADE,
+          rules jsonb NOT NULL CHECK(jsonb_typeof(rules)='array'), PRIMARY KEY(zone_id,project_slug)
+        );
+        CREATE TABLE dns_member_grants (
+          user_id uuid NOT NULL, project_slug text NOT NULL, zone_id uuid NOT NULL, rule jsonb NOT NULL,
+          FOREIGN KEY(user_id,project_slug) REFERENCES memberships ON DELETE CASCADE,
+          FOREIGN KEY(zone_id,project_slug) REFERENCES dns_delegations ON DELETE CASCADE
+        );
+        CREATE INDEX dns_member_grants_member ON dns_member_grants(user_id,project_slug);
+      `)
+      await db.query('INSERT INTO migrations(version) VALUES(7)')
+    }
   })
 }
 if (

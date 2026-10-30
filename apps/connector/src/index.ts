@@ -3,6 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import WebSocket from 'ws'
 import { readConfig } from './config.js'
 import { createCollector } from './docker.js'
+import { deploymentWorker } from './deployments.js'
 
 const config = readConfig()
 const collectSnapshot = createCollector(config.dockerSocket, config.host)
@@ -11,6 +12,9 @@ if (!/^[A-Za-z0-9_-]{43}$/.test(config.token))
     'CONNECTOR_TOKEN must be a credential created in the dashboard',
   )
 const shutdown = new AbortController()
+const worker = config.deploymentsEnabled
+  ? deploymentWorker(config, shutdown.signal)
+  : Promise.resolve()
 let apiReachable = false,
   dockerReachable = false,
   current: WebSocket | undefined
@@ -115,5 +119,7 @@ try {
     }
   }
 } finally {
+  shutdown.abort()
+  await worker
   health.close()
 }

@@ -43,12 +43,13 @@ test('disabled sidebar actions use QuickTip with a focusable wrapper', async ({
     const path = new URL(route.request().url()).pathname
     const data: Record<string, unknown> = {
       '/api/auth/me': { id: 'owner', username: 'owner', admin: true },
-      '/api/projects': [],
+      '/api/projects': [{ slug: 'demo', name: 'Demo' }],
+      '/api/projects/demo/containers': [],
       '/api/admin/users': [],
     }
     return route.fulfill({ json: data[path] ?? { ok: true } })
   })
-  await page.goto('/admin/users')
+  await page.goto('/projects/demo/compute/containers')
   const action = page.getByRole('button', { name: 'Builds', exact: true })
   await expect(action).toBeDisabled()
   await action.locator('..').hover()

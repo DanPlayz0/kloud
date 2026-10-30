@@ -1,4 +1,8 @@
 import { useRef, useState, type FormEvent } from 'react'
+import { ServiceGrantsEditor } from './service-grants'
+import { DnsMemberGrants } from './dns'
+import type { DnsGrant } from '@dedi-dash/protocol/dns'
+import type { Service, ServiceList, ServiceGrant } from './api'
 import { Search, UserPen, UserPlus, UserX } from 'lucide-react'
 import {
   Dialog,
@@ -55,6 +59,7 @@ export function ProjectAccessPage({
   const inventory = usePolling<ContainerRow[]>(
     `/projects/${project}/containers`,
   )
+  const serviceList = usePolling<ServiceList>(`/projects/${project}/services`)
   const query = search.trim().toLowerCase()
   const members =
     data?.members.filter((member) =>
@@ -96,7 +101,9 @@ export function ProjectAccessPage({
         <div className="page-heading">
           <h1>Project access</h1>
         </div>
-        <ErrorMessage message={error || loadError || inventory.error} />
+        <ErrorMessage
+          message={error || loadError || inventory.error || serviceList.error}
+        />
         {message && (
           <p className="success break-all" role="status">
             {message}
@@ -146,6 +153,8 @@ export function ProjectAccessPage({
                 />
               </div>
               <MemberDialog
+                project={project}
+                services={serviceList.data?.services ?? []}
                 mode={data.grant_mode}
                 containers={inventory.data ?? []}
                 onSave={(body) => action(`${base}/members`, 'POST', body)}
@@ -158,7 +167,7 @@ export function ProjectAccessPage({
               are planned and unavailable today, and include View for the same
               target.
             </p>
-            <div className="overflow-x-auto rounded-lg border border-border bg-card">
+            <div className="relative overflow-x-auto rounded-lg border border-border bg-card">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-border bg-background text-muted-foreground">
                   <tr>
@@ -188,7 +197,7 @@ export function ProjectAccessPage({
                       <td className="p-4 text-muted-foreground">
                         {member.role === 'admin'
                           ? 'Project Administrator'
-                          : `${member.grants.length} grant${member.grants.length === 1 ? '' : 's'}`}
+                          : `${member.grants.length} container grants · ${member.service_grants?.length ?? 0} service grants`}
                       </td>
                       <td className="p-4 text-muted-foreground">
                         {member.disabled ? 'Disabled' : 'Active'}
@@ -196,6 +205,8 @@ export function ProjectAccessPage({
                       <td className="p-4">
                         <div className="flex justify-end gap-2">
                           <MemberDialog
+                            project={project}
+                            services={serviceList.data?.services ?? []}
                             member={member}
                             mode={data.grant_mode}
                             containers={inventory.data ?? []}
@@ -252,6 +263,8 @@ export function ProjectAccessPage({
 }
 
 type MemberEditorProps = {
+  project: string
+  services: Service[]
   member?: ProjectMember
   mode: 'id' | 'name'
   containers: ContainerRow[]
@@ -327,6 +340,8 @@ function MemberDialog(props: MemberEditorProps) {
 }
 
 function MemberEditor({
+  project,
+  services,
   member,
   mode,
   containers,
@@ -335,8 +350,12 @@ function MemberEditor({
   saving,
 }: MemberEditorProps & { onCancel: () => void; saving: boolean }) {
   const [saveError, setSaveError] = useState('')
+  const [dnsGrants, setDnsGrants] = useState<DnsGrant[]>(member?.dns_grants ?? [])
   const [role, setRole] = useState(member?.role ?? 'member')
   const [grants, setGrants] = useState<Grant[]>(member?.grants ?? [])
+  const [serviceGrants, setServiceGrants] = useState<ServiceGrant[]>(
+    member?.service_grants ?? [],
+  )
   const [kind, setKind] = useState<Grant['kind']>(mode)
   const [selected, setSelected] = useState('')
   const [capabilities, setCapabilities] = useState<Grant['capability'][]>([
@@ -375,6 +394,8 @@ function MemberEditor({
     const body = {
       role,
       grants,
+      service_grants: serviceGrants,
+      ...(JSON.stringify(dnsGrants) !== JSON.stringify(member?.dns_grants ?? []) || !member ? {dns_grants: dnsGrants} : {}),
       ...(!member
         ? { username: new FormData(e.currentTarget).get('username') }
         : {}),
@@ -428,6 +449,13 @@ function MemberEditor({
             management. Saved member grants are retained.
           </p>
         )}
+        <ServiceGrantsEditor
+          value={serviceGrants}
+          onChange={setServiceGrants}
+          services={services}
+          disabled={role === 'admin'}
+        />
+        <DnsMemberGrants project={project} grants={dnsGrants} onChange={setDnsGrants} disabled={role === 'admin'}/>
         <div className="space-y-2">
           <h3>Container grants</h3>
           {grants.map((g, index) => (
@@ -553,7 +581,10 @@ function MemberEditor({
             saving ||
             (!!member &&
               role === member.role &&
-              JSON.stringify(grants) === JSON.stringify(member.grants))
+              JSON.stringify(grants) === JSON.stringify(member.grants) &&
+              JSON.stringify(dnsGrants) === JSON.stringify(member.dns_grants ?? []) &&
+              JSON.stringify(serviceGrants) ===
+                JSON.stringify(member.service_grants ?? []))
           }
         >
           {saving

@@ -2,7 +2,15 @@
 
 The connector collects read-only Docker inventory and CPU/RAM usage and sends
 validated full snapshots to the API over an authenticated outbound WebSocket.
-It does not create, edit, stop, or delete containers.
+With deployments disabled (the default), it does not change containers.
+Set `DEPLOYMENTS_ENABLED=true` to process authorized service deployments through
+temporary checkout/build helpers and rootless BuildKit. The helpers receive no
+host Docker socket or connector credential. The connector imports built images
+and creates or updates the service's runtime containers.
+
+See [service deployments and build isolation](../../docs/DEPLOYMENTS.md) for
+building the helper image, host requirements, resource limits, and private GitHub
+source credentials.
 
 Copy `.env.example` to `.env` in this directory. Create a token in the dashboard's
 Administration > Connectors screen and set `CONNECTOR_TOKEN`. Set `API_URL` to the

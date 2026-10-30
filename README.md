@@ -53,7 +53,9 @@ Use `pnpm install --frozen-lockfile` in CI to install the locked dependency vers
 
 `pnpm dev` starts all three apps and requires a configured connector token.
 The connector sends Docker inventory every five seconds and serves local liveness
-at http://127.0.0.1:3001/health. Container lifecycle operations remain deferred.
+at http://127.0.0.1:3001/health. Optional [GitHub deployments](docs/DEPLOYMENTS.md)
+create and redeploy Dockerfile applications and Compose stacks on pushes or manual
+commit builds. Compute / Services provides persistent services and granular access.
 
 ## Website routes
 
@@ -68,8 +70,9 @@ Git and Docker build contexts; do not edit the generated route tree manually.
 - `/login` and `/enroll`: password and passkey authentication.
 - `/projects/$projectSlug/compute/containers`: Docker compute.
 - `/projects/$projectSlug/compute/serverless`: Kubernetes placeholder.
-- `/projects/$projectSlug/applications/$appSlug`: application placeholder.
-- `/projects/$projectSlug/access`: project roles, invitations, container grants, and matching defaults.
+- `/projects/$projectSlug/services`: Dockerfile applications and Compose services.
+- `/projects/$projectSlug/applications/$appSlug`: deployment configuration and build history.
+- `/projects/$projectSlug/access`: project roles, invitations, service permissions, container grants, and matching defaults.
 - `/admin/$section`: server administration, authorized by individual capabilities.
 
 Server Administrators have unrestricted access. Server capabilities independently
@@ -78,6 +81,10 @@ and inventory management. Project Administrators manage members and container
 grants within their project. Members need View grants for selected container IDs,
 exact names on a connector, or all project containers. Existing memberships retain
 project-wide View access after migration; new members start without grants.
+Service grants independently control read, create, update, delete, and deploy for
+one service or every service in a project. Service read follows container replacement;
+deploy permits repository builds on a host. Create grants access to the new service
+without granting deployment permission. Migration 6 imports existing services.
 Logs, lifecycle, terminal, and configuration grants are stored for future features.
 See [project access and container grants](docs/API.md#project-access-and-container-grants)
 for matching rules and administrative safeguards.
@@ -127,3 +134,9 @@ and Docker socket permissions as documented in [dashboard setup](docs/SETUP.md).
 ```sh
 docker compose down
 ```
+## Cloud DNS
+
+Cloudflare connections support shared server providers, private project providers,
+and DNS delegation down to individual records. See [Cloud DNS setup](docs/DNS.md)
+for the required encryption key, token permissions, and sharing model.
+

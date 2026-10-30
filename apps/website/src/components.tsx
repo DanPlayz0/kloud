@@ -148,77 +148,97 @@ export function Shell({
       >
         <ProjectPicker user={user} projects={projects} project={project} />
         <nav aria-label="Main navigation">
-          <div className="nav-group">
-            <p>COMPUTE</p>
-            <a
-              className={
-                active === 'containers' ? 'nav-item active' : 'nav-item'
-              }
-              href={project ? `/projects/${project}/compute/containers` : '/'}
-            >
-              <Icon />
-              Containers
-            </a>
-            <a
-              className={
-                active === 'serverless' ? 'nav-item active' : 'nav-item'
-              }
-              href={project ? `/projects/${project}/compute/serverless` : '/'}
-            >
-              <Icon name="network" />
-              Serverless<span className="soon">Soon</span>
-            </a>
-          </div>
-          {groups.map(([label, items]) => (
-            <div className="nav-group" key={label}>
-              <p>{label}</p>
-              {items
-                .filter(
-                  ([name]) =>
-                    name !== 'Access' ||
-                    !project ||
-                    projects.find((p) => p.slug === project)?.can_manage_access,
-                )
-                .map(([name, icon]) =>
-                  name === 'Access' &&
-                  project &&
-                  projects.find((p) => p.slug === project)
-                    ?.can_manage_access ? (
-                    <a
-                      key={name}
-                      className={`nav-item ${active === 'access' ? 'active' : ''}`}
-                      href={`/projects/${project}/access`}
-                    >
-                      <Icon name={icon} />
-                      Access
-                    </a>
-                  ) : (
-                    <QuickTip
-                      key={name}
-                      portal
-                      content={
-                        name === 'Access'
-                          ? 'Select a project to manage access'
-                          : 'Coming in a later update'
-                      }
-                    >
-                      <span
-                        tabIndex={0}
-                        className="block w-full cursor-not-allowed"
-                      >
-                        <Button
-                          className="nav-item deferred pointer-events-none"
-                          disabled
+          {project && (
+            <>
+              <div className="nav-group">
+                <p>COMPUTE</p>
+                <a
+                  className={
+                    active === 'services' ? 'nav-item active' : 'nav-item'
+                  }
+                  href={`/projects/${project}/services`}
+                >
+                  <Icon name="box" />
+                  Services
+                </a>
+                <a
+                  className={
+                    active === 'containers' ? 'nav-item active' : 'nav-item'
+                  }
+                  href={
+                    project ? `/projects/${project}/compute/containers` : '/'
+                  }
+                >
+                  <Icon />
+                  Containers
+                </a>
+                <a
+                  className={
+                    active === 'serverless' ? 'nav-item active' : 'nav-item'
+                  }
+                  href={
+                    project ? `/projects/${project}/compute/serverless` : '/'
+                  }
+                >
+                  <Icon name="network" />
+                  Serverless<span className="soon">Soon</span>
+                </a>
+              </div>
+              {groups.map(([label, items]) => (
+                <div className="nav-group" key={label}>
+                  <p>{label}</p>
+                  {items
+                    .filter(
+                      ([name]) =>
+                        name !== 'Access' ||
+                        !project ||
+                        projects.find((p) => p.slug === project)
+                          ?.can_manage_access,
+                    )
+                    .map(([name, icon]) =>
+                      name === 'Cloud DNS' && project ? (
+                        <a key={name} className={`nav-item ${active === 'dns' ? 'active' : ''}`} href={`/projects/${project}/dns`}><Icon name={icon} />Cloud DNS</a>
+                      ) : name === 'Access' &&
+                      project &&
+                      projects.find((p) => p.slug === project)
+                        ?.can_manage_access ? (
+                        <a
+                          key={name}
+                          className={`nav-item ${active === 'access' ? 'active' : ''}`}
+                          href={`/projects/${project}/access`}
                         >
                           <Icon name={icon} />
-                          {name}
-                        </Button>
-                      </span>
-                    </QuickTip>
-                  ),
-                )}
-            </div>
-          ))}
+                          Access
+                        </a>
+                      ) : (
+                        <QuickTip
+                          key={name}
+                          portal
+                          content={
+                            name === 'Access'
+                              ? 'Select a project to manage access'
+                              : 'Coming in a later update'
+                          }
+                        >
+                          <span
+                            tabIndex={0}
+                            className="block w-full cursor-not-allowed"
+                          >
+                            <Button
+                              className="nav-item deferred pointer-events-none"
+                              disabled
+                            >
+                              <Icon name={icon} />
+                              {name}
+                            </Button>
+                          </span>
+                        </QuickTip>
+                      ),
+                    )}
+                </div>
+              ))}
+            </>
+          )}
           {(user.admin || !!user.capabilities?.length) && (
             <div className="nav-group">
               <p>ADMINISTRATION</p>
@@ -227,6 +247,7 @@ export function Shell({
                 ['Users', 'users', 'users'],
                 ['Connectors', 'connectors', 'network'],
                 ['Inventory', 'containers', 'database'],
+                ['DNS providers', 'dns', 'globe'],
               ]
                 .filter(([, path]) =>
                   hasServer(user, adminCapabilities[path!]!),
@@ -310,7 +331,7 @@ export function Shell({
     </div>
   )
 }
-export function usePolling<T>(path: string, refreshKey = 0) {
+export function usePolling<T>(path: string | null, refreshKey = 0) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     const clock = setInterval(() => setNow(Date.now()), 1000)
@@ -320,6 +341,7 @@ export function usePolling<T>(path: string, refreshKey = 0) {
     [error, setError] = useState('')
   useEffect(() => setData(undefined), [path])
   useEffect(() => {
+    if (path === null) return
     let stopped = false,
       timer: ReturnType<typeof setTimeout>
     const abort = new AbortController()
