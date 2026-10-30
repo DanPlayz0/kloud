@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "routes:generate": "tsr generate",
-    "build": "npm run routes:generate && tsc --noEmit && vite build",
-    "typecheck": "npm run routes:generate && tsc --noEmit",
+    "build": "pnpm run routes:generate && tsc --noEmit && vite build",
+    "typecheck": "pnpm run routes:generate && tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {

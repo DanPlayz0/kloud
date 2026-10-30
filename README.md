@@ -1,17 +1,18 @@
 # Dedi Dash
 
-An npm workspaces monorepo with two private application packages in one Git repository:
+A pnpm workspaces monorepo with two private application packages in one Git repository:
 
 - `apps/website`: Vite, React, TypeScript, and TanStack Router (file-based routes).
 - `apps/api`: Hono, TypeScript, and `@hono/zod-openapi` for Zod schemas and OpenAPI generation.
 
 ## Getting started
 
-Use Node.js 22.12+ and npm 11+.
+Use Node.js 22.12+ and pnpm 12.16.1 (pinned in `packageManager`). With a Corepack-enabled
+Node.js installation, run `corepack enable` to make the pinned pnpm version available.
 
 ```sh
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 The website runs at http://localhost:5173 and the API at http://localhost:3000.
@@ -22,18 +23,21 @@ Set the `PORT` environment variable to change the API port; update the Vite prox
 ## Commands
 
 ```sh
-npm run build
-npm run typecheck
-npm test
-npm run dev --workspace @dedi-dash/website
-npm run dev --workspace @dedi-dash/api
-npm run start --workspace @dedi-dash/api
-npm run preview --workspace @dedi-dash/website
+pnpm build
+pnpm typecheck
+pnpm test
+pnpm --filter @dedi-dash/website dev
+pnpm --filter @dedi-dash/api dev
+pnpm --filter @dedi-dash/api start
+pnpm --filter @dedi-dash/website preview
 ```
 
 Build before running the API start command or website preview. For deployment, serve
 `apps/website/dist` with an SPA fallback to `index.html` and proxy `/api/*` to the API
 with the prefix removed. The Vite development proxy does not apply to production or preview.
+
+Workspace packages are declared in `pnpm-workspace.yaml` and share `pnpm-lock.yaml`.
+Use `pnpm install --frozen-lockfile` in CI to install the locked dependency versions.
 
 ## Website routes
 
@@ -70,7 +74,7 @@ Both images include health checks and run as non-root users; Compose waits for t
 API to become healthy before starting the website.
 
 Each app has a multi-stage Dockerfile. Always use the repository root as the build
-context so npm can use the shared workspace lockfile:
+context so pnpm can use the shared workspace lockfile:
 
 ```sh
 docker build -f apps/api/Dockerfile -t dedi-dash-api .

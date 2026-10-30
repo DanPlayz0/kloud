@@ -1,25 +1,27 @@
 # Build from the repository root: docker build -f apps/api/Dockerfile .
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 WORKDIR /app
-COPY package.json package-lock.json ./
+RUN npm install --global pnpm@12.16.1
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/website/package.json ./apps/website/package.json
 
 FROM base AS build
-RUN npm ci --workspace @dedi-dash/api --include-workspace-root
+RUN pnpm install --frozen-lockfile
 COPY tsconfig.base.json ./
 COPY apps/api/tsconfig.json ./apps/api/tsconfig.json
 COPY apps/api/src ./apps/api/src
-RUN npm run build --workspace @dedi-dash/api
+RUN pnpm --filter @dedi-dash/api run build
 
 FROM base AS production-dependencies
-RUN npm ci --omit=dev --workspace @dedi-dash/api && npm cache clean --force
+RUN pnpm --filter @dedi-dash/api install --prod --frozen-lockfile
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:26-bookworm-slim AS runtime
 ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --from=production-dependencies --chown=node:node /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/api/package.json ./apps/api/package.json
 COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
 USER node

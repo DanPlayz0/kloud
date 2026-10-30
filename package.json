@@ -2,21 +2,18 @@
   "name": "dedi-dash",
   "private": true,
   "version": "0.1.0",
-  "workspaces": [
-    "apps/*"
-  ],
+  "packageManager": "pnpm@12.16.1",
   "engines": {
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n website,api \"npm run dev --workspace @dedi-dash/website\" \"npm run dev --workspace @dedi-dash/api\"",
-    "build": "npm run build --workspaces",
-    "typecheck": "npm run typecheck --workspaces",
-    "test": "npm run test --workspaces --if-present"
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r --if-present run test"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "concurrently": "^10.0.6",
     "typescript": "^7.0.2"
   }
 }
