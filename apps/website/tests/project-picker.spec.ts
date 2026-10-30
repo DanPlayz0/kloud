@@ -41,10 +41,16 @@ test('searches names and slugs, preserves order, navigates with keyboard and res
   const search = page.getByRole('combobox', { name: 'Search projects' })
   await expect(search).toBeFocused()
   await page.screenshot({ path: testInfo.outputPath('project-picker.png') })
-  await expect(page.getByRole('option')).toHaveText([
+  await expect(page.getByRole('option')).toContainText([
     'Alpha projectalpha',
     'Backendproduction-services',
   ])
+  await expect(
+    page.getByRole('option', { name: 'Alpha project alpha' }),
+  ).toBeDisabled()
+  await expect(
+    page.getByRole('dialog', { name: 'Select project' }),
+  ).toHaveAttribute('data-side', 'right')
   await search.fill('ALPHA')
   await expect(page.getByRole('option')).toHaveCount(1)
   await search.fill('no-match')
@@ -188,6 +194,58 @@ test('dialog validates, preserves failures, blocks duplicate submission and open
   await expect(page).toHaveURL(/\/projects\/new-project\/compute\/containers$/)
 })
 
+for (const entry of ['picker', 'administration'] as const) {
+  test(`${entry} generates a project slug until edited and displays conflicts`, async ({
+    page,
+  }) => {
+    await fixtures(page)
+    if (entry === 'picker') {
+      await page.getByRole('button', { name: 'Project', exact: true }).click()
+      await page
+        .getByRole('button', { name: 'Create project', exact: true })
+        .click()
+    } else {
+      await page.goto('/admin/projects')
+    }
+
+    const name = page.getByLabel('Project name')
+    const slug = page.getByLabel('Project slug')
+    await name.fill("Dedi's Dashboard")
+    await expect(slug).toHaveValue('dedis-dashboard')
+    await name.fill('  Dédi’s Dashboard / Production!  ')
+    await expect(slug).toHaveValue('dedis-dashboard-production')
+    await name.fill("Dedi's Dashboard")
+
+    let calls = 0
+    const conflict =
+      'A project with this slug already exists. Choose a different slug.'
+    await page.route('**/api/admin/projects', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback()
+      calls++
+      expect(route.request().postDataJSON()).toEqual({
+        name: "Dedi's Dashboard",
+        slug: 'dedis-dashboard',
+      })
+      await route.fulfill({ status: 409, json: { error: conflict } })
+    })
+    await page
+      .getByRole('button', { name: 'Create project', exact: true })
+      .click()
+    await expect(page.getByRole('alert')).toHaveText(conflict)
+    expect(calls).toBe(1)
+    await expect(name).toHaveValue("Dedi's Dashboard")
+    await expect(slug).toHaveValue('dedis-dashboard')
+
+    await slug.fill('custom-project')
+    await name.fill('Another name')
+    await expect(slug).toHaveValue('custom-project')
+    await slug.fill('')
+    await expect(slug).toHaveValue('another-name')
+    await name.fill('Renamed project')
+    await expect(slug).toHaveValue('renamed-project')
+  })
+}
+
 test('empty picker and mobile dialog reset on cancellation', async ({
   page,
 }, testInfo) => {
@@ -195,8 +253,11 @@ test('empty picker and mobile dialog reset on cancellation', async ({
   await fixtures(page, true, [], [])
   await page.getByRole('button', { name: 'Toggle navigation' }).click()
   const picker = page.getByRole('button', { name: 'Project', exact: true })
-  await expect(picker).toHaveText('Select project')
+  await expect(picker).toContainText('Select project')
   await picker.click()
+  await expect(
+    page.getByRole('dialog', { name: 'Select project' }),
+  ).toHaveAttribute('data-side', 'bottom')
   await expect(page.getByText('No projects found')).toBeVisible()
   await page
     .getByRole('button', { name: 'Create project', exact: true })

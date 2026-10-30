@@ -440,6 +440,47 @@ test(
         },
       )
       await t.test(
+        'server administrators and project managers receive project admin membership when creating projects',
+        async () => {
+          const manager = await account(
+            randomUUID(),
+            'manager-creator',
+            false,
+            ['projects.create', 'projects.manage'],
+          )
+          for (const [actor, slug] of [
+            [admin, 'admin-created-project'],
+            [manager, 'manager-created-project'],
+          ]) {
+            await status(
+              actor,
+              '/admin/projects',
+              'POST',
+              { slug, name: 'Created project' },
+              201,
+            )
+            const response = await request(actor, `/projects/${slug}/access`)
+            assert.equal(response.status, 200)
+            assert.deepEqual((await response.json()).members, [
+              {
+                id: actor,
+                username: actor === admin ? 'server-admin' : 'manager-creator',
+                disabled: false,
+                role: 'admin',
+                grants: [],
+              },
+            ])
+            await status(
+              admin,
+              `/admin/projects/${slug}`,
+              'DELETE',
+              undefined,
+              200,
+            )
+          }
+        },
+      )
+      await t.test(
         'project creation grants access only to the new project',
         async () => {
           const creator = await account(randomUUID(), 'creator', false, [
@@ -494,13 +535,15 @@ test(
             undefined,
             403,
           )
-          await status(
-            creator,
-            '/admin/projects',
-            'POST',
-            { slug: 'creator-project', name: 'Duplicate' },
-            409,
-          )
+          const duplicate = await request(creator, '/admin/projects', 'POST', {
+            slug: 'creator-project',
+            name: 'Duplicate',
+          })
+          assert.equal(duplicate.status, 409)
+          assert.deepEqual(await duplicate.json(), {
+            error:
+              'A project with this slug already exists. Choose a different slug.',
+          })
           const visible = (await (
             await request(creator, '/projects')
           ).json()) as any[]

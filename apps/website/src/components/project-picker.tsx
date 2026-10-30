@@ -1,5 +1,5 @@
-import { useRef, useState, type FormEvent } from 'react'
-import { Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Check, ChevronsUpDown, FolderKanban, Plus } from 'lucide-react'
 import { api, hasServer, type Project, type User } from '../api'
 import { Button } from './ui/controls'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
@@ -18,6 +18,27 @@ import {
 } from './ui/dialog'
 import { ProjectFields, projectFormValues } from './project-fields'
 
+function ProjectMark({
+  project,
+  compact = false,
+}: {
+  project?: Project
+  compact?: boolean
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`project-mark flex shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground ${compact ? 'size-7 text-[10px]' : 'size-9 text-xs'}`}
+    >
+      {project ? (
+        project.name.trim().slice(0, 2).toUpperCase()
+      ) : (
+        <FolderKanban className="size-4" />
+      )}
+    </span>
+  )
+}
+
 export function ProjectPicker({
   user,
   projects,
@@ -32,8 +53,19 @@ export function ProjectPicker({
   const [query, setQuery] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [mobile, setMobile] = useState(
+    () => window.matchMedia('(max-width: 720px)').matches,
+  )
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 720px)')
+    const update = () => setMobile(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   const submitting = useRef(false)
   const trigger = useRef<HTMLButtonElement>(null)
+  const current = projects.find((p) => p.slug === project)
   const canCreate = hasServer(user, 'projects.create')
   const filtered = projects.filter((p) =>
     `${p.name}\n${p.slug}`.toLowerCase().includes(query.toLowerCase().trim()),
@@ -74,11 +106,16 @@ export function ProjectPicker({
             ref={trigger}
             type="button"
             aria-label="Project"
-            className="flex w-full min-w-0 items-center justify-between gap-2 bg-card px-3 py-3 text-xs font-semibold"
+            className="project-picker-trigger w-full min-w-0 bg-background text-foreground"
           >
-            <span className="truncate">
-              {projects.find((p) => p.slug === project)?.name ??
-                'Select project'}
+            <ProjectMark project={current} />
+            <span className="grid min-w-0 flex-1 gap-1 text-left leading-tight">
+              <span className="truncate text-sm font-semibold">
+                {current?.name ?? 'Select project'}
+              </span>
+              <span className="truncate text-xs font-normal text-muted-foreground">
+                {current?.slug ?? 'Projects'}
+              </span>
             </span>
             <ChevronsUpDown
               className="size-4 shrink-0 text-muted-foreground"
@@ -88,6 +125,9 @@ export function ProjectPicker({
         </PopoverTrigger>
         <PopoverContent
           aria-label="Select project"
+          className="project-picker-popover"
+          side={mobile ? 'bottom' : 'right'}
+          sideOffset={8}
           onCloseAutoFocus={(event) => {
             if (creating) event.preventDefault()
           }}
@@ -100,26 +140,34 @@ export function ProjectPicker({
               onValueChange={setQuery}
             />
             <CommandList label="Projects">
+              <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
+                Projects
+              </div>
               <CommandEmpty>No projects found</CommandEmpty>
               {filtered.map((p) => (
                 <CommandItem
                   key={p.slug}
                   value={p.slug}
+                  disabled={p.slug === project}
+                  aria-current={p.slug === project ? 'true' : undefined}
                   onSelect={() => {
                     setOpen(false)
                     navigate(p.slug)
                   }}
                 >
-                  <Check
-                    className={`size-4 shrink-0 ${project === p.slug ? 'opacity-100' : 'opacity-0'}`}
-                    aria-hidden="true"
-                  />
-                  <span className="min-w-0">
+                  <ProjectMark project={p} compact />
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate">{p.name}</span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {p.slug}
                     </span>
                   </span>
+                  {project === p.slug && (
+                    <Check
+                      className="size-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  )}
                 </CommandItem>
               ))}
             </CommandList>
@@ -128,7 +176,7 @@ export function ProjectPicker({
             <div className="border-t border-border p-1">
               <Button
                 type="button"
-                className="flex w-full items-center gap-2 text-left text-sm"
+                className="project-picker-create w-full text-left text-sm text-muted-foreground"
                 onClick={() => {
                   setError('')
                   setCreating(true)
@@ -136,7 +184,9 @@ export function ProjectPicker({
                   setQuery('')
                 }}
               >
-                <Plus className="size-4" aria-hidden="true" />
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background">
+                  <Plus className="size-4" aria-hidden="true" />
+                </span>
                 Create project
               </Button>
             </div>

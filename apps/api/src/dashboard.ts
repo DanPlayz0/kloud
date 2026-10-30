@@ -107,16 +107,19 @@ dashboard.post('/admin/projects', async (c) => {
   const body = projectBody.parse(await c.req.json())
   await permissionTransaction(c.get('user'), async (db, actor) => {
     demandServer(actor, 'projects.create')
-    await db.query('INSERT INTO projects(slug,name) VALUES($1,$2)', [
-      body.slug,
-      body.name,
-    ])
-    if (!hasServer(actor, 'projects.manage')) {
-      await db.query(
-        "INSERT INTO memberships(user_id,project_slug,role) VALUES($1,$2,'admin')",
-        [actor.id, body.slug],
-      )
-    }
+    const created = await db.query(
+      'INSERT INTO projects(slug,name) VALUES($1,$2) ON CONFLICT (slug) DO NOTHING RETURNING slug',
+      [body.slug, body.name],
+    )
+    if (!created.rowCount)
+      throw new HTTPException(409, {
+        message:
+          'A project with this slug already exists. Choose a different slug.',
+      })
+    await db.query(
+      "INSERT INTO memberships(user_id,project_slug,role) VALUES($1,$2,'admin')",
+      [actor.id, body.slug],
+    )
   })
   return c.json({ ok: true }, 201)
 })

@@ -166,11 +166,31 @@ small {
   margin: 0 7px 6px;
 }
 .project-picker > .ui-button {
-  justify-content: space-between;
+  justify-content: flex-start;
+  background: transparent;
+  border-color: transparent;
+  padding: 8px;
+  gap: 10px;
+}
+.project-picker > .ui-button:hover,
+.project-picker > .ui-button[data-state='open'] {
   background: var(--color-card);
-  padding: 13px 12px;
-  font-size: 12px;
-  font-weight: 600;
+}
+.project-picker-popover {
+  width: 280px;
+  border-radius: 8px;
+}
+.project-picker-create.ui-button {
+  justify-content: flex-start;
+  border-color: transparent;
+  background: transparent;
+  padding: 8px;
+  color: var(--color-muted-foreground);
+}
+.project-picker-create.ui-button:hover,
+.project-picker-create.ui-button:focus-visible {
+  background: var(--color-secondary);
+  color: var(--color-foreground);
 }
 .sidebar nav {
   overflow: auto;
