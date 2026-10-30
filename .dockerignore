@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/coverage
+**/.tanstack
+**/routeTree.gen.ts
+**/*.tsbuildinfo
+**/.vite
+**/.DS_Store
+**/Thumbs.db
+.git
+.agents
+.codex
+.aws
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log

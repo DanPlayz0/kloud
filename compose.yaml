@@ -1,0 +1,22 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    init: true
+    environment:
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+
+  website:
+    build:
+      context: .
+      dockerfile: apps/website/Dockerfile
+    environment:
+      API_UPSTREAM: api:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy

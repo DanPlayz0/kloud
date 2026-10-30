@@ -6,3 +6,8 @@ dist/
 *.log
 .DS_Store
 coverage/
+.tanstack/
+routeTree.gen.ts
+*.tsbuildinfo
+.vite/
+Thumbs.db
