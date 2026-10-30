@@ -1,0 +1,15 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #e2e8f0;
+  background: #0f172a;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+body { margin: 0; }
+main { max-width: 960px; margin: 0 auto; padding: 2rem; }
+header { display: flex; justify-content: space-between; padding-bottom: 2rem; border-bottom: 1px solid #334155; }
+section { padding: 4rem 0; }
+h1 { font-size: clamp(2rem, 6vw, 4rem); margin: 0 0 1rem; }
+p { line-height: 1.7; color: #cbd5e1; }
+a { color: #7dd3fc; text-underline-offset: 0.2em; }
