@@ -1,84 +1,59 @@
+import {
+  Server,
+  Database,
+  ChartColumnIncreasing,
+  KeyRound,
+  Users,
+  Network,
+  Globe,
+  History,
+  Hammer,
+  ShieldCheck,
+  Menu,
+  ChevronsUpDown,
+  Ellipsis,
+  ArrowUpRight,
+  ArrowRight,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
 import { Button, NativeSelect, Label } from './components/ui/controls'
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, type Project, type User } from './api'
 
-export function Icon({ name = 'box' }: { name?: string }) {
-  const shapes: Record<string, ReactNode> = {
-    box: (
-      <>
-        <rect x="3" y="3" width="18" height="7" rx="2" />
-        <rect x="3" y="14" width="18" height="7" rx="2" />
-        <path d="M7 6.5h.01M7 17.5h.01" />
-      </>
-    ),
-    database: (
-      <>
-        <ellipse cx="12" cy="5" rx="8" ry="3" />
-        <path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0" />
-      </>
-    ),
-    chart: (
-      <>
-        <path d="M4 3v17h17M8 15v-4M13 15V6M18 15v-7" />
-      </>
-    ),
-    key: (
-      <>
-        <circle cx="15" cy="8" r="5" />
-        <path d="m11 12-8 8v2h4v-3h3v-3l3-3" />
-      </>
-    ),
-    users: (
-      <>
-        <circle cx="9" cy="7" r="3" />
-        <path d="M3 21v-4a6 6 0 0 1 12 0v4M17 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 5v2" />
-      </>
-    ),
-    network: (
-      <>
-        <circle cx="12" cy="4" r="2" />
-        <circle cx="4" cy="19" r="2" />
-        <circle cx="20" cy="19" r="2" />
-        <path d="M12 6v6H4v5M12 12h8v5" />
-      </>
-    ),
-    globe: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <ellipse cx="12" cy="12" rx="4" ry="9" />
-        <path d="M3 12h18" />
-      </>
-    ),
-    activity: (
-      <>
-        <path d="M3 5v5h5M3 10a9 9 0 1 1 1 7M12 7v5l3 2" />
-      </>
-    ),
-    build: (
-      <>
-        <path d="m3 21 9-9M14 3l7 7-4 4-7-7zM3 4l4-1 3 4-3 3z" />
-      </>
-    ),
-    shield: (
-      <>
-        <path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6" />
-      </>
-    ),
-  }
+const icons: Record<string, LucideIcon> = {
+  box: Server,
+  database: Database,
+  chart: ChartColumnIncreasing,
+  key: KeyRound,
+  users: Users,
+  network: Network,
+  globe: Globe,
+  activity: History,
+  build: Hammer,
+  shield: ShieldCheck,
+  menu: Menu,
+  chevrons: ChevronsUpDown,
+  more: Ellipsis,
+  external: ArrowUpRight,
+  arrow: ArrowRight,
+  close: X,
+}
+export function Icon({
+  name = 'box',
+  className,
+}: {
+  name?: string
+  className?: string
+}) {
+  const Component = icons[name] ?? Server
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <Component
+      size={16}
+      strokeWidth={1.6}
+      className={className}
       aria-hidden="true"
-    >
-      {shapes[name] ?? shapes.box}
-    </svg>
+    />
   )
 }
 const groups = [
@@ -136,14 +111,14 @@ export function Shell({
     [account, setAccount] = useState(false),
     [error, setError] = useState('')
   return (
-    <div className="app-shell">
+    <div className="app-shell bg-background text-foreground">
       <Button
         className="mobile-toggle"
         onClick={() => setOpen(!open)}
         aria-label="Toggle navigation"
         aria-expanded={open}
       >
-        ☰
+        <Icon name="menu" />
       </Button>
       {open && (
         <Button
@@ -152,7 +127,9 @@ export function Shell({
           onClick={() => setOpen(false)}
         />
       )}
-      <aside className={`sidebar ${open ? 'open' : ''}`}>
+      <aside
+        className={`sidebar bg-background border-border ${open ? 'open' : ''}`}
+      >
         <Label className="project-picker">
           <span className="sr-only">Project</span>
           <NativeSelect
@@ -175,7 +152,7 @@ export function Shell({
             ))}
           </NativeSelect>
           <span>
-            ⌃<br />⌄
+            <Icon name="chevrons" />
           </span>
         </Label>
         <nav aria-label="Main navigation">
@@ -237,7 +214,7 @@ export function Shell({
             </div>
           )}
         </nav>
-        <div className="account">
+        <div className="account border-border">
           {account && (
             <div className="account-menu">
               <Button
@@ -266,12 +243,12 @@ export function Shell({
                 {user.admin ? 'Super administrator' : 'Project member'}
               </small>
             </span>
-            <span className="account-dots">···</span>
+            <Icon name="more" className="account-dots" />
           </Button>
         </div>
       </aside>
-      <main className="workspace">
-        <header className="topbar">
+      <main className="workspace bg-background">
+        <header className="topbar border-border text-muted-foreground">
           <span>{title}</span>
           <span className="topbar-brand">DEDI DASH</span>
         </header>
@@ -291,11 +268,12 @@ export function usePolling<T>(path: string) {
   useEffect(() => {
     let stopped = false,
       timer: ReturnType<typeof setTimeout>
+    const abort = new AbortController()
     setData(undefined)
     setError('')
     const load = async () => {
       try {
-        const result = await api<T>(path)
+        const result = await api<T>(path, 'GET', undefined, abort.signal)
         if (!stopped) {
           setData(result)
           setError('')
@@ -313,6 +291,7 @@ export function usePolling<T>(path: string) {
     void load()
     return () => {
       stopped = true
+      abort.abort()
       clearTimeout(timer)
     }
   }, [path])

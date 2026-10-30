@@ -5,6 +5,7 @@ if (!process.env.E2E_DATABASE_URL)
   )
 export default defineConfig({
   testDir: './tests',
+  testMatch: '**/*.spec.ts',
   workers: 1,
   timeout: 60000,
   use: {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { collect, metrics } from './docker.js'
+import { collect, metrics, createCollector } from './docker.js'
 test('CPU deltas and Linux cache-adjusted memory are calculated', () => {
   assert.deepEqual(
     metrics({
@@ -55,4 +55,52 @@ test('collector excludes dashboard infrastructure, sanitizes labels, handles sto
   )
   assert.equal(JSON.stringify(result).includes('never-send'), false)
   assert.equal(requests.length, 2)
+})
+
+test('one-shot CPU samples are retained across polls and cleared when containers disappear', async () => {
+  let total = 200,
+    system = 1000,
+    present = true
+  const collectSnapshot = createCollector(
+    'fixture',
+    'host',
+    async (_, path) => {
+      if (path.startsWith('/containers/json'))
+        return present
+          ? [
+              {
+                Id: 'a'.repeat(64),
+                Names: ['/worker'],
+                State: 'running',
+                Labels: {},
+              },
+            ]
+          : []
+      assert.ok(path.includes('one-shot=true'))
+      return {
+        cpu_stats: {
+          cpu_usage: { total_usage: total },
+          system_cpu_usage: system,
+          online_cpus: 2,
+        },
+      }
+    },
+  )
+  assert.equal((await collectSnapshot()).containers[0]?.cpu, null)
+  total = 300
+  system = 1500
+  assert.equal((await collectSnapshot()).containers[0]?.cpu, 40)
+  total = 10
+  system = 2000
+  assert.equal(
+    (await collectSnapshot()).containers[0]?.cpu,
+    null,
+    'Restarted counters must not yield negative usage',
+  )
+  present = false
+  await collectSnapshot()
+  present = true
+  total = 100
+  system = 2500
+  assert.equal((await collectSnapshot()).containers[0]?.cpu, null)
 })

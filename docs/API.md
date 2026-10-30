@@ -14,6 +14,9 @@ limited to 64 KiB, apart from the separately bounded WebSocket protocol.
 
 | Method/path                 | Input                                             | Result                                                                              |
 | --------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET /auth/setup`           | None                                              | `{ required: boolean }`; true only when no accounts exist                           |
+| `POST /auth/setup/options`  | `{ username, password }`, password 12–256 characters | Registration options and five-minute `setup` cookie; empty installations only       |
+| `POST /auth/setup/verify`   | SimpleWebAuthn registration response               | Atomically creates the first super-admin with password and passkey; sign in afterward |
 | `POST /auth/password`       | `{ username, password }`                          | WebAuthn authentication options; sets five-minute `pending` cookie, never a session |
 | `POST /auth/verify`         | SimpleWebAuthn authentication response            | `{ ok: true }`; sets eight-hour `session` cookie                                    |
 | `POST /auth/enroll/options` | `{ token, password }`, password 12–256 characters | Registration options and five-minute `enrollment` cookie                            |
@@ -26,6 +29,13 @@ origin, and required user verification. Login permits ten password attempts per
 normalized username per 15-minute window. Successful two-factor login clears that
 username's counter. Disabled users cannot enroll or authenticate. Enrollment resets
 invalidate existing sessions. Expired state is periodically deleted.
+
+Once the API observes an existing account or commits first-account setup, it
+caches that state in memory until the process restarts. Setup status checks and
+rejected setup submissions then require no database access. Concurrent initial
+status checks share one query; empty results and database failures are not cached.
+Each API process maintains its own cache. Removing every account manually requires
+restarting the API to reopen setup.
 
 ## Project data
 

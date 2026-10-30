@@ -81,6 +81,11 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
   await page.getByLabel('Project slug').fill(project)
   await page.getByRole('button', { name: 'Create project' }).click()
   await expect(page.getByRole('status')).toContainText('Changes saved')
+  await expect(
+    page
+      .getByLabel('Project', { exact: true })
+      .locator(`option[value="${project}"]`),
+  ).toHaveCount(1)
   await page.getByRole('link', { name: 'Connectors', exact: true }).click()
   await page.getByLabel('Connector name').fill('Browser Docker host')
   await page.getByRole('button', { name: 'Create connector token' }).click()
@@ -213,4 +218,43 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
     clearInterval(interval)
     ws.close()
   }
+})
+
+test('container polling times out hung responses and recovers', async ({
+  page,
+}) => {
+  let blocked = true,
+    requested = false
+  await page.clock.install()
+  await page.route('**/api/auth/me', (route) =>
+    route.fulfill({
+      json: { id: 'review-user', username: 'review', admin: false },
+    }),
+  )
+  await page.route('**/api/projects', (route) =>
+    route.fulfill({ json: [{ slug: 'review', name: 'Review' }] }),
+  )
+  await page.route('**/api/projects/review/containers', (route) => {
+    requested = true
+    if (!blocked) return route.fulfill({ json: [] })
+    // Leave the response pending so the production request timeout must fire.
+  })
+  await page.goto('/projects/review/compute/containers')
+  await expect(
+    page.getByRole('heading', { name: 'Containers', exact: true }),
+  ).toBeVisible()
+  await expect.poll(() => requested).toBe(true)
+  await page.clock.runFor(11000)
+  await expect(page.getByRole('alert')).toBeVisible()
+  blocked = false
+  await page.clock.runFor(5000)
+  await expect(
+    page.getByRole('heading', { name: 'No containers assigned' }),
+  ).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  expect(
+    await page
+      .locator('.app-shell')
+      .evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).toBe('rgb(11, 11, 11)')
 })

@@ -42,7 +42,7 @@ function Enroll() {
     }
   }
   return (
-    <main className="auth-page">
+    <main className="auth-page bg-background text-foreground">
       <div className="auth-card">
         <div className="auth-mark">
           <Icon name="key" />
@@ -52,9 +52,11 @@ function Enroll() {
         {done ? (
           <>
             <p>Your password and passkey are registered.</p>
-            <a className="button primary" href="/login">
-              Continue to sign in →
-            </a>
+            <Button asChild variant="primary">
+              <a href="/login">
+                Continue to sign in <Icon name="arrow" />
+              </a>
+            </Button>
           </>
         ) : !invitation ? (
           <p role="alert">

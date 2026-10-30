@@ -4,15 +4,19 @@ import * as LabelPrimitive from '@radix-ui/react-label'
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { clsx } from 'clsx'
+import { Check } from 'lucide-react'
 
 // shadcn/ui's Radix composition, adapted to the dashboard's CSS theme.
 // https://ui.shadcn.com/docs/components/radix/button
-const buttonVariants = cva('ui-button', {
-  variants: {
-    variant: { default: '', primary: 'primary', destructive: 'danger' },
+const buttonVariants = cva(
+  'ui-button bg-secondary text-foreground border-border',
+  {
+    variants: {
+      variant: { default: '', primary: 'primary', destructive: 'danger' },
+    },
+    defaultVariants: { variant: 'default' },
   },
-  defaultVariants: { variant: 'default' },
-})
+)
 export function Button({
   className,
   variant,
@@ -34,7 +38,10 @@ export function Input({ className, type, ...props }: ComponentProps<'input'>) {
     <input
       data-slot="input"
       type={type}
-      className={clsx('ui-input', className)}
+      className={clsx(
+        'ui-input bg-muted text-foreground border-border',
+        className,
+      )}
       {...props}
     />
   )
@@ -46,7 +53,7 @@ export function Label({
   return (
     <LabelPrimitive.Root
       data-slot="label"
-      className={clsx('ui-label', className)}
+      className={clsx('ui-label text-muted-foreground', className)}
       {...props}
     />
   )
@@ -60,7 +67,10 @@ export function NativeSelect({
   return (
     <select
       data-slot="native-select"
-      className={clsx('ui-native-select', className)}
+      className={clsx(
+        'ui-native-select bg-muted text-foreground border-border',
+        className,
+      )}
       {...props}
     />
   )
@@ -76,17 +86,7 @@ export function Checkbox({
       {...props}
     >
       <CheckboxPrimitive.Indicator>
-        <svg
-          width="11"
-          height="11"
-          viewBox="0 0 16 16"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="m3 8 3 3 7-7" />
-        </svg>
+        <Check size={11} strokeWidth={2} aria-hidden="true" />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   )

@@ -1,12 +1,23 @@
 import type { Server } from 'node:http'
-import { WebSocketServer } from 'ws'
+import { WebSocket, WebSocketServer } from 'ws'
 import { snapshotSchema } from '@dedi-dash/protocol'
 import { pool, transaction } from './db.js'
 import { digest } from './security.js'
 
-export async function acceptSnapshot(connector: string, raw: unknown) {
+export async function acceptSnapshot(
+  connector: string,
+  raw: unknown,
+  isCurrent = () => true,
+) {
   const snapshot = snapshotSchema.parse(raw)
   return transaction(async (db) => {
+    // A replaced connection may already be waiting on this lock. Check ownership
+    // after acquiring it so an old snapshot cannot overwrite its replacement.
+    const active = await db.query(
+      'SELECT id FROM connectors WHERE id=$1 AND NOT revoked FOR UPDATE',
+      [connector],
+    )
+    if (!active.rowCount || !isCurrent()) return false
     const result = await db.query(
       'UPDATE connectors SET host=$1,seen=now() WHERE id=$2 AND NOT revoked RETURNING discovery',
       [snapshot.host, connector],
@@ -69,7 +80,7 @@ export function attachConnectors(server: Server) {
         return
       }
       wss.handleUpgrade(request, socket, head, (ws) => {
-        connections.get(connector.id)?.close(1000, 'Replaced by new connection')
+        connections.get(connector.id)?.terminate()
         connections.set(connector.id, ws)
         let alive = true,
           busy = false
@@ -101,7 +112,12 @@ export function attachConnectors(server: Server) {
             connections.delete(connector.id)
         })
         ws.on('message', (data, binary) => {
-          if (busy || binary) {
+          if (
+            busy ||
+            binary ||
+            connections.get(connector.id) !== ws ||
+            ws.readyState !== WebSocket.OPEN
+          ) {
             ws.close(1008, 'Invalid message')
             return
           }
@@ -110,9 +126,13 @@ export function attachConnectors(server: Server) {
             const accepted = await acceptSnapshot(
               connector.id,
               JSON.parse(data.toString()),
+              () =>
+                connections.get(connector.id) === ws &&
+                ws.readyState === WebSocket.OPEN,
             )
             if (!accepted) ws.close(1008, 'Credential revoked')
-            else ws.send(JSON.stringify({ type: 'accepted', version: 1 }))
+            else if (ws.readyState === WebSocket.OPEN)
+              ws.send(JSON.stringify({ type: 'accepted', version: 1 }))
           })()
             .catch(() => ws.close(1008, 'Snapshot rejected'))
             .finally(() => {

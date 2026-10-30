@@ -19,7 +19,6 @@ Install pnpm with `npm install --global pnpm@12.16.1` if needed.
 ```sh
 pnpm install
 pnpm --filter @dedi-dash/api migrate
-pnpm --filter @dedi-dash/api cli bootstrap owner
 pnpm --filter @dedi-dash/api dev
 pnpm --filter @dedi-dash/website dev
 ```
@@ -27,6 +26,8 @@ pnpm --filter @dedi-dash/website dev
 The website runs at http://localhost:5173 and the API at http://localhost:3000.
 Vite proxies `/api/*` requests to the API during development (removing the `/api` prefix).
 Configure PostgreSQL and `apps/api/.env` first as described in the setup guide.
+On an empty installation, open the website to create your super-admin account
+with a username, password, and passkey. Setup closes as soon as an account exists.
 The API offers public `GET /health` and authenticated `GET /openapi.json`.
 Set the `PORT` environment variable to change the API port; update the Vite proxy target to match.
 

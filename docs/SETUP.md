@@ -9,14 +9,10 @@ assignments. There is no public signup, password-only login, or demo-data fallba
 1. Copy the root `.env.example` to `.env`.
 2. Run `docker compose up --build -d`. PostgreSQL starts first, then the one-shot
    migration service, then the API and website.
-3. Bootstrap the first administrator:
-
-   ```sh
-   docker compose run --rm api node apps/api/dist/cli.js bootstrap owner
-   ```
-
-4. Open the printed enrollment link at `http://localhost:8080`. Choose a password
-   of at least 12 characters and register a passkey. Sign in using both factors.
+3. Open `http://localhost:8080`. With no accounts, the website prompts you to
+   create the super-admin with a username, a password of at least 12 characters,
+   and a passkey. The account is created only after successful passkey registration.
+4. Sign in using both factors. Setup is unavailable once any account exists.
 5. In **Administration → Projects**, create a project. In **Connectors**, create
    a connector and copy its token immediately; it cannot be retrieved later.
 
@@ -115,7 +111,6 @@ Copy `apps/api/.env.example` to `apps/api/.env`, then:
 ```sh
 pnpm install
 pnpm --filter @dedi-dash/api migrate
-pnpm --filter @dedi-dash/api cli bootstrap owner
 pnpm --filter @dedi-dash/api dev
 pnpm --filter @dedi-dash/website dev
 ```

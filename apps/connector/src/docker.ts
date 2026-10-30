@@ -6,6 +6,12 @@ import {
   type Container,
 } from '@dedi-dash/protocol'
 
+interface CPUStats {
+  cpu_usage?: { total_usage?: number; percpu_usage?: number[] }
+  system_cpu_usage?: number
+  online_cpus?: number
+}
+
 export function dockerGet(
   socketPath: string,
   path: string,
@@ -44,18 +50,19 @@ export function dockerGet(
 }
 export function metrics(
   stats: any,
+  previous?: CPUStats,
 ): Pick<Container, 'cpu' | 'memory' | 'memoryLimit'> {
+  const prior = previous ?? stats.precpu_stats
   const cpuDelta =
-    stats.cpu_stats?.cpu_usage?.total_usage -
-    stats.precpu_stats?.cpu_usage?.total_usage
+    stats.cpu_stats?.cpu_usage?.total_usage - prior?.cpu_usage?.total_usage
   const systemDelta =
-    stats.cpu_stats?.system_cpu_usage - stats.precpu_stats?.system_cpu_usage
+    stats.cpu_stats?.system_cpu_usage - prior?.system_cpu_usage
   const cpus =
     stats.cpu_stats?.online_cpus ??
     stats.cpu_stats?.cpu_usage?.percpu_usage?.length ??
     1
   const cpu =
-    systemDelta > 0 && cpuDelta >= 0
+    prior?.system_cpu_usage > 0 && systemDelta > 0 && cpuDelta >= 0
       ? (cpuDelta / systemDelta) * cpus * 100
       : null
   const usage = stats.memory_stats?.usage,
@@ -74,12 +81,14 @@ export async function collect(
   socket: string,
   host: string,
   get = dockerGet,
+  previous = new Map<string, CPUStats>(),
 ): Promise<Snapshot> {
   const signal = AbortSignal.timeout(10000)
   const list = await get(socket, '/containers/json?all=true', signal)
   if (!Array.isArray(list) || list.length > 5000)
     throw new Error('Invalid Docker inventory')
   const output: Container[] = []
+  const samples = new Map<string, CPUStats>()
   const eligible = list.filter(
     (item) => item.Labels?.['dedi-dash.internal'] !== 'true',
   )
@@ -96,13 +105,13 @@ export async function collect(
         }
         if (item.State === 'running') {
           try {
-            usage = metrics(
-              await get(
-                socket,
-                `/containers/${item.Id}/stats?stream=false&one-shot=true`,
-                signal,
-              ),
+            const stats = await get(
+              socket,
+              `/containers/${item.Id}/stats?stream=false&one-shot=true`,
+              signal,
             )
+            usage = metrics(stats, previous.get(item.Id))
+            if (stats.cpu_stats) samples.set(item.Id, stats.cpu_stats)
           } catch {
             /* Container may disappear during collection. */
           }
@@ -121,10 +130,19 @@ export async function collect(
     }),
   )
   signal.throwIfAborted()
-  return snapshotSchema.parse({
+  const snapshot = snapshotSchema.parse({
     version: 1,
     type: 'snapshot',
     host,
     containers: output,
   })
+  previous.clear()
+  for (const [id, sample] of samples) previous.set(id, sample)
+  return snapshot
+}
+
+/** One-shot responses omit precpu_stats; retain samples per host between polls. */
+export function createCollector(socket: string, host: string, get = dockerGet) {
+  const previous = new Map<string, CPUStats>()
+  return () => collect(socket, host, get, previous)
 }

@@ -7,7 +7,7 @@ import {
 } from './components/ui/controls'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, type User, type Project, type ContainerRow } from './api'
-import { Shell, usePolling, ErrorMessage, Notice } from './components'
+import { Shell, usePolling, ErrorMessage, Notice, Icon } from './components'
 type AdminUser = User & {
   disabled: boolean
   enrolled: boolean
@@ -34,6 +34,8 @@ export function Admin({
     [message, setMessage] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
+  const [projectList, setProjectList] = useState(projects)
+  useEffect(() => setProjectList(projects), [projects])
   async function action(path: string, method: string, body: unknown) {
     setError('')
     setMessage('')
@@ -52,6 +54,12 @@ export function Admin({
             : 'Changes saved.',
       )
       setRevision((n) => n + 1)
+      if (path === '/admin/projects' && method === 'POST') {
+        // Keep the sidebar in sync without losing a successful mutation's result.
+        void api<Project[]>('/projects')
+          .then(setProjectList)
+          .catch(() => {})
+      }
       return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed')
@@ -69,7 +77,7 @@ export function Admin({
   return (
     <Shell
       user={user}
-      projects={projects}
+      projects={projectList}
       active={`admin-${section}`}
       title={`Administration / ${titles[section]}`}
     >
@@ -85,7 +93,7 @@ export function Admin({
           <div className="success" role="status">
             <span>{message}</span>
             <Button onClick={() => setMessage('')} aria-label="Dismiss">
-              ×
+              <Icon name="close" />
             </Button>
           </div>
         )}
@@ -97,7 +105,7 @@ export function Admin({
               revision={revision}
               action={action}
               current={user}
-              projects={projects}
+              projects={projectList}
             />
           ) : section === 'connectors' ? (
             <Connectors revision={revision} action={action} />
@@ -105,7 +113,7 @@ export function Admin({
             <Inventory
               revision={revision}
               action={action}
-              projects={projects}
+              projects={projectList}
             />
           )}
         </fieldset>
@@ -128,7 +136,7 @@ function Projects({ revision, action }: { revision: number; action: Action }) {
   }
   return (
     <>
-      <form className="inline-form" onSubmit={submit}>
+      <form className="inline-form bg-card border-border" onSubmit={submit}>
         <Label>
           Project name
           <Input name="name" required maxLength={100} placeholder="Miki" />
@@ -147,14 +155,16 @@ function Projects({ revision, action }: { revision: number; action: Action }) {
       </form>
       <ErrorMessage message={error} />
       {data?.map((p) => (
-        <div className="admin-row" key={p.slug}>
+        <div className="admin-row bg-card border-border" key={p.slug}>
           <div>
             <strong>{p.name}</strong>
             <small>{p.slug}</small>
           </div>
-          <a className="button" href={`/projects/${p.slug}/compute/containers`}>
-            Open project →
-          </a>
+          <Button asChild>
+            <a href={`/projects/${p.slug}/compute/containers`}>
+              Open project <Icon name="arrow" />
+            </a>
+          </Button>
         </div>
       ))}
       {data?.length === 0 && (
@@ -189,7 +199,7 @@ function Users({
   }
   return (
     <>
-      <form className="inline-form" onSubmit={submit}>
+      <form className="inline-form bg-card border-border" onSubmit={submit}>
         <Label>
           Username
           <Input
@@ -233,7 +243,7 @@ function UserEditor({
   const [selected, setSelected] = useState(user.projects),
     [disabled, setDisabled] = useState(user.disabled)
   return (
-    <div className="admin-row user-row">
+    <div className="admin-row user-row bg-card border-border">
       <div>
         <strong>{user.username}</strong>
         <small>
@@ -325,7 +335,7 @@ function Connectors({
   }
   return (
     <>
-      <form className="inline-form" onSubmit={submit}>
+      <form className="inline-form bg-card border-border" onSubmit={submit}>
         <Label>
           Connector name
           <Input
@@ -343,7 +353,7 @@ function Connectors({
       </p>
       <ErrorMessage message={error} />
       {data?.map((c) => (
-        <div className="admin-row" key={c.id}>
+        <div className="admin-row bg-card border-border" key={c.id}>
           <div>
             <strong>{c.name}</strong>
             <small>
@@ -456,7 +466,7 @@ function Assignment({
   const path = `/admin/containers/${row.connector_id}/${row.container_id}`
   return (
     <form
-      className="admin-row assignment-row"
+      className="admin-row assignment-row bg-card border-border"
       onSubmit={(e) => {
         e.preventDefault()
         void action(path, 'PUT', { project, application })

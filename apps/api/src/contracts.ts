@@ -88,6 +88,30 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     })
   }
   route(
+    'get',
+    '/auth/setup',
+    'Check whether first-account setup is required',
+    z.object({ required: z.boolean() }),
+    undefined,
+    false,
+  )
+  route(
+    'post',
+    '/auth/setup/options',
+    'Begin first super-admin password and passkey setup (empty installation only)',
+    flexible,
+    credentials,
+    false,
+  )
+  route(
+    'post',
+    '/auth/setup/verify',
+    'Verify passkey and create the first super-admin atomically',
+    ok,
+    flexible,
+    false,
+  )
+  route(
     'post',
     '/auth/password',
     'Verify password and start a five-minute passkey challenge',

@@ -27,6 +27,16 @@ export async function migrate() {
       await db.query(migration)
       await db.query('INSERT INTO migrations(version) VALUES(1)')
     }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=2'))
+        .rowCount
+    ) {
+      await db.query(`CREATE TABLE setup_challenges (
+        token text PRIMARY KEY, user_id uuid NOT NULL, username text NOT NULL,
+        password_hash text NOT NULL, challenge text NOT NULL, expires timestamptz NOT NULL
+      )`)
+      await db.query('INSERT INTO migrations(version) VALUES(2)')
+    }
   })
 }
 if (

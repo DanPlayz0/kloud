@@ -16,7 +16,7 @@ const closeConnectors = attachConnectors(server as import('node:http').Server)
 const cleanup = setInterval(() => {
   void pool
     .query(
-      `WITH a AS (DELETE FROM challenges WHERE expires<now()), b AS (DELETE FROM sessions WHERE expires<now()), c AS (DELETE FROM invitations WHERE expires<now()) DELETE FROM login_attempts WHERE expires<now()`,
+      `WITH a AS (DELETE FROM challenges WHERE expires<now()), b AS (DELETE FROM sessions WHERE expires<now()), c AS (DELETE FROM invitations WHERE expires<now()), d AS (DELETE FROM setup_challenges WHERE expires<now()) DELETE FROM login_attempts WHERE expires<now()`,
     )
     .catch((error) => console.error('Expiry cleanup failed:', error.message))
 }, 60000)

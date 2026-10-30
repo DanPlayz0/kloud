@@ -1,32 +1,51 @@
 import { Button, Input, Label } from '../components/ui/controls'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
-import { startAuthentication } from '@simplewebauthn/browser'
+import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
 import { api } from '../api'
 import { ErrorMessage, Icon } from '../components'
+import { loginDestination } from '../navigation'
 export const Route = createFileRoute('/login')({
+  loader: () => api<{ required: boolean }>('/auth/setup'),
+  staleTime: 0,
   validateSearch: (search: Record<string, unknown>) => ({
-    next:
-      typeof search.next === 'string' &&
-      search.next.startsWith('/') &&
-      !search.next.includes('\\') &&
-      !search.next.startsWith('//')
-        ? search.next
-        : '/',
+    next: loginDestination(search.next),
   }),
   component: Login,
 })
 function Login() {
+  const setup = Route.useLoaderData().required
   const { next } = Route.useSearch(),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [phase, setPhase] = useState('Sign in')
+    [phase, setPhase] = useState('Sign in'),
+    [created, setCreated] = useState(false)
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setBusy(true)
     setError('')
     const data = new FormData(event.currentTarget)
     try {
+      if (setup && !created) {
+        if (data.get('password') !== data.get('confirm'))
+          throw new Error('Passwords must match')
+        setPhase('Registering passkey')
+        const optionsJSON = await api<
+          Parameters<typeof startRegistration>[0]['optionsJSON']
+        >('/auth/setup/options', 'POST', {
+          username: data.get('username'),
+          password: data.get('password'),
+        })
+        await api(
+          '/auth/setup/verify',
+          'POST',
+          await startRegistration({ optionsJSON }),
+        )
+        setCreated(true)
+        setBusy(false)
+        setPhase('Sign in')
+        return
+      }
       const optionsJSON = await api<
         Parameters<typeof startAuthentication>[0]['optionsJSON']
       >('/auth/password', 'POST', {
@@ -44,14 +63,24 @@ function Login() {
     }
   }
   return (
-    <main className="auth-page">
-      <div className="auth-card">
+    <main className="auth-page bg-background text-foreground">
+      <div className="auth-card bg-card border-border">
         <div className="auth-mark">
           <Icon />
         </div>
         <p className="eyebrow">DEDI DASH</p>
-        <h1>Welcome back</h1>
-        <p>Sign in to your infrastructure.</p>
+        <h1>
+          {setup && !created
+            ? 'Create your super-admin account'
+            : 'Welcome back'}
+        </h1>
+        <p className="text-muted-foreground">
+          {created
+            ? 'Your super-admin account is ready. Sign in with your password and passkey.'
+            : setup
+              ? 'No accounts exist yet. Choose a username and password, then register a passkey to get started.'
+              : 'Sign in to your infrastructure.'}
+        </p>
         <form
           onSubmit={(e) => {
             void submit(e)
@@ -64,6 +93,7 @@ function Login() {
               autoComplete="username"
               required
               maxLength={100}
+              pattern={setup && !created ? '[a-zA-Z0-9_.@\\-]+' : undefined}
             />
           </Label>
           <Label>
@@ -71,15 +101,41 @@ function Login() {
             <Input
               name="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={
+                setup && !created ? 'new-password' : 'current-password'
+              }
               required
+              minLength={setup && !created ? 12 : undefined}
               maxLength={256}
             />
           </Label>
+          {setup && !created && (
+            <>
+              <Label>
+                Confirm password
+                <Input
+                  name="confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={12}
+                  maxLength={256}
+                />
+              </Label>
+              <small className="text-muted-foreground">
+                Use at least 12 characters. Usernames may contain letters,
+                numbers, underscores, periods, @, and hyphens.
+              </small>
+            </>
+          )}
           <ErrorMessage message={error} />
           <Button className="primary" disabled={busy}>
-            {busy ? phase + '…' : 'Continue with password and passkey'}
-            <span>→</span>
+            {busy
+              ? phase + '…'
+              : setup && !created
+                ? 'Create super-admin and register passkey'
+                : 'Continue with password and passkey'}
+            <Icon name="arrow" />
           </Button>
         </form>
         <p className="auth-foot">

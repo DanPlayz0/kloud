@@ -1,6 +1,8 @@
 import { Hono, type Context } from 'hono'
+import { randomUUID } from 'node:crypto'
 import { getCookie, setCookie } from 'hono/cookie'
 import { z } from 'zod'
+import { HTTPException } from 'hono/http-exception'
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -59,6 +61,140 @@ export const requireAdmin = async (
     return c.json({ error: 'Administrator access required' }, 403)
   await next()
 }
+
+// Once populated, setup stays closed for this process's lifetime. Only cache
+// positive results so an empty installation can still detect CLI bootstrap.
+let accountsExist = false
+let accountCheck: Promise<boolean> | undefined
+async function hasAccounts(): Promise<boolean> {
+  if (accountsExist) return true
+  if (!accountCheck) {
+    accountCheck = pool
+      .query('SELECT EXISTS(SELECT 1 FROM users) AS populated')
+      .then((result) => {
+        accountsExist ||= result.rows[0].populated
+        return accountsExist
+      })
+      .finally(() => {
+        accountCheck = undefined
+      })
+  }
+  return accountCheck
+}
+
+auth.get('/setup', async (c) => c.json({ required: !(await hasAccounts()) }))
+
+// Reject repeated setup submissions before opening a database transaction.
+auth.use('/setup/*', async (c, next) => {
+  if (await hasAccounts())
+    return c.json({ error: 'Setup is complete. Sign in to your account.' }, 409)
+  await next()
+})
+
+// Lock against every user-creation path, including CLI bootstrap and invitations.
+async function requireEmptyUsers(db: import('pg').PoolClient) {
+  await db.query('SELECT pg_advisory_xact_lock(842192)')
+  await db.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE')
+  if ((await db.query('SELECT 1 FROM users LIMIT 1')).rowCount) {
+    accountsExist = true
+    throw new HTTPException(409, {
+      message: 'Setup is complete. Sign in to your account.',
+    })
+  }
+}
+
+auth.post('/setup/options', async (c) => {
+  const body = z
+    .object({
+      username: z.string().regex(/^[a-zA-Z0-9_.@-]{1,100}$/),
+      password,
+    })
+    .parse(await c.req.json())
+  const pending = token()
+  const options = await transaction(async (db) => {
+    await requireEmptyUsers(db)
+    const userID = randomUUID()
+    const options = await generateRegistrationOptions({
+      rpName: 'Dedi Dash',
+      rpID,
+      userName: body.username.toLowerCase(),
+      userID: new TextEncoder().encode(userID),
+      attestationType: 'none',
+      authenticatorSelection: {
+        residentKey: 'required',
+        userVerification: 'required',
+      },
+    })
+    await db.query(
+      'DELETE FROM setup_challenges WHERE expires<=now() OR token=$1',
+      [digest(getCookie(c, 'setup') ?? '')],
+    )
+    await db.query(
+      `INSERT INTO setup_challenges(token,user_id,username,password_hash,challenge,expires)
+       VALUES($1,$2,$3,$4,$5,now()+interval '5 minutes')`,
+      [
+        digest(pending),
+        userID,
+        body.username.toLowerCase(),
+        await hashPassword(body.password),
+        options.challenge,
+      ],
+    )
+    return options
+  })
+  setCookie(c, 'setup', pending, { ...cookieOptions, maxAge: 300 })
+  return c.json(options)
+})
+
+auth.post('/setup/verify', async (c) => {
+  const body = z.record(z.string(), z.any()).parse(await c.req.json())
+  const success = await transaction(async (db) => {
+    await requireEmptyUsers(db)
+    const challenge = (
+      await db.query(
+        'DELETE FROM setup_challenges WHERE token=$1 AND expires>now() RETURNING *',
+        [digest(getCookie(c, 'setup') ?? '')],
+      )
+    ).rows[0]
+    if (!challenge) return false
+    let verification
+    try {
+      verification = await verifyRegistrationResponse({
+        response: body as unknown as RegistrationResponseJSON,
+        expectedChallenge: challenge.challenge,
+        expectedOrigin: publicOrigin,
+        expectedRPID: rpID,
+        requireUserVerification: true,
+      })
+    } catch {
+      return false
+    }
+    if (!verification.verified || !verification.registrationInfo) return false
+    const credential = verification.registrationInfo.credential
+    await db.query(
+      'INSERT INTO users(id,username,password_hash,admin) VALUES($1,$2,$3,true)',
+      [challenge.user_id, challenge.username, challenge.password_hash],
+    )
+    await db.query(
+      'INSERT INTO passkeys(id,user_id,public_key,counter,transports) VALUES($1,$2,$3,$4,$5)',
+      [
+        credential.id,
+        challenge.user_id,
+        Buffer.from(credential.publicKey),
+        credential.counter,
+        JSON.stringify(credential.transports ?? []),
+      ],
+    )
+    await db.query('DELETE FROM setup_challenges')
+    return true
+  })
+  // Publish only after the account and passkey transaction has committed.
+  if (success) accountsExist = true
+  setCookie(c, 'setup', '', { ...cookieOptions, maxAge: 0 })
+  return success
+    ? c.json({ ok: true })
+    : c.json({ error: 'Setup failed or expired. Start again.' }, 400)
+})
 
 auth.post('/password', async (c) => {
   const body = z

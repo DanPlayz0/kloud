@@ -2,9 +2,10 @@ import { createServer } from 'node:http'
 import { setTimeout as delay } from 'node:timers/promises'
 import WebSocket from 'ws'
 import { readConfig } from './config.js'
-import { collect } from './docker.js'
+import { createCollector } from './docker.js'
 
 const config = readConfig()
+const collectSnapshot = createCollector(config.dockerSocket, config.host)
 if (!/^[A-Za-z0-9_-]{43}$/.test(config.token))
   throw new Error(
     'CONNECTOR_TOKEN must be a credential created in the dashboard',
@@ -53,7 +54,7 @@ try {
           return
         }
         try {
-          const snapshot = await collect(config.dockerSocket, config.host)
+          const snapshot = await collectSnapshot()
           dockerReachable = true
           if (ws.readyState === WebSocket.OPEN) {
             const data = JSON.stringify(snapshot)

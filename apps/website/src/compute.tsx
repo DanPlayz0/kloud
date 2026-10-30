@@ -1,4 +1,11 @@
-import { usePolling, Shell, ErrorMessage, Notice, bytes } from './components'
+import {
+  usePolling,
+  Shell,
+  ErrorMessage,
+  Notice,
+  bytes,
+  Icon,
+} from './components'
 import type { User, Project, ContainerRow } from './api'
 export function Compute({
   user,
@@ -79,7 +86,7 @@ export function Compute({
                             className="container-link"
                           >
                             {row.data.name}
-                            <span className="row-arrow">↗</span>
+                            <Icon name="external" className="row-arrow" />
                           </a>
                         </td>
                         <td>

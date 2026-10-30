@@ -25,6 +25,10 @@ Containers labeled `dedi-dash.internal=true` are excluded. Only the explicit
 `dedi-dash.project` and `dedi-dash.application` label values are transmitted;
 environment variables and arbitrary labels are never included.
 
+CPU usage is calculated from successive samples retained by the collector. The
+first reading after startup, a counter reset, or a container restart may be
+unavailable until the next collection.
+
 For Compose deployment, token setup, manual assignment, and Linux socket-group
 configuration, see [dashboard setup](../../docs/SETUP.md). The shared protocol and
 API are documented in [API contracts](../../docs/API.md).

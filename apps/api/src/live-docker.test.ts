@@ -175,6 +175,14 @@ test(
       assert.equal(inventory.length, 1)
       assert.equal(inventory[0].data.state, 'running')
       assert.equal(typeof inventory[0].data.memory, 'number')
+      await waitUntil(async () => {
+        const sample = (
+          await pool.query('SELECT data FROM inventory WHERE connector_id=$1', [
+            connector,
+          ])
+        ).rows[0]?.data
+        return typeof sample?.cpu === 'number' && Number.isFinite(sample.cpu)
+      })
       assert.equal(JSON.stringify(inventory).includes('DATABASE_URL'), false)
       const beforeRestart = new Date()
       docker('restart', apiName)

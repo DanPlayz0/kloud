@@ -138,6 +138,89 @@ test(
     }
     try {
       await t.test(
+        'empty installations create exactly one super-admin after passkey verification',
+        async () => {
+          await migrate()
+          assert.deepEqual(await (await request('/auth/setup')).json(), {
+            required: true,
+          })
+          assert.equal(
+            (
+              await request('/auth/setup/options', 'POST', {
+                username: 'owner',
+                password: 'short',
+              })
+            ).status,
+            400,
+          )
+          const begin = () =>
+            request('/auth/setup/options', 'POST', {
+              username: 'First.Admin',
+              password: 'correct horse battery staple',
+            })
+          const cancelled = await begin()
+          assert.equal(cancelled.status, 200)
+          assert.deepEqual(await (await request('/auth/setup')).json(), {
+            required: true,
+          })
+          assert.equal(
+            (
+              await request(
+                '/auth/setup/verify',
+                'POST',
+                {},
+                cookie(cancelled, 'setup'),
+              )
+            ).status,
+            400,
+          )
+          const expired = await begin()
+          await pool.query(
+            "UPDATE setup_challenges SET expires=now()-interval '1 second'",
+          )
+          assert.equal(
+            (
+              await request(
+                '/auth/setup/verify',
+                'POST',
+                registration((await expired.json()).challenge),
+                cookie(expired, 'setup'),
+              )
+            ).status,
+            400,
+          )
+          const first = await begin(),
+            second = await begin()
+          const attempts = await Promise.all(
+            [first, second].map(async (response) =>
+              request(
+                '/auth/setup/verify',
+                'POST',
+                registration((await response.json()).challenge),
+                cookie(response, 'setup'),
+              ),
+            ),
+          )
+          assert.deepEqual(attempts.map((r) => r.status).sort(), [200, 409])
+          const users = await pool.query(
+            'SELECT id,username,admin,password_hash FROM users',
+          )
+          assert.equal(users.rowCount, 1)
+          assert.equal(users.rows[0].username, 'first.admin')
+          assert.equal(users.rows[0].admin, true)
+          assert.ok(users.rows[0].password_hash)
+          assert.equal((await pool.query('SELECT 1 FROM passkeys')).rowCount, 1)
+          assert.deepEqual(await (await request('/auth/setup')).json(), {
+            required: false,
+          })
+          assert.equal((await begin()).status, 409)
+          // Any existing account blocks setup, including disabled non-admins.
+          await pool.query('UPDATE users SET admin=false,disabled=true')
+          assert.equal((await begin()).status, 409)
+          await pool.query('DELETE FROM users WHERE id=$1', [users.rows[0].id])
+        },
+      )
+      await t.test(
         'migrations are idempotent and invitation enrollment verifies a real credential',
         async () => {
           await migrate()
@@ -489,6 +572,27 @@ test(
             '2',
           )
           await acceptSnapshot(connector.id, snapshot([]))
+          const seenBeforeReplacedSnapshot = (
+            await pool.query('SELECT seen FROM connectors WHERE id=$1', [
+              connector.id,
+            ])
+          ).rows[0].seen
+          assert.equal(
+            await acceptSnapshot(connector.id, snapshot([raw]), () => false),
+            false,
+          )
+          assert.equal(
+            (await pool.query('SELECT count(*) FROM inventory')).rows[0].count,
+            '0',
+          )
+          assert.equal(
+            (
+              await pool.query('SELECT seen FROM connectors WHERE id=$1', [
+                connector.id,
+              ])
+            ).rows[0].seen.toISOString(),
+            seenBeforeReplacedSnapshot.toISOString(),
+          )
           assert.equal(
             (await pool.query('SELECT count(*) FROM assignments')).rows[0]
               .count,

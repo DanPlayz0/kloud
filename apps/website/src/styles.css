@@ -1,3 +1,18 @@
+/* Resolve sources from the workspace root, not the Vite process's cwd. */
+@import 'tailwindcss' source('../../../');
+
+@theme {
+  --color-background: #0b0b0b;
+  --color-foreground: #e8e8e8;
+  --color-card: #171717;
+  --color-border: #292929;
+  --color-muted: #151515;
+  --color-muted-foreground: #888888;
+  --color-secondary: #191919;
+  --color-primary: #eeeeee;
+  --color-primary-foreground: #171717;
+}
+
 :root {
   font-family:
     Inter,
@@ -6,8 +21,9 @@
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #e8e8e8;
-  background: #0b0b0b;
+  color: var(--color-foreground);
+  background: var(--color-background);
+  line-height: normal;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   color-scheme: dark;
@@ -37,10 +53,10 @@ a,
 .ui-button,
 .button {
   cursor: pointer;
-  border: 1px solid #333;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: #191919;
-  color: #ddd;
+  background: var(--color-secondary);
+  color: var(--color-foreground);
   padding: 9px 13px;
   display: inline-flex;
   align-items: center;
@@ -57,9 +73,9 @@ a,
 }
 .ui-input,
 .ui-native-select {
-  background: #151515;
-  border: 1px solid #343434;
-  color: #eee;
+  background: var(--color-muted);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
   border-radius: 7px;
   padding: 11px 12px;
   min-width: 0;
@@ -73,7 +89,7 @@ a,
   flex-direction: column;
   gap: 8px;
   font-size: 12px;
-  color: #aaa;
+  color: var(--color-muted-foreground);
 }
 h1,
 h2,
@@ -102,7 +118,7 @@ small {
 }
 .sidebar {
   width: 264px;
-  background: #0b0b0b;
+  background: var(--color-background);
   border-right: 1px solid #252525;
   position: fixed;
   inset: 0 auto 0 0;
@@ -121,7 +137,7 @@ small {
   padding: 13px 12px;
   font-size: 12px;
   font-weight: 600;
-  background: #171717;
+  background: var(--color-card);
 }
 .project-picker > span:last-child {
   position: absolute;
@@ -168,11 +184,11 @@ small {
   color: #878787;
 }
 .nav-item.active {
-  background: #191919;
+  background: var(--color-secondary);
   color: #f4f4f4;
 }
 .nav-item:hover {
-  background: #151515;
+  background: var(--color-muted);
 }
 .nav-item.deferred {
   opacity: 1;
@@ -182,7 +198,7 @@ small {
   font-size: 9px;
   margin-left: auto;
   color: #575757;
-  border: 1px solid #292929;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 1px 4px;
 }
@@ -202,7 +218,7 @@ small {
 }
 .avatar {
   border: 1px solid #353535;
-  background: #171717;
+  background: var(--color-card);
   padding: 7px;
   border-radius: 8px;
   display: flex;
@@ -245,7 +261,7 @@ small {
   align-items: center;
   justify-content: space-between;
   padding: 0 36px;
-  color: #888;
+  color: var(--color-muted-foreground);
   font-size: 11px;
 }
 .topbar-brand {
@@ -322,12 +338,12 @@ small {
   width: 17%;
 }
 .container-table td {
-  background: #171717;
+  background: var(--color-card);
   border-bottom: 1px solid #0b0b0b;
   padding: 18px 22px;
   height: 63px;
   font-size: 11px;
-  color: #888;
+  color: var(--color-muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -461,7 +477,7 @@ small {
 }
 .table-skeleton > div {
   height: 63px;
-  background: #151515;
+  background: var(--color-muted);
   border-bottom: 1px solid #0b0b0b;
   display: flex;
   align-items: center;
@@ -485,7 +501,7 @@ small {
   display: grid;
   place-items: center;
   padding: 32px;
-  background: radial-gradient(ellipse at top, #1a1a1a 0, transparent 60%);
+  background-image: radial-gradient(ellipse at top, #1a1a1a 0, transparent 60%);
 }
 .auth-card {
   width: 100%;
@@ -499,7 +515,7 @@ small {
   justify-content: center;
   border: 1px solid #333;
   border-radius: 11px;
-  background: #191919;
+  background: var(--color-secondary);
   margin-bottom: 30px;
 }
 .auth-mark svg {
@@ -567,9 +583,9 @@ small {
   align-items: end;
   gap: 16px;
   padding: 22px;
-  border: 1px solid #292929;
+  border: 1px solid var(--color-border);
   border-radius: 9px;
-  background: #131313;
+  background: var(--color-card);
   margin-bottom: 24px;
 }
 .inline-form .ui-input:not([type='checkbox']) {
@@ -605,12 +621,12 @@ small {
 }
 .admin-row {
   padding: 22px;
-  border-bottom: 1px solid #292929;
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   gap: 20px;
   align-items: center;
   justify-content: space-between;
-  background: #131313;
+  background: var(--color-card);
   font-size: 12px;
 }
 .admin-row strong {
@@ -647,7 +663,7 @@ small {
 }
 .helper {
   font-size: 12px;
-  color: #888;
+  color: var(--color-muted-foreground);
   line-height: 1.8;
   margin-bottom: 24px;
 }
