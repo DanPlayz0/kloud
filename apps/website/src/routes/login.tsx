@@ -72,12 +72,12 @@ function Login() {
         <p className="eyebrow">DEDI DASH</p>
         <h1>
           {setup && !created
-            ? 'Create your super-admin account'
+            ? 'Create your Server Administrator account'
             : 'Welcome back'}
         </h1>
         <p className="text-muted-foreground">
           {created
-            ? 'Your super-admin account is ready. Sign in with your password and passkey.'
+            ? 'Your Server Administrator account is ready. Sign in with your password and passkey.'
             : setup
               ? 'No accounts exist yet. Choose a username and password, then register a passkey to get started.'
               : 'Sign in to your infrastructure.'}
@@ -134,7 +134,7 @@ function Login() {
             {busy
               ? phase + '…'
               : setup && !created
-                ? 'Create super-admin and register passkey'
+                ? 'Create Server Administrator and register passkey'
                 : 'Continue with password and passkey'}
             <Icon name="arrow" />
           </Button>

@@ -417,6 +417,10 @@ test(
             `INSERT INTO memberships(user_id,project_slug) VALUES($1,'miki')`,
             [memberID],
           )
+          await pool.query(
+            `INSERT INTO container_grants(id,user_id,project_slug,capability,kind) VALUES($1,$2,'miki','view','all')`,
+            [randomUUID(), memberID],
+          )
           assert.equal(
             (await request('/admin/users', 'GET', undefined, memberCookie))
               .status,

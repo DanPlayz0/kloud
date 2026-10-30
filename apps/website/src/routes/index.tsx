@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { api, session, type Project } from '../api'
+import { api, session, hasServer, type Project } from '../api'
 import { Shell, Notice } from '../components'
 
 export const Route = createFileRoute('/')({
@@ -20,7 +20,7 @@ function Home() {
   return (
     <Shell user={user} projects={projects} title="Overview">
       <Notice title="No projects yet">
-        {user.admin ? (
+        {hasServer(user, 'projects.manage') ? (
           <a href="/admin/projects">Create your first project</a>
         ) : (
           'Ask an administrator to grant you project access.'

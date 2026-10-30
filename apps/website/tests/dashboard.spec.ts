@@ -188,7 +188,9 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
     ).toBeVisible()
     await page.getByRole('button', { name: 'Toggle navigation' }).click()
     await expect(
-      page.getByRole('link', { name: 'Containers', exact: true }),
+      page
+        .getByRole('navigation', { name: 'Main navigation' })
+        .getByRole('link', { name: 'Containers', exact: true }),
     ).toBeVisible()
     await page
       .getByRole('button', { name: 'Close navigation', exact: true })

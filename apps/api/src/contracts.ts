@@ -1,11 +1,30 @@
 import { z, type OpenAPIHono } from '@hono/zod-openapi'
 import { slug } from '@dedi-dash/protocol'
+import { serverCapabilities, grantSchema } from './permissions.js'
+import {
+  memberBody,
+  projectInviteBody,
+  settingsBody,
+} from './project-permissions.js'
 
 export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   const user = z
-    .object({ id: z.string().uuid(), username: z.string(), admin: z.boolean() })
+    .object({
+      id: z.string().uuid(),
+      username: z.string(),
+      admin: z.boolean(),
+      capabilities: z.array(z.enum(serverCapabilities)),
+    })
     .openapi('User')
-  const project = z.object({ slug, name: z.string() }).openapi('Project')
+  const project = z
+    .object({
+      slug,
+      name: z.string(),
+      grant_mode: z.enum(['id', 'name']).optional(),
+      role: z.enum(['admin', 'member']).nullable().optional(),
+      can_manage_access: z.boolean().optional(),
+    })
+    .openapi('Project')
   const ok = z.object({ ok: z.literal(true) })
   const flexible = z.record(z.string(), z.unknown())
   const credentials = z.object({ username: z.string(), password: z.string() })
@@ -34,7 +53,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     })
     .openapi('ContainerRow')
   function route(
-    method: 'get' | 'post' | 'put',
+    method: 'get' | 'post' | 'put' | 'delete',
     path: string,
     summary: string,
     output: z.ZodType,
@@ -98,7 +117,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'post',
     '/auth/setup/options',
-    'Begin first super-admin password and passkey setup (empty installation only)',
+    'Begin first Server Administrator password and passkey setup (empty installation only)',
     flexible,
     credentials,
     false,
@@ -106,7 +125,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'post',
     '/auth/setup/verify',
-    'Verify passkey and create the first super-admin atomically',
+    'Verify passkey and create the first Server Administrator atomically',
     ok,
     flexible,
     false,
@@ -168,13 +187,13 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'get',
     '/admin/projects',
-    'List projects (super-admin)',
+    'List projects (projects.manage)',
     z.array(project),
   )
   route(
     'post',
     '/admin/projects',
-    'Create project (super-admin)',
+    'Create project (projects.manage)',
     ok,
     project,
     true,
@@ -183,7 +202,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'get',
     '/admin/users',
-    'List users and project memberships (super-admin)',
+    'List users and project memberships (users.manage)',
     z.array(
       user.extend({
         disabled: z.boolean(),
@@ -195,35 +214,44 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'post',
     '/admin/users',
-    'Invite user (super-admin)',
+    'Invite user (users.manage; server privileges require Server Administrator)',
     enrollment,
-    z.object({ username: z.string(), admin: z.boolean().optional() }),
+    z.object({
+      username: z.string(),
+      admin: z.boolean().optional(),
+      capabilities: z.array(z.enum(serverCapabilities)).optional(),
+    }),
     true,
     201,
   )
   route(
     'put',
     '/admin/users/{id}',
-    'Replace memberships and set disabled status (super-admin)',
+    'Update account (users.manage; memberships require projects.manage; server privileges require Server Administrator)',
     ok,
-    z.object({ disabled: z.boolean(), projects: z.array(slug) }),
+    z.object({
+      disabled: z.boolean(),
+      projects: z.array(slug).optional(),
+      admin: z.boolean().optional(),
+      capabilities: z.array(z.enum(serverCapabilities)).optional(),
+    }),
   )
   route(
     'post',
     '/admin/users/{id}/enrollment',
-    'Reset credentials and issue invitation (super-admin)',
+    'Reset ordinary account credentials (users.manage; privileged accounts require Server Administrator)',
     enrollment,
   )
   route(
     'get',
     '/admin/connectors',
-    'List connector status (super-admin)',
+    'List connector status (connectors.manage)',
     z.array(flexible),
   )
   route(
     'post',
     '/admin/connectors',
-    'Create connector; token shown once (super-admin)',
+    'Create connector; token shown once (connectors.manage)',
     z.object({ id: z.string().uuid(), token: z.string() }),
     z.object({ name: z.string() }),
     true,
@@ -232,21 +260,86 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'put',
     '/admin/connectors/{id}',
-    'Set discovery or permanently revoke credential (super-admin)',
+    'Set discovery or permanently revoke credential (connectors.manage)',
     ok,
     z.object({ discovery: z.boolean(), revoked: z.boolean() }),
   )
   route(
     'get',
     '/admin/containers',
-    'List assigned and discovery-enabled inventory (super-admin)',
+    'List assigned and discovery-enabled inventory (inventory.manage)',
     z.array(row),
   )
   route(
     'put',
     '/admin/containers/{connector}/{container}',
-    'Assign/unassign discovered container (super-admin)',
+    'Assign/unassign discovered container (inventory.manage)',
     ok,
     z.object({ project: slug, application: slug }).nullable(),
+  )
+  route(
+    'get',
+    '/admin/containers/projects',
+    'List project choices for inventory assignment (inventory.manage)',
+    z.array(z.object({ slug, name: z.string() })),
+  )
+  route(
+    'put',
+    '/admin/projects/{project}',
+    'Rename project (projects.manage)',
+    ok,
+    z.object({ name: z.string().min(1).max(100) }),
+  )
+  route(
+    'delete',
+    '/admin/projects/{project}',
+    'Delete project and access grants (projects.manage)',
+    ok,
+  )
+  route(
+    'get',
+    '/projects/{project}/access',
+    'Read project access (Project Administrator or projects.manage)',
+    z.object({
+      grant_mode: z.enum(['id', 'name']),
+      members: z.array(
+        z.object({
+          id: z.string().uuid(),
+          username: z.string(),
+          disabled: z.boolean(),
+          role: z.enum(['admin', 'member']),
+          grants: z.array(grantSchema),
+        }),
+      ),
+    }),
+  )
+  route(
+    'put',
+    '/projects/{project}/access/settings',
+    'Set default grant matching mode (Project Administrator or projects.manage)',
+    ok,
+    settingsBody,
+  )
+  route(
+    'post',
+    '/projects/{project}/access/members',
+    'Invite or add project member; enrollment link only for new accounts',
+    ok.extend({ enrollmentUrl: z.string().url().optional() }),
+    projectInviteBody,
+    true,
+    201,
+  )
+  route(
+    'put',
+    '/projects/{project}/access/members/{id}',
+    'Replace project role and grants (Project Administrator or projects.manage)',
+    ok,
+    memberBody,
+  )
+  route(
+    'delete',
+    '/projects/{project}/access/members/{id}',
+    'Remove membership and grants (Project Administrator or projects.manage)',
+    ok,
   )
 }

@@ -3,10 +3,60 @@ export interface User {
   id: string
   username: string
   admin: boolean
+  capabilities?: ServerCapability[]
+}
+export const serverCapabilities = [
+  'users.manage',
+  'projects.manage',
+  'connectors.manage',
+  'inventory.manage',
+] as const
+export type ServerCapability = (typeof serverCapabilities)[number]
+export const serverCapabilityLabels: Record<ServerCapability, string> = {
+  'users.manage': 'Manage users',
+  'projects.manage': 'Manage projects and all project access',
+  'connectors.manage': 'Manage connectors',
+  'inventory.manage': 'Manage inventory assignments',
+}
+export const hasServer = (user: User, capability: ServerCapability) =>
+  user.admin || !!user.capabilities?.includes(capability)
+export const adminCapabilities: Record<string, ServerCapability> = {
+  users: 'users.manage',
+  projects: 'projects.manage',
+  connectors: 'connectors.manage',
+  containers: 'inventory.manage',
+}
+export const containerCapabilities = [
+  'view',
+  'logs',
+  'lifecycle',
+  'terminal',
+  'configuration',
+] as const
+export type ContainerCapability = (typeof containerCapabilities)[number]
+export interface Grant {
+  capability: ContainerCapability
+  kind: 'all' | 'id' | 'name'
+  connector_id: string | null
+  target: string | null
+}
+export interface ProjectMember {
+  id: string
+  username: string
+  disabled: boolean
+  role: 'member' | 'admin'
+  grants: Grant[]
+}
+export interface ProjectAccess {
+  grant_mode: 'id' | 'name'
+  members: ProjectMember[]
 }
 export interface Project {
   slug: string
   name: string
+  grant_mode?: 'id' | 'name'
+  role?: 'member' | 'admin' | null
+  can_manage_access?: boolean
 }
 export interface ContainerRow {
   connector_id: string
@@ -76,8 +126,12 @@ export async function projectSession(slug: string) {
     throw new Error('Project not found or access denied')
   return { user, projects }
 }
-export async function adminSession() {
+export async function adminSession(section: string) {
   const user = await session()
-  if (!user.admin) throw new Error('Administrator access required')
+  if (
+    !adminCapabilities[section] ||
+    !hasServer(user, adminCapabilities[section])
+  )
+    throw new Error('Server permission required')
   return user
 }

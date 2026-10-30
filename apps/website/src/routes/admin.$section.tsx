@@ -3,7 +3,7 @@ import { adminSession, api, type Project } from '../api'
 import { Admin } from '../admin'
 export const Route = createFileRoute('/admin/$section')({
   loader: async ({ params }) => {
-    const user = await adminSession()
+    const user = await adminSession(params.section)
     if (
       !['projects', 'users', 'connectors', 'containers'].includes(
         params.section,

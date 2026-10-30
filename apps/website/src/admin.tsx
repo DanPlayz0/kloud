@@ -6,7 +6,16 @@ import {
   Checkbox,
 } from './components/ui/controls'
 import { useEffect, useState, type FormEvent } from 'react'
-import { api, type User, type Project, type ContainerRow } from './api'
+import {
+  api,
+  hasServer,
+  serverCapabilities,
+  serverCapabilityLabels,
+  type ServerCapability,
+  type User,
+  type Project,
+  type ContainerRow,
+} from './api'
 import { Shell, usePolling, ErrorMessage, Notice, Icon } from './components'
 type AdminUser = User & {
   disabled: boolean
@@ -54,7 +63,7 @@ export function Admin({
             : 'Changes saved.',
       )
       setRevision((n) => n + 1)
-      if (path === '/admin/projects' && method === 'POST') {
+      if (path.startsWith('/admin/projects')) {
         // Keep the sidebar in sync without losing a successful mutation's result.
         void api<Project[]>('/projects')
           .then(setProjectList)
@@ -160,11 +169,42 @@ function Projects({ revision, action }: { revision: number; action: Action }) {
             <strong>{p.name}</strong>
             <small>{p.slug}</small>
           </div>
-          <Button asChild>
-            <a href={`/projects/${p.slug}/compute/containers`}>
-              Open project <Icon name="arrow" />
-            </a>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <a href={`/projects/${p.slug}/access`}>Manage access</a>
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const name = prompt('Project name', p.name)
+                if (name?.trim())
+                  void action(`/admin/projects/${p.slug}`, 'PUT', {
+                    name: name.trim(),
+                  })
+              }}
+            >
+              Rename
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (
+                  confirm(
+                    `Delete project ${p.name}? Memberships and grants will be removed. Docker containers will keep running.`,
+                  )
+                )
+                  void action(`/admin/projects/${p.slug}`, 'DELETE', undefined)
+              }}
+            >
+              Delete
+            </Button>
+            <Button asChild>
+              <a href={`/projects/${p.slug}/compute/containers`}>
+                Open project <Icon name="arrow" />
+              </a>
+            </Button>
+          </div>
         </div>
       ))}
       {data?.length === 0 && (
@@ -194,7 +234,7 @@ function Users({
     const form = new FormData(e.currentTarget)
     void action('/admin/users', 'POST', {
       username: form.get('username'),
-      admin: form.get('admin') === 'on',
+      ...(current.admin ? { admin: form.get('admin') === 'on' } : {}),
     })
   }
   return (
@@ -210,10 +250,12 @@ function Users({
             autoComplete="off"
           />
         </Label>
-        <Label className="checkbox">
-          <Checkbox name="admin" />
-          Super-admin
-        </Label>
+        {current.admin && (
+          <Label className="checkbox">
+            <Checkbox name="admin" />
+            Server Administrator
+          </Label>
+        )}
         <Button className="primary">Invite user</Button>
       </form>
       <ErrorMessage message={error} />
@@ -241,54 +283,96 @@ function UserEditor({
   action: Action
 }) {
   const [selected, setSelected] = useState(user.projects),
-    [disabled, setDisabled] = useState(user.disabled)
+    [disabled, setDisabled] = useState(user.disabled),
+    [admin, setAdmin] = useState(user.admin),
+    [capabilities, setCapabilities] = useState<ServerCapability[]>(
+      user.capabilities ?? [],
+    )
+  const protectedAccount =
+    !current.admin && (user.admin || !!user.capabilities?.length)
   return (
     <div className="admin-row user-row bg-card border-border">
       <div>
         <strong>{user.username}</strong>
         <small>
-          {user.admin ? 'Super-admin' : 'Member'} ·{' '}
+          {user.admin ? 'Server Administrator' : 'Member'} ·{' '}
           {user.enrolled ? 'Enrolled' : 'Enrollment required'}
         </small>
       </div>
       <div className="membership-list">
-        {projects.map((p) => (
-          <Label className="checkbox" key={p.slug}>
-            <Checkbox
-              checked={selected.includes(p.slug)}
-              onCheckedChange={(checked) =>
-                setSelected(
-                  checked === true
-                    ? [...selected, p.slug]
-                    : selected.filter((s) => s !== p.slug),
-                )
-              }
-            />
-            {p.name}
-          </Label>
-        ))}
-        {user.admin && <small>Super-admins can access every project.</small>}
+        {hasServer(current, 'projects.manage') &&
+          projects.map((p) => (
+            <Label className="checkbox" key={p.slug}>
+              <Checkbox
+                checked={selected.includes(p.slug)}
+                onCheckedChange={(checked) =>
+                  setSelected(
+                    checked === true
+                      ? [...selected, p.slug]
+                      : selected.filter((s) => s !== p.slug),
+                  )
+                }
+              />
+              {p.name}
+            </Label>
+          ))}
+        {user.admin && (
+          <small>Server Administrators can access every project.</small>
+        )}
+        {current.admin && (
+          <>
+            <Label className="checkbox">
+              <Checkbox
+                checked={admin}
+                onCheckedChange={(v) => setAdmin(v === true)}
+              />
+              Server Administrator
+            </Label>
+            {serverCapabilities.map((capability) => (
+              <Label className="checkbox" key={capability}>
+                <Checkbox
+                  checked={capabilities.includes(capability)}
+                  onCheckedChange={(v) =>
+                    setCapabilities((old) =>
+                      v
+                        ? [...old, capability]
+                        : old.filter((c) => c !== capability),
+                    )
+                  }
+                />
+                {serverCapabilityLabels[capability]}
+              </Label>
+            ))}
+          </>
+        )}
+        {protectedAccount && (
+          <small>This account requires a Server Administrator to modify.</small>
+        )}
       </div>
       <div className="row-actions">
         <Label className="checkbox">
           <Checkbox
             checked={disabled}
-            disabled={current.id === user.id}
+            disabled={current.id === user.id || protectedAccount}
             onCheckedChange={(checked) => setDisabled(checked === true)}
           />
           Disabled
         </Label>
         <Button
+          disabled={protectedAccount}
           onClick={() => {
             void action(`/admin/users/${user.id}`, 'PUT', {
               disabled,
-              projects: selected,
+              ...(hasServer(current, 'projects.manage')
+                ? { projects: selected }
+                : {}),
+              ...(current.admin ? { admin, capabilities } : {}),
             })
           }}
         >
           Save access
         </Button>
-        {current.id !== user.id && (
+        {current.id !== user.id && !protectedAccount && (
           <Button
             onClick={() => {
               if (
@@ -425,6 +509,7 @@ function Inventory({
   action: Action
   projects: Project[]
 }) {
+  const assignmentProjects = usePolling<Project[]>('/admin/containers/projects')
   const { data, error } = usePolling<ContainerRow[]>(
     `/admin/containers?revision=${revision}`,
   )
@@ -439,7 +524,7 @@ function Inventory({
         <Assignment
           key={`${c.connector_id}:${c.container_id}:${revision}`}
           row={c}
-          projects={projects}
+          projects={assignmentProjects.data ?? projects}
           action={action}
         />
       ))}

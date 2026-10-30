@@ -25,6 +25,7 @@ export interface User {
   id: string
   username: string
   admin: boolean
+  capabilities: import('./permissions.js').ServerCapability[]
 }
 export type Env = { Variables: { user: User } }
 export const auth = new Hono<Env>()
@@ -39,7 +40,7 @@ export const currentUser = async (c: Context) => {
   const value = getCookie(c, 'session')
   if (!value) return undefined
   const result = await pool.query<User>(
-    'SELECT u.id,u.username,u.admin FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=$1 AND s.expires>now() AND NOT u.disabled',
+    'SELECT u.id,u.username,u.admin,u.capabilities FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=$1 AND s.expires>now() AND NOT u.disabled',
     [digest(value)],
   )
   return result.rows[0]

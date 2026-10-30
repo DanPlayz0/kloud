@@ -15,7 +15,7 @@ try {
     let id: string
     if (command === 'bootstrap') {
       if ((await db.query('SELECT 1 FROM users WHERE admin')).rowCount)
-        throw new Error('A super-admin already exists; use recover')
+        throw new Error('A Server Administrator already exists; use recover')
       id = randomUUID()
       await db.query(
         'INSERT INTO users(id,username,admin) VALUES($1,$2,true)',

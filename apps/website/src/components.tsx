@@ -27,7 +27,13 @@ import {
   BreadcrumbSeparator,
 } from './components/ui/breadcrumb'
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { api, type Project, type User } from './api'
+import {
+  api,
+  hasServer,
+  adminCapabilities,
+  type Project,
+  type User,
+} from './api'
 
 const icons: Record<string, LucideIcon> = {
   box: Server,
@@ -188,20 +194,40 @@ export function Shell({
           {groups.map(([label, items]) => (
             <div className="nav-group" key={label}>
               <p>{label}</p>
-              {items.map(([name, icon]) => (
-                <Button
-                  className="nav-item deferred"
-                  disabled
-                  key={name}
-                  title="Coming in a later update"
-                >
-                  <Icon name={icon} />
-                  {name}
-                </Button>
-              ))}
+              {items
+                .filter(
+                  ([name]) =>
+                    name !== 'Access' ||
+                    projects.find((p) => p.slug === project)?.can_manage_access,
+                )
+                .map(([name, icon]) =>
+                  name === 'Access' &&
+                  project &&
+                  projects.find((p) => p.slug === project)
+                    ?.can_manage_access ? (
+                    <a
+                      key={name}
+                      className={`nav-item ${active === 'access' ? 'active' : ''}`}
+                      href={`/projects/${project}/access`}
+                    >
+                      <Icon name={icon} />
+                      Access
+                    </a>
+                  ) : (
+                    <Button
+                      className="nav-item deferred"
+                      disabled
+                      key={name}
+                      title="Coming in a later update"
+                    >
+                      <Icon name={icon} />
+                      {name}
+                    </Button>
+                  ),
+                )}
             </div>
           ))}
-          {user.admin && (
+          {(user.admin || !!user.capabilities?.length) && (
             <div className="nav-group">
               <p>ADMINISTRATION</p>
               {[
@@ -209,16 +235,20 @@ export function Shell({
                 ['Users', 'users', 'users'],
                 ['Connectors', 'connectors', 'network'],
                 ['Inventory', 'containers', 'database'],
-              ].map(([label, path, icon]) => (
-                <a
-                  className={`nav-item ${active === `admin-${path}` ? 'active' : ''}`}
-                  key={path}
-                  href={`/admin/${path}`}
-                >
-                  <Icon name={icon} />
-                  {label}
-                </a>
-              ))}
+              ]
+                .filter(([, path]) =>
+                  hasServer(user, adminCapabilities[path!]!),
+                )
+                .map(([label, path, icon]) => (
+                  <a
+                    className={`nav-item ${active === `admin-${path}` ? 'active' : ''}`}
+                    key={path}
+                    href={`/admin/${path}`}
+                  >
+                    <Icon name={icon} />
+                    {label}
+                  </a>
+                ))}
             </div>
           )}
         </nav>
@@ -248,7 +278,13 @@ export function Shell({
             <span>
               <strong>{user.username}</strong>
               <small>
-                {user.admin ? 'Super administrator' : 'Project member'}
+                {user.admin
+                  ? 'Server Administrator'
+                  : user.capabilities?.length
+                    ? 'Server permissions'
+                    : projects.find((p) => p.slug === project)?.role === 'admin'
+                      ? 'Project Administrator'
+                      : 'Project Member'}
               </small>
             </span>
             <Icon name="more" className="account-dots" />

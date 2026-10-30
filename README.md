@@ -26,7 +26,7 @@ pnpm --filter @dedi-dash/website dev
 The website runs at http://localhost:5173 and the API at http://localhost:3000.
 Vite proxies `/api/*` requests to the API during development (removing the `/api` prefix).
 Configure PostgreSQL and `apps/api/.env` first as described in the setup guide.
-On an empty installation, open the website to create your super-admin account
+On an empty installation, open the website to create your Server Administrator account
 with a username, password, and passkey. Setup closes as soon as an account exists.
 The API offers public `GET /health` and authenticated `GET /openapi.json`.
 Set the `PORT` environment variable to change the API port; update the Vite proxy target to match.
@@ -69,7 +69,18 @@ Git and Docker build contexts; do not edit the generated route tree manually.
 - `/projects/$projectSlug/compute/containers`: Docker compute.
 - `/projects/$projectSlug/compute/serverless`: Kubernetes placeholder.
 - `/projects/$projectSlug/applications/$appSlug`: application placeholder.
-- `/admin/$section`: super-admin projects, users, connectors, and inventory.
+- `/projects/$projectSlug/access`: project roles, invitations, container grants, and matching defaults.
+- `/admin/$section`: server administration, authorized by individual capabilities.
+
+Server Administrators have unrestricted access. Server capabilities independently
+delegate users, projects (including project access and visibility), connectors,
+and inventory management. Project Administrators manage members and container
+grants within their project. Members need View grants for selected container IDs,
+exact names on a connector, or all project containers. Existing memberships retain
+project-wide View access after migration; new members start without grants.
+Logs, lifecycle, terminal, and configuration grants are stored for future features.
+See [project access and container grants](docs/API.md#project-access-and-container-grants)
+for matching rules and administrative safeguards.
 
 Each page exports `Route = createFileRoute('/path')({ component: Page })` from
 `@tanstack/react-router`. The plugin keeps the route path in sync with the file.

@@ -37,6 +37,30 @@ export async function migrate() {
       )`)
       await db.query('INSERT INTO migrations(version) VALUES(2)')
     }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=3'))
+        .rowCount
+    ) {
+      await db.query(`
+        ALTER TABLE users ADD COLUMN capabilities text[] NOT NULL DEFAULT '{}'
+          CHECK (capabilities <@ ARRAY['users.manage','projects.manage','connectors.manage','inventory.manage']::text[]);
+        ALTER TABLE projects ADD COLUMN grant_mode text NOT NULL DEFAULT 'id' CHECK(grant_mode IN ('id','name'));
+        ALTER TABLE memberships ADD COLUMN role text NOT NULL DEFAULT 'member' CHECK(role IN ('member','admin'));
+        CREATE TABLE container_grants (
+          id uuid PRIMARY KEY, user_id uuid NOT NULL, project_slug text NOT NULL,
+          capability text NOT NULL CHECK(capability IN ('view','logs','lifecycle','terminal','configuration')),
+          kind text NOT NULL CHECK(kind IN ('all','id','name')),
+          connector_id uuid REFERENCES connectors ON DELETE CASCADE, target text,
+          FOREIGN KEY(user_id,project_slug) REFERENCES memberships ON DELETE CASCADE,
+          CHECK ((kind='all' AND connector_id IS NULL AND target IS NULL) OR
+                 (kind IN ('id','name') AND connector_id IS NOT NULL AND target IS NOT NULL AND length(target)>0))
+        );
+        CREATE INDEX container_grants_membership ON container_grants(user_id,project_slug);
+        INSERT INTO container_grants(id,user_id,project_slug,capability,kind)
+          SELECT gen_random_uuid(),user_id,project_slug,'view','all' FROM memberships;
+      `)
+      await db.query('INSERT INTO migrations(version) VALUES(3)')
+    }
   })
 }
 if (

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
 
-test('first super-admin can register a passkey and sign in', async ({
+test('first Server Administrator can register a passkey and sign in', async ({
   page,
   context,
 }) => {
@@ -39,10 +39,14 @@ test('first super-admin can register a passkey and sign in', async ({
       .getByLabel('Confirm password')
       .fill('a strong first admin password')
     await page
-      .getByRole('button', { name: 'Create super-admin and register passkey' })
+      .getByRole('button', {
+        name: 'Create Server Administrator and register passkey',
+      })
       .click()
     await expect(
-      page.getByText('Your super-admin account is ready.', { exact: false }),
+      page.getByText('Your Server Administrator account is ready.', {
+        exact: false,
+      }),
     ).toBeVisible()
     await page
       .getByRole('button', { name: 'Continue with password and passkey' })
@@ -60,7 +64,7 @@ test('first super-admin can register a passkey and sign in', async ({
   }
 })
 
-test('empty installations prompt for super-admin setup and validate password confirmation', async ({
+test('empty installations prompt for Server Administrator setup and validate password confirmation', async ({
   page,
 }) => {
   await page.route('**/api/auth/setup', (route) =>
@@ -68,7 +72,9 @@ test('empty installations prompt for super-admin setup and validate password con
   )
   await page.goto('/login')
   await expect(
-    page.getByRole('heading', { name: 'Create your super-admin account' }),
+    page.getByRole('heading', {
+      name: 'Create your Server Administrator account',
+    }),
   ).toBeVisible()
   await page.getByLabel('Username', { exact: true }).fill('owner')
   await page
@@ -76,7 +82,9 @@ test('empty installations prompt for super-admin setup and validate password con
     .fill('a strong first admin password')
   await page.getByLabel('Confirm password').fill('a different strong password')
   await page
-    .getByRole('button', { name: 'Create super-admin and register passkey' })
+    .getByRole('button', {
+      name: 'Create Server Administrator and register passkey',
+    })
     .click()
   await expect(page.getByRole('alert')).toHaveText('Passwords must match')
 })

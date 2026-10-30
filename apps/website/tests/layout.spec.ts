@@ -33,6 +33,7 @@ async function fixtures(page: Page) {
       '/api/auth/me': owner,
       '/api/projects': [project],
       '/api/admin/projects': [project],
+      '/api/admin/containers/projects': [project],
       '/api/admin/users': [
         { ...owner, disabled: false, enrolled: true, projects: [project.slug] },
       ],
@@ -98,7 +99,9 @@ for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 840 })
     await page.goto('/login')
     await expect(
-      page.getByRole('heading', { name: 'Create your super-admin account' }),
+      page.getByRole('heading', {
+        name: 'Create your Server Administrator account',
+      }),
     ).toBeVisible()
     await page.screenshot({
       path: testInfo.outputPath('setup-card.png'),
