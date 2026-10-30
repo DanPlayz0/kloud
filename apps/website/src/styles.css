@@ -52,6 +52,10 @@ a,
 }
 .ui-button,
 .button {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
   border: 1px solid var(--color-border);
   border-radius: 7px;
@@ -63,6 +67,16 @@ a,
   justify-content: center;
   gap: 9px;
 }
+.ui-button > svg {
+  flex-shrink: 0;
+}
+.ui-card {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 28px;
+  overflow-wrap: anywhere;
+}
 .ui-button:hover,
 .button:hover {
   background: #252525;
@@ -73,6 +87,8 @@ a,
 }
 .ui-input,
 .ui-native-select {
+  width: 100%;
+  max-width: 100%;
   background: var(--color-muted);
   border: 1px solid var(--color-border);
   color: var(--color-foreground);
@@ -85,6 +101,8 @@ a,
   outline: 2px solid #888;
 }
 .ui-label {
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -217,6 +235,7 @@ small {
   justify-content: flex-start;
 }
 .avatar {
+  flex-shrink: 0;
   border: 1px solid #353535;
   background: var(--color-card);
   padding: 7px;
@@ -224,9 +243,16 @@ small {
   display: flex;
 }
 .account-button strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 550;
   display: block;
+}
+.account-button > span:not(.avatar) {
+  flex: 1;
+  min-width: 0;
 }
 .account-button small {
   display: block;
@@ -239,22 +265,26 @@ small {
 }
 .account-menu {
   position: absolute;
-  bottom: 65px;
+  bottom: calc(100% + 8px);
   background: #202020;
   border: 1px solid #383838;
   border-radius: 8px;
   padding: 6px;
   width: 100%;
+  max-height: 50svh;
+  overflow-y: auto;
 }
 .account-menu .ui-button {
   width: 100%;
   border: 0;
 }
 .workspace {
+  min-width: 0;
   margin-left: 264px;
   min-height: 100vh;
 }
 .topbar {
+  min-width: 0;
   height: 60px;
   border-bottom: 1px solid #252525;
   display: flex;
@@ -466,6 +496,8 @@ small {
   text-underline-offset: 4px;
 }
 .error {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: #e5a6a6;
   background: #251717;
   border: 1px solid #4b2929;
@@ -499,13 +531,16 @@ small {
 .auth-page {
   min-height: 100vh;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
-  padding: 32px;
+  padding: clamp(16px, 4vw, 32px);
   background-image: radial-gradient(ellipse at top, #1a1a1a 0, transparent 60%);
 }
 .auth-card {
   width: 100%;
-  max-width: 380px;
+  max-width: 440px;
+  justify-self: center;
+  padding: clamp(20px, 4vw, 32px);
 }
 .auth-mark {
   width: 44px;
@@ -580,6 +615,8 @@ small {
 }
 .inline-form {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: end;
   gap: 16px;
   padding: 22px;
@@ -589,13 +626,17 @@ small {
   margin-bottom: 24px;
 }
 .inline-form .ui-input:not([type='checkbox']) {
-  min-width: 200px;
+  min-width: 0;
+}
+.inline-form > .ui-label:not(.checkbox) {
+  flex: 1 1 200px;
 }
 .checkbox {
   flex-direction: row;
   align-items: center;
   gap: 7px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .ui-checkbox {
   display: inline-flex;
@@ -623,11 +664,25 @@ small {
   padding: 22px;
   border-bottom: 1px solid var(--color-border);
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 20px;
   align-items: center;
   justify-content: space-between;
   background: var(--color-card);
   font-size: 12px;
+}
+.admin-row > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-row > div:first-child {
+  flex: 1 1 160px;
+  overflow-wrap: anywhere;
+}
+.label-assignment {
+  flex: 1 1 180px;
+  overflow-wrap: anywhere;
 }
 .admin-row strong {
   font-weight: 550;
@@ -648,6 +703,7 @@ small {
   gap: 10px;
   flex-wrap: wrap;
   flex: 1;
+  min-width: 0;
 }
 .membership-list small {
   width: 100%;
@@ -682,18 +738,26 @@ small {
   align-items: start;
 }
 .success .ui-button {
+  flex-shrink: 0;
   background: transparent;
   border: 0;
   margin-left: auto;
   padding: 0 5px;
   color: #afc9b5;
 }
+.success > span {
+  min-width: 0;
+  flex: 1;
+}
 .assignment-row > div:first-child {
   flex: 1;
   min-width: 130px;
 }
 .assignment-row .ui-input {
-  width: 160px;
+  width: 100%;
+}
+.assignment-row > .ui-label {
+  flex: 1 1 160px;
 }
 .danger {
   color: #dc9a9a;
@@ -723,9 +787,6 @@ small {
   .admin-row,
   .inline-form {
     flex-wrap: wrap;
-  }
-  .assignment-row .ui-label {
-    flex: 1;
   }
   .assignment-row .ui-input {
     width: 100%;
@@ -780,6 +841,10 @@ small {
     align-items: stretch;
     flex-direction: column;
   }
+  .inline-form > .ui-label:not(.checkbox) {
+    flex-basis: auto;
+    width: 100%;
+  }
   .inline-form .ui-input:not([type='checkbox']) {
     min-width: 0;
   }
@@ -788,6 +853,11 @@ small {
   }
   .admin-row {
     padding: 18px;
+  }
+  .assignment-row > .ui-label,
+  .assignment-row > div:first-child {
+    flex-basis: 100%;
+    width: 100%;
   }
   .membership-list {
     flex-basis: 100%;

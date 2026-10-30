@@ -18,7 +18,15 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { Button, NativeSelect, Label } from './components/ui/controls'
-import { useEffect, useState, type ReactNode } from 'react'
+import { Card } from './components/ui/card'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from './components/ui/breadcrumb'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { api, type Project, type User } from './api'
 
 const icons: Record<string, LucideIcon> = {
@@ -216,7 +224,7 @@ export function Shell({
         </nav>
         <div className="account border-border">
           {account && (
-            <div className="account-menu">
+            <Card className="account-menu">
               <Button
                 onClick={() => {
                   void api('/auth/logout', 'POST')
@@ -227,7 +235,7 @@ export function Shell({
                 Sign out
               </Button>
               {error && <p role="alert">{error}</p>}
-            </div>
+            </Card>
           )}
           <Button
             className="account-button"
@@ -249,7 +257,24 @@ export function Shell({
       </aside>
       <main className="workspace bg-background">
         <header className="topbar border-border text-muted-foreground">
-          <span>{title}</span>
+          <Breadcrumb className="min-w-0">
+            <BreadcrumbList className="text-xs">
+              {title.split(' / ').map((part, index, parts) => (
+                <Fragment key={index}>
+                  {index > 0 && <BreadcrumbSeparator />}
+                  <BreadcrumbItem>
+                    {index === parts.length - 1 ? (
+                      <BreadcrumbPage className="break-all">
+                        {part}
+                      </BreadcrumbPage>
+                    ) : (
+                      <span>{part}</span>
+                    )}
+                  </BreadcrumbItem>
+                </Fragment>
+              ))}
+            </BreadcrumbList>
+          </Breadcrumb>
           <span className="topbar-brand">DEDI DASH</span>
         </header>
         {children}

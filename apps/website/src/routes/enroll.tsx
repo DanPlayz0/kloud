@@ -1,4 +1,5 @@
 import { Button, Input, Label } from '../components/ui/controls'
+import { Card } from '../components/ui/card'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, type FormEvent } from 'react'
 import { startRegistration } from '@simplewebauthn/browser'
@@ -43,7 +44,7 @@ function Enroll() {
   }
   return (
     <main className="auth-page bg-background text-foreground">
-      <div className="auth-card">
+      <Card className="auth-card">
         <div className="auth-mark">
           <Icon name="key" />
         </div>
@@ -101,7 +102,7 @@ function Enroll() {
             </form>
           </>
         )}
-      </div>
+      </Card>
     </main>
   )
 }

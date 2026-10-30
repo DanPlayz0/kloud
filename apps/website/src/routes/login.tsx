@@ -1,4 +1,5 @@
 import { Button, Input, Label } from '../components/ui/controls'
+import { Card } from '../components/ui/card'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
@@ -64,7 +65,7 @@ function Login() {
   }
   return (
     <main className="auth-page bg-background text-foreground">
-      <div className="auth-card bg-card border-border">
+      <Card className="auth-card">
         <div className="auth-mark">
           <Icon />
         </div>
@@ -141,7 +142,7 @@ function Login() {
         <p className="auth-foot">
           <Icon name="shield" /> Password and passkey required
         </p>
-      </div>
+      </Card>
     </main>
   )
 }
