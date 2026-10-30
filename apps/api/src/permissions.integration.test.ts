@@ -135,7 +135,22 @@ test(
         [member],
       )
       await migrate()
+      // Simulate an existing manager upgrading from migration 3.
+      await pool.query(
+        "UPDATE users SET capabilities=ARRAY['projects.manage'] WHERE id=$1",
+        [member],
+      )
+      await pool.query('DELETE FROM migrations WHERE version=4')
       await migrate()
+      await migrate()
+      assert.deepEqual(
+        (
+          await pool.query('SELECT capabilities FROM users WHERE id=$1', [
+            member,
+          ])
+        ).rows[0].capabilities,
+        ['projects.manage', 'projects.create'],
+      )
       assert.deepEqual(
         (
           await pool.query(
@@ -424,6 +439,106 @@ test(
           )
         },
       )
+      await t.test(
+        'project creation grants access only to the new project',
+        async () => {
+          const creator = await account(randomUUID(), 'creator', false, [
+            'projects.create',
+          ])
+          const manager = await account(randomUUID(), 'manager-only', false, [
+            'projects.manage',
+          ])
+          for (const actor of [manager, projectAdmin, member, other]) {
+            await status(
+              actor,
+              '/admin/projects',
+              'POST',
+              { slug: 'forbidden-create', name: 'Forbidden' },
+              403,
+            )
+          }
+          await status(creator, '/admin/projects', 'GET', undefined, 403)
+          await status(
+            creator,
+            '/admin/projects',
+            'POST',
+            { slug: 'creator-project', name: 'Creator project' },
+            201,
+          )
+          await status(
+            creator,
+            '/projects/creator-project/containers',
+            'GET',
+            undefined,
+            200,
+          )
+          await status(
+            creator,
+            '/projects/creator-project/access',
+            'GET',
+            undefined,
+            200,
+          )
+          await status(creator, '/projects/beta/access', 'GET', undefined, 404)
+          await status(
+            creator,
+            '/admin/projects/alpha',
+            'PUT',
+            { name: 'Forbidden' },
+            403,
+          )
+          await status(
+            creator,
+            '/admin/projects/alpha',
+            'DELETE',
+            undefined,
+            403,
+          )
+          await status(
+            creator,
+            '/admin/projects',
+            'POST',
+            { slug: 'creator-project', name: 'Duplicate' },
+            409,
+          )
+          const visible = (await (
+            await request(creator, '/projects')
+          ).json()) as any[]
+          assert.deepEqual(
+            visible.map((p) => [p.slug, p.role, p.can_manage_access]),
+            [['creator-project', 'admin', true]],
+          )
+          assert.equal(
+            (
+              await pool.query('SELECT 1 FROM memberships WHERE user_id=$1', [
+                creator,
+              ])
+            ).rowCount,
+            1,
+          )
+          await status(
+            admin,
+            `/admin/users/${creator}`,
+            'PUT',
+            {
+              disabled: false,
+              capabilities: [
+                'users.manage',
+                'projects.create',
+                'projects.manage',
+                'connectors.manage',
+                'inventory.manage',
+              ],
+            },
+            200,
+          )
+          await pool.query("DELETE FROM projects WHERE slug='creator-project'")
+          await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [
+            [creator, manager],
+          ])
+        },
+      )
+
       await t.test(
         'server capabilities authorize only their own domains',
         async () => {

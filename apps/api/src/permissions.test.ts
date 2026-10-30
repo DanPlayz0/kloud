@@ -1,6 +1,33 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { grantSchema, normalizeGrants, hasServer } from './permissions.js'
+import {
+  grantSchema,
+  normalizeGrants,
+  hasServer,
+  capabilitySchema,
+  serverCapabilities,
+} from './permissions.js'
+
+test('project creation and server-wide management are independent capabilities', () => {
+  const creator = {
+    id: 'creator',
+    username: 'creator',
+    admin: false,
+    capabilities: ['projects.create' as const],
+  }
+  const manager = { ...creator, capabilities: ['projects.manage' as const] }
+  assert.equal(hasServer(creator, 'projects.create'), true)
+  assert.equal(hasServer(creator, 'projects.manage'), false)
+  assert.equal(hasServer(manager, 'projects.create'), false)
+  assert.equal(hasServer(manager, 'projects.manage'), true)
+  assert.equal(
+    hasServer({ ...creator, admin: true, capabilities: [] }, 'projects.create'),
+    true,
+  )
+  assert.deepEqual(capabilitySchema.parse([...serverCapabilities]), [
+    ...serverCapabilities,
+  ])
+})
 
 test('grant validation rejects malformed and over-broad targets', () => {
   for (const grant of [

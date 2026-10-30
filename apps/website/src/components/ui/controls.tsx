@@ -4,7 +4,7 @@ import * as LabelPrimitive from '@radix-ui/react-label'
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { clsx } from 'clsx'
-import { Check } from 'lucide-react'
+import { Check, Minus } from 'lucide-react'
 
 // shadcn/ui's Radix composition, adapted to the dashboard's CSS theme.
 // https://ui.shadcn.com/docs/components/radix/button
@@ -77,16 +77,22 @@ export function NativeSelect({
 }
 export function Checkbox({
   className,
+  checked,
   ...props
 }: ComponentProps<typeof CheckboxPrimitive.Root>) {
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={clsx('ui-checkbox', className)}
+      checked={checked}
       {...props}
     >
       <CheckboxPrimitive.Indicator>
-        <Check size={11} strokeWidth={2} aria-hidden="true" />
+        {checked === 'indeterminate' ? (
+          <Minus size={11} strokeWidth={2} aria-hidden="true" />
+        ) : (
+          <Check size={11} strokeWidth={2} aria-hidden="true" />
+        )}
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   )

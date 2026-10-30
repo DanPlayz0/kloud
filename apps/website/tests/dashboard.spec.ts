@@ -34,6 +34,63 @@ test.afterAll(async () => {
   ])
   await db.end()
 })
+for (const creatorOnly of [false, true]) {
+  test(`sidebar creates a project as ${creatorOnly ? 'a project creator' : 'a server administrator'} and opens its Containers page`, async ({
+    page,
+    context,
+  }) => {
+    const session = randomBytes(32).toString('base64url')
+    const creatorID = creatorOnly ? randomUUID() : id
+    const slug = `picker-${creatorID.slice(0, 8)}`
+    if (creatorOnly)
+      await db.query(
+        "INSERT INTO users(id,username,capabilities) VALUES($1,$2,ARRAY['projects.create'])",
+        [creatorID, `creator-${creatorID.slice(0, 8)}`],
+      )
+    await db.query(
+      "INSERT INTO sessions(token,user_id,expires) VALUES($1,$2,now()+interval '1 hour')",
+      [digest(session), creatorID],
+    )
+    await context.addCookies([
+      { name: 'session', value: session, url: 'http://localhost:5174' },
+    ])
+    try {
+      await page.goto(creatorOnly ? '/' : '/admin/projects')
+      if (creatorOnly)
+        await expect(
+          page.getByRole('link', { name: 'Projects', exact: true }),
+        ).toHaveCount(0)
+      await page.getByRole('button', { name: 'Project', exact: true }).click()
+      await page
+        .getByRole('button', { name: 'Create project', exact: true })
+        .last()
+        .click()
+      const dialog = page.getByRole('dialog', { name: 'Create project' })
+      await dialog.getByLabel('Project name').fill('Picker project')
+      await dialog.getByLabel('Project slug').fill(slug)
+      await dialog
+        .getByRole('button', { name: 'Create project', exact: true })
+        .click()
+      await expect(page).toHaveURL(`/projects/${slug}/compute/containers`)
+      await expect(
+        page.getByRole('button', { name: 'Project', exact: true }),
+      ).toContainText('Picker project')
+      await expect(
+        page.getByRole('heading', { name: 'Containers', exact: true }),
+      ).toBeVisible()
+      if (creatorOnly)
+        await expect(
+          page.getByRole('link', { name: 'Access', exact: true }),
+        ).toBeVisible()
+    } finally {
+      await db.query('DELETE FROM projects WHERE slug=$1', [slug])
+      await db.query('DELETE FROM sessions WHERE token=$1', [digest(session)])
+      if (creatorOnly)
+        await db.query('DELETE FROM users WHERE id=$1', [creatorID])
+    }
+  })
+}
+
 test('enrollment, two-factor login, administration, live inventory and responsive navigation', async ({
   page,
   context,
@@ -81,11 +138,13 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
   await page.getByLabel('Project slug').fill(project)
   await page.getByRole('button', { name: 'Create project' }).click()
   await expect(page.getByRole('status')).toContainText('Changes saved')
+  await page.getByRole('button', { name: 'Project', exact: true }).click()
   await expect(
     page
-      .getByLabel('Project', { exact: true })
-      .locator(`option[value="${project}"]`),
-  ).toHaveCount(1)
+      .getByRole('listbox', { name: 'Projects' })
+      .getByRole('option', { name: /Miki/ }),
+  ).toBeVisible()
+  await page.keyboard.press('Escape')
   await page.getByRole('link', { name: 'Connectors', exact: true }).click()
   await page.getByLabel('Connector name').fill('Browser Docker host')
   await page.getByRole('button', { name: 'Create connector token' }).click()
@@ -141,7 +200,11 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
     await page.getByLabel('Application slug for worker').fill('worker')
     await page.getByRole('button', { name: 'Assign', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('Changes saved')
-    await page.getByLabel('Project', { exact: true }).selectOption(project)
+    await page.getByRole('button', { name: 'Project', exact: true }).click()
+    await page
+      .getByRole('listbox', { name: 'Projects' })
+      .getByRole('option', { name: /Miki/ })
+      .click()
     await expect(page.getByRole('link', { name: /imgen/ })).toBeVisible()
     await expect(page.getByRole('link', { name: /worker/ })).toBeVisible()
     await page.screenshot({

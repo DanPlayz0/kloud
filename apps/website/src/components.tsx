@@ -17,7 +17,9 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { Button, NativeSelect, Label } from './components/ui/controls'
+import { Button } from './components/ui/controls'
+import QuickTip from './components/quickTip'
+import { ProjectPicker } from './components/project-picker'
 import { Card } from './components/ui/card'
 import {
   Breadcrumb,
@@ -144,31 +146,7 @@ export function Shell({
       <aside
         className={`sidebar bg-background border-border ${open ? 'open' : ''}`}
       >
-        <Label className="project-picker">
-          <span className="sr-only">Project</span>
-          <NativeSelect
-            aria-label="Project"
-            value={project ?? ''}
-            onChange={(e) => {
-              if (e.target.value)
-                location.assign(
-                  `/projects/${e.target.value}/compute/containers`,
-                )
-            }}
-          >
-            <option value="" disabled>
-              Select project
-            </option>
-            {projects.map((p) => (
-              <option key={p.slug} value={p.slug}>
-                {p.name}
-              </option>
-            ))}
-          </NativeSelect>
-          <span>
-            <Icon name="chevrons" />
-          </span>
-        </Label>
+        <ProjectPicker user={user} projects={projects} project={project} />
         <nav aria-label="Main navigation">
           <div className="nav-group">
             <p>COMPUTE</p>
@@ -198,6 +176,7 @@ export function Shell({
                 .filter(
                   ([name]) =>
                     name !== 'Access' ||
+                    !project ||
                     projects.find((p) => p.slug === project)?.can_manage_access,
                 )
                 .map(([name, icon]) =>
@@ -214,15 +193,25 @@ export function Shell({
                       Access
                     </a>
                   ) : (
-                    <Button
-                      className="nav-item deferred"
-                      disabled
+                    <QuickTip
                       key={name}
-                      title="Coming in a later update"
+                      portal
+                      content={
+                        name === 'Access'
+                          ? 'Select a project to manage access'
+                          : 'Coming in a later update'
+                      }
                     >
-                      <Icon name={icon} />
-                      {name}
-                    </Button>
+                      <span tabIndex={0} className="block w-full">
+                        <Button
+                          className="nav-item deferred pointer-events-none"
+                          disabled
+                        >
+                          <Icon name={icon} />
+                          {name}
+                        </Button>
+                      </span>
+                    </QuickTip>
                   ),
                 )}
             </div>
@@ -318,7 +307,7 @@ export function Shell({
     </div>
   )
 }
-export function usePolling<T>(path: string) {
+export function usePolling<T>(path: string, refreshKey = 0) {
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
     const clock = setInterval(() => setNow(Date.now()), 1000)
@@ -326,11 +315,11 @@ export function usePolling<T>(path: string) {
   }, [])
   const [data, setData] = useState<T>(),
     [error, setError] = useState('')
+  useEffect(() => setData(undefined), [path])
   useEffect(() => {
     let stopped = false,
       timer: ReturnType<typeof setTimeout>
     const abort = new AbortController()
-    setData(undefined)
     setError('')
     const load = async () => {
       try {
@@ -355,7 +344,7 @@ export function usePolling<T>(path: string) {
       abort.abort()
       clearTimeout(timer)
     }
-  }, [path])
+  }, [path, refreshKey])
   return { data, error, now }
 }
 export function Notice({

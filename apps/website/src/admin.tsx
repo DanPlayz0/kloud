@@ -1,3 +1,4 @@
+import { ProjectFields, projectFormValues } from './components/project-fields'
 import {
   Button,
   Input,
@@ -9,14 +10,13 @@ import { useEffect, useState, type FormEvent } from 'react'
 import {
   api,
   hasServer,
-  serverCapabilities,
-  serverCapabilityLabels,
   type ServerCapability,
   type User,
   type Project,
   type ContainerRow,
 } from './api'
 import { Shell, usePolling, ErrorMessage, Notice, Icon } from './components'
+import { ServerPermissionTree } from './components/server-permission-tree'
 type AdminUser = User & {
   disabled: boolean
   enrolled: boolean
@@ -108,7 +108,11 @@ export function Admin({
         )}
         <fieldset className="admin-controls" disabled={busy}>
           {section === 'projects' ? (
-            <Projects revision={revision} action={action} />
+            <Projects
+              revision={revision}
+              action={action}
+              canCreate={hasServer(user, 'projects.create')}
+            />
           ) : section === 'users' ? (
             <Users
               revision={revision}
@@ -131,37 +135,30 @@ export function Admin({
   )
 }
 type Action = (path: string, method: string, body: unknown) => Promise<boolean>
-function Projects({ revision, action }: { revision: number; action: Action }) {
+function Projects({
+  revision,
+  action,
+  canCreate,
+}: {
+  revision: number
+  action: Action
+  canCreate: boolean
+}) {
   const { data, error } = usePolling<Project[]>(
     `/admin/projects?revision=${revision}`,
   )
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    const form = new FormData(e.currentTarget)
-    void action('/admin/projects', 'POST', {
-      name: form.get('name'),
-      slug: form.get('slug'),
-    })
+    void action('/admin/projects', 'POST', projectFormValues(e.currentTarget))
   }
   return (
     <>
-      <form className="inline-form bg-card border-border" onSubmit={submit}>
-        <Label>
-          Project name
-          <Input name="name" required maxLength={100} placeholder="Miki" />
-        </Label>
-        <Label>
-          Project slug
-          <Input
-            name="slug"
-            required
-            pattern="[a-z0-9]+(-[a-z0-9]+)*"
-            maxLength={100}
-            placeholder="miki"
-          />
-        </Label>
-        <Button className="primary">Create project</Button>
-      </form>
+      {canCreate && (
+        <form className="inline-form bg-card border-border" onSubmit={submit}>
+          <ProjectFields />
+          <Button className="primary">Create project</Button>
+        </form>
+      )}
       <ErrorMessage message={error} />
       {data?.map((p) => (
         <div className="admin-row bg-card border-border" key={p.slug}>
@@ -229,12 +226,14 @@ function Users({
   const { data, error } = usePolling<AdminUser[]>(
     `/admin/users?revision=${revision}`,
   )
+  const [admin, setAdmin] = useState(false)
+  const [capabilities, setCapabilities] = useState<ServerCapability[]>([])
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
     void action('/admin/users', 'POST', {
       username: form.get('username'),
-      ...(current.admin ? { admin: form.get('admin') === 'on' } : {}),
+      ...(current.admin ? { admin, capabilities } : {}),
     })
   }
   return (
@@ -251,10 +250,14 @@ function Users({
           />
         </Label>
         {current.admin && (
-          <Label className="checkbox">
-            <Checkbox name="admin" />
-            Server Administrator
-          </Label>
+          <ServerPermissionTree
+            admin={admin}
+            capabilities={capabilities}
+            onChange={(admin, capabilities) => {
+              setAdmin(admin)
+              setCapabilities(capabilities)
+            }}
+          />
         )}
         <Button className="primary">Invite user</Button>
       </form>
@@ -316,34 +319,18 @@ function UserEditor({
               {p.name}
             </Label>
           ))}
-        {user.admin && (
+        {admin && (
           <small>Server Administrators can access every project.</small>
         )}
         {current.admin && (
-          <>
-            <Label className="checkbox">
-              <Checkbox
-                checked={admin}
-                onCheckedChange={(v) => setAdmin(v === true)}
-              />
-              Server Administrator
-            </Label>
-            {serverCapabilities.map((capability) => (
-              <Label className="checkbox" key={capability}>
-                <Checkbox
-                  checked={capabilities.includes(capability)}
-                  onCheckedChange={(v) =>
-                    setCapabilities((old) =>
-                      v
-                        ? [...old, capability]
-                        : old.filter((c) => c !== capability),
-                    )
-                  }
-                />
-                {serverCapabilityLabels[capability]}
-              </Label>
-            ))}
-          </>
+          <ServerPermissionTree
+            admin={admin}
+            capabilities={capabilities}
+            onChange={(admin, capabilities) => {
+              setAdmin(admin)
+              setCapabilities(capabilities)
+            }}
+          />
         )}
         {protectedAccount && (
           <small>This account requires a Server Administrator to modify.</small>

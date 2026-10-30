@@ -1,4 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
+import { Search, UserPen, UserPlus, UserX } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from './components/ui/dialog'
 import {
   api,
   containerCapabilities,
@@ -10,13 +17,24 @@ import {
   type Project,
 } from './api'
 import { Shell, usePolling, ErrorMessage } from './components'
+import { Button, Input, Label, NativeSelect } from './components/ui/controls'
 import {
-  Button,
-  Input,
-  Label,
-  NativeSelect,
-  Checkbox,
-} from './components/ui/controls'
+  CheckboxTree,
+  CheckboxTreeCheckboxState,
+  getInitialCheckboxTreeValues,
+  type CheckboxTreeItem,
+} from './components/ui/checkbox-tree'
+
+const containerPermissionItems: CheckboxTreeItem[] = [
+  { id: 1, parentId: 0, name: 'All container capabilities', value: 'all' },
+  ...containerCapabilities.map((value, index) => ({
+    id: index + 2,
+    parentId: 1,
+    name: value === 'view' ? 'View' : `${value} (planned)`,
+    value,
+    dependentIds: value === 'view' ? [] : [2],
+  })),
+]
 
 export function ProjectAccessPage({
   user,
@@ -32,12 +50,20 @@ export function ProjectAccessPage({
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false)
   const base = `/projects/${project}/access`
-  const { data, error: loadError } = usePolling<ProjectAccess>(
-    `${base}?revision=${revision}`,
-  )
+  const [search, setSearch] = useState('')
+  const { data, error: loadError } = usePolling<ProjectAccess>(base, revision)
   const inventory = usePolling<ContainerRow[]>(
     `/projects/${project}/containers`,
   )
+  const query = search.trim().toLowerCase()
+  const members =
+    data?.members.filter((member) =>
+      [
+        member.username,
+        member.role,
+        member.disabled ? 'disabled' : 'active',
+      ].some((value) => value.toLowerCase().includes(query)),
+    ) ?? []
   async function action(path: string, method: string, body?: unknown) {
     setBusy(true)
     setError('')
@@ -105,13 +131,26 @@ export function ProjectAccessPage({
                 containers on the same connector in this project.
               </p>
             </form>
-            <h2>Invite or add a member</h2>
-            <MemberEditor
-              key={`invite:${revision}`}
-              mode={data.grant_mode}
-              containers={inventory.data ?? []}
-              onSave={(body) => action(`${base}/members`, 'POST', body)}
-            />
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+              <div className="relative w-80 max-w-full">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  aria-label="Search members"
+                  placeholder="Search members..."
+                  className="pl-9"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+              <MemberDialog
+                mode={data.grant_mode}
+                containers={inventory.data ?? []}
+                onSave={(body) => action(`${base}/members`, 'POST', body)}
+              />
+            </div>
             <h2>Members</h2>
             <p className="text-muted-foreground text-sm">
               Project Administrators manage access and see every container.
@@ -119,28 +158,171 @@ export function ProjectAccessPage({
               are planned and unavailable today, and include View for the same
               target.
             </p>
-            {data.members.map((member) => (
-              <MemberEditor
-                key={`${member.id}:${revision}`}
-                member={member}
-                mode={data.grant_mode}
-                containers={inventory.data ?? []}
-                onSave={(body) =>
-                  action(`${base}/members/${member.id}`, 'PUT', body)
-                }
-                onRemove={() => {
-                  if (confirm(`Remove ${member.username} from this project?`))
-                    void action(`${base}/members/${member.id}`, 'DELETE')
-                }}
-              />
-            ))}
-            {!data.members.length && (
-              <p className="text-muted-foreground">No project members yet.</p>
-            )}
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border bg-background text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="p-4 font-medium">
+                      Member
+                    </th>
+                    <th scope="col" className="p-4 font-medium">
+                      Permissions
+                    </th>
+                    <th scope="col" className="p-4 font-medium">
+                      Status
+                    </th>
+                    <th scope="col" className="p-4">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((member) => (
+                    <tr
+                      key={member.id}
+                      className="border-b border-border last:border-0"
+                    >
+                      <td className="p-4 font-medium">
+                        <span className="break-all">{member.username}</span>
+                      </td>
+                      <td className="p-4 text-muted-foreground">
+                        {member.role === 'admin'
+                          ? 'Project Administrator'
+                          : `${member.grants.length} grant${member.grants.length === 1 ? '' : 's'}`}
+                      </td>
+                      <td className="p-4 text-muted-foreground">
+                        {member.disabled ? 'Disabled' : 'Active'}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex justify-end gap-2">
+                          <MemberDialog
+                            member={member}
+                            mode={data.grant_mode}
+                            containers={inventory.data ?? []}
+                            onSave={(body) =>
+                              action(
+                                `${base}/members/${member.id}`,
+                                'PUT',
+                                body,
+                              )
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            aria-label={`Remove ${member.username}`}
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Remove ${member.username} from this project?`,
+                                )
+                              )
+                                void action(
+                                  `${base}/members/${member.id}`,
+                                  'DELETE',
+                                )
+                            }}
+                          >
+                            <UserX className="size-4" aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {!members.length && (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="h-28 p-4 text-center text-muted-foreground"
+                      >
+                        {query
+                          ? 'No members match your search.'
+                          : 'No project members yet.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </fieldset>
         )}
       </section>
     </Shell>
+  )
+}
+
+type MemberEditorProps = {
+  member?: ProjectMember
+  mode: 'id' | 'name'
+  containers: ContainerRow[]
+  onSave: (body: unknown) => Promise<boolean>
+}
+
+function MemberDialog(props: MemberEditorProps) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const submitting = useRef(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!submitting.current) setOpen(next)
+      }}
+    >
+      <Button
+        ref={trigger}
+        type="button"
+        variant={props.member ? 'default' : 'primary'}
+        aria-label={props.member ? `Edit ${props.member.username}` : undefined}
+        onClick={() => setOpen(true)}
+      >
+        {props.member ? (
+          <UserPen className="size-4" aria-hidden="true" />
+        ) : (
+          <>
+            <UserPlus className="size-4" aria-hidden="true" /> Invite or add
+            member
+          </>
+        )}
+      </Button>
+      <DialogContent
+        className="max-w-xl"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          trigger.current?.focus()
+        }}
+      >
+        <DialogTitle className="break-all text-lg font-semibold">
+          {props.member
+            ? `Edit ${props.member.username}`
+            : 'Invite or add a member'}
+        </DialogTitle>
+        <DialogDescription className="mt-2 text-sm text-muted-foreground">
+          {props.member
+            ? "Make changes to this member's role and container permissions."
+            : 'Invite someone to help manage this project.'}
+        </DialogDescription>
+        <MemberEditor
+          {...props}
+          saving={saving}
+          onCancel={() => setOpen(false)}
+          onSave={async (body) => {
+            if (submitting.current) return false
+            submitting.current = true
+            setSaving(true)
+            try {
+              const success = await props.onSave(body)
+              if (success) setOpen(false)
+              return success
+            } finally {
+              submitting.current = false
+              setSaving(false)
+            }
+          }}
+        />
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -149,14 +331,10 @@ function MemberEditor({
   mode,
   containers,
   onSave,
-  onRemove,
-}: {
-  member?: ProjectMember
-  mode: 'id' | 'name'
-  containers: ContainerRow[]
-  onSave: (body: unknown) => Promise<boolean>
-  onRemove?: () => void
-}) {
+  onCancel,
+  saving,
+}: MemberEditorProps & { onCancel: () => void; saving: boolean }) {
+  const [saveError, setSaveError] = useState('')
   const [role, setRole] = useState(member?.role ?? 'member')
   const [grants, setGrants] = useState<Grant[]>(member?.grants ?? [])
   const [kind, setKind] = useState<Grant['kind']>(mode)
@@ -201,160 +379,189 @@ function MemberEditor({
         ? { username: new FormData(e.currentTarget).get('username') }
         : {}),
     }
-    void onSave(body)
+    setSaveError('')
+    void onSave(body).then((success) => {
+      if (!success)
+        setSaveError('Could not save member access. Please try again.')
+    })
   }
   return (
     <form
-      className="bg-card border border-border rounded-lg p-4 space-y-4 min-w-0"
+      className="mt-5 space-y-4 min-w-0"
+      aria-busy={saving}
       onSubmit={submit}
     >
-      <div className="flex flex-wrap items-end gap-4">
-        {member ? (
-          <strong className="break-all">
-            {member.username}
-            {member.disabled && ' (disabled)'}
-          </strong>
-        ) : (
+      <fieldset disabled={saving} className="min-w-0 space-y-4">
+        <div className="flex flex-wrap items-end gap-4">
+          {member ? (
+            <strong className="break-all">
+              {member.username}
+              {member.disabled && ' (disabled)'}
+            </strong>
+          ) : (
+            <Label>
+              Username
+              <Input
+                name="username"
+                required
+                maxLength={100}
+                pattern="[a-zA-Z0-9_.@\-]+"
+                autoComplete="off"
+              />
+            </Label>
+          )}
           <Label>
-            Username
-            <Input
-              name="username"
-              required
-              maxLength={100}
-              pattern="[a-zA-Z0-9_.@\-]+"
-              autoComplete="off"
-            />
-          </Label>
-        )}
-        <Label>
-          Project role
-          <NativeSelect
-            aria-label="Project role"
-            value={role}
-            onChange={(e) => setRole(e.target.value as typeof role)}
-          >
-            <option value="member">Project Member</option>
-            <option value="admin">Project Administrator</option>
-          </NativeSelect>
-        </Label>
-      </div>
-      {role === 'admin' && (
-        <p className="text-muted-foreground text-sm">
-          This role grants all project container capabilities and access
-          management. Saved member grants are retained.
-        </p>
-      )}
-      <div className="space-y-2">
-        <h3>Container grants</h3>
-        {grants.map((g, index) => (
-          <div
-            key={index}
-            className="flex flex-wrap items-center gap-2 text-sm"
-          >
-            <span className="break-all">
-              {g.capability}
-              {g.capability !== 'view' && ' (planned)'} ·{' '}
-              {g.kind === 'all'
-                ? 'All containers in this project'
-                : `${g.kind}: ${g.target} · ${containers.find((c) => c.connector_id === g.connector_id)?.connector_name ?? g.connector_id}`}
-            </span>
-            <Button
-              type="button"
-              aria-label={`Remove ${g.capability} grant ${index + 1}`}
-              onClick={() =>
-                setGrants((old) =>
-                  old.filter(
-                    (_, i) =>
-                      i !== index &&
-                      !(
-                        g.capability === 'view' &&
-                        old[i]?.kind === g.kind &&
-                        old[i]?.connector_id === g.connector_id &&
-                        old[i]?.target === g.target
-                      ),
-                  ),
-                )
-              }
-            >
-              Remove
-            </Button>
-          </div>
-        ))}
-        {!grants.length && (
-          <p className="text-muted-foreground text-sm">
-            {role === 'admin'
-              ? 'No member grants. The administrator role provides project-wide access.'
-              : 'No grants. Project Members cannot view containers until granted access.'}
-          </p>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-4 items-end">
-        <Label>
-          Grant target
-          <NativeSelect
-            aria-label="Grant target"
-            value={kind}
-            onChange={(e) => setKind(e.target.value as Grant['kind'])}
-          >
-            <option value="all">All containers in this project</option>
-            <option value="id">Container ID</option>
-            <option value="name">Exact container name</option>
-          </NativeSelect>
-        </Label>
-        {kind !== 'all' && (
-          <Label>
-            Container
+            Project role
             <NativeSelect
-              aria-label="Container"
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
+              aria-label="Project role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as typeof role)}
             >
-              <option value="">Select container</option>
-              {containers.map((c) => (
-                <option
-                  key={`${c.connector_id}:${c.container_id}`}
-                  value={`${c.connector_id}:${c.container_id}`}
-                >
-                  {c.data.name} ({c.connector_name})
-                </option>
-              ))}
+              <option value="member">Project Member</option>
+              <option value="admin">Project Administrator</option>
             </NativeSelect>
           </Label>
+        </div>
+        {role === 'admin' && (
+          <p className="text-muted-foreground text-sm">
+            This role grants all project container capabilities and access
+            management. Saved member grants are retained.
+          </p>
         )}
-        <Button
-          type="button"
-          onClick={addGrant}
-          disabled={!capabilities.length || (kind !== 'all' && !selected)}
-        >
-          Add grant
-        </Button>
-      </div>
-      <div className="flex flex-wrap gap-4">
-        {containerCapabilities.map((capability) => (
-          <Label key={capability} className="checkbox">
-            <Checkbox
-              checked={capabilities.includes(capability)}
-              onCheckedChange={(checked) =>
-                setCapabilities((old) =>
-                  checked
-                    ? [...old, capability]
-                    : old.filter((c) => c !== capability),
-                )
-              }
-            />
-            {capability === 'view' ? 'View' : `${capability} (planned)`}
+        <div className="space-y-2">
+          <h3>Container grants</h3>
+          {grants.map((g, index) => (
+            <div
+              key={index}
+              className="flex flex-wrap items-center gap-2 text-sm"
+            >
+              <span className="break-all">
+                {g.capability}
+                {g.capability !== 'view' && ' (planned)'} ·{' '}
+                {g.kind === 'all'
+                  ? 'All containers in this project'
+                  : `${g.kind}: ${g.target} · ${containers.find((c) => c.connector_id === g.connector_id)?.connector_name ?? g.connector_id}`}
+              </span>
+              <Button
+                type="button"
+                aria-label={`Remove ${g.capability} grant ${index + 1}`}
+                onClick={() =>
+                  setGrants((old) =>
+                    old.filter(
+                      (_, i) =>
+                        i !== index &&
+                        !(
+                          g.capability === 'view' &&
+                          old[i]?.kind === g.kind &&
+                          old[i]?.connector_id === g.connector_id &&
+                          old[i]?.target === g.target
+                        ),
+                    ),
+                  )
+                }
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+          {!grants.length && (
+            <p className="text-muted-foreground text-sm">
+              {role === 'admin'
+                ? 'No member grants. The administrator role provides project-wide access.'
+                : 'No grants. Project Members cannot view containers until granted access.'}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-4 items-end">
+          <Label>
+            Grant target
+            <NativeSelect
+              aria-label="Grant target"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as Grant['kind'])}
+            >
+              <option value="all">All containers in this project</option>
+              <option value="id">Container ID</option>
+              <option value="name">Exact container name</option>
+            </NativeSelect>
           </Label>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <Button variant="primary">
-          {member ? 'Save member access' : 'Invite or add member'}
-        </Button>
-        {onRemove && (
-          <Button type="button" variant="destructive" onClick={onRemove}>
-            Remove member
+          {kind !== 'all' && (
+            <Label>
+              Container
+              <NativeSelect
+                aria-label="Container"
+                value={selected}
+                onChange={(e) => setSelected(e.target.value)}
+              >
+                <option value="">Select container</option>
+                {containers.map((c) => (
+                  <option
+                    key={`${c.connector_id}:${c.container_id}`}
+                    value={`${c.connector_id}:${c.container_id}`}
+                  >
+                    {c.data.name} ({c.connector_name})
+                  </option>
+                ))}
+              </NativeSelect>
+            </Label>
+          )}
+          <Button
+            type="button"
+            onClick={addGrant}
+            disabled={
+              role === 'admin' ||
+              !capabilities.length ||
+              (kind !== 'all' && !selected)
+            }
+          >
+            Add grant
           </Button>
-        )}
+        </div>
+        <CheckboxTree
+          data={containerPermissionItems}
+          value={getInitialCheckboxTreeValues(
+            containerPermissionItems,
+            role === 'admin' ? ['all'] : capabilities,
+          )}
+          disabled={role === 'admin'}
+          onChange={(states) =>
+            setCapabilities(
+              containerCapabilities.filter((capability) =>
+                states.some(
+                  (state) =>
+                    state.value === capability &&
+                    state.state === CheckboxTreeCheckboxState.CHECKED,
+                ),
+              ),
+            )
+          }
+        />
+      </fieldset>
+      {saveError && (
+        <p role="alert" className="error">
+          {saveError}
+        </p>
+      )}
+      <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-4">
+        <Button type="button" disabled={saving} onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={
+            saving ||
+            (!!member &&
+              role === member.role &&
+              JSON.stringify(grants) === JSON.stringify(member.grants))
+          }
+        >
+          {saving
+            ? 'Saving…'
+            : member
+              ? 'Save member access'
+              : 'Invite or add member'}
+        </Button>
       </div>
     </form>
   )

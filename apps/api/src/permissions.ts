@@ -6,6 +6,7 @@ import type { User } from './auth.js'
 
 export const serverCapabilities = [
   'users.manage',
+  'projects.create',
   'projects.manage',
   'connectors.manage',
   'inventory.manage',
@@ -20,7 +21,7 @@ export const containerCapabilities = [
 ] as const
 export const capabilitySchema = z
   .array(z.enum(serverCapabilities))
-  .max(4)
+  .max(serverCapabilities.length)
   .transform((v) => [...new Set(v)])
 export const grantSchema = z
   .object({

@@ -28,7 +28,10 @@ dashboard.use('/admin/*', async (c, next) => {
     connectors: 'connectors.manage',
     containers: 'inventory.manage',
   } as const
-  const required = capability[section as keyof typeof capability]
+  const required =
+    c.req.method === 'POST' && c.req.path === '/admin/projects'
+      ? 'projects.create'
+      : capability[section as keyof typeof capability]
   if (required) demandServer(c.get('user'), required)
   await next()
 })
@@ -103,11 +106,17 @@ dashboard.get('/admin/projects', async (c) =>
 dashboard.post('/admin/projects', async (c) => {
   const body = projectBody.parse(await c.req.json())
   await permissionTransaction(c.get('user'), async (db, actor) => {
-    demandServer(actor, 'projects.manage')
+    demandServer(actor, 'projects.create')
     await db.query('INSERT INTO projects(slug,name) VALUES($1,$2)', [
       body.slug,
       body.name,
     ])
+    if (!hasServer(actor, 'projects.manage')) {
+      await db.query(
+        "INSERT INTO memberships(user_id,project_slug,role) VALUES($1,$2,'admin')",
+        [actor.id, body.slug],
+      )
+    }
   })
   return c.json({ ok: true }, 201)
 })

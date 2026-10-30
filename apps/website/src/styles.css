@@ -149,22 +149,12 @@ small {
   position: relative;
   margin: 0 7px 6px;
 }
-.project-picker .ui-native-select {
-  appearance: none;
-  width: 100%;
+.project-picker > .ui-button {
+  justify-content: space-between;
+  background: var(--color-card);
   padding: 13px 12px;
   font-size: 12px;
   font-weight: 600;
-  background: var(--color-card);
-}
-.project-picker > span:last-child {
-  position: absolute;
-  right: 14px;
-  top: 9px;
-  font-size: 10px;
-  line-height: 9px;
-  pointer-events: none;
-  color: #666;
 }
 .sidebar nav {
   overflow: auto;
@@ -652,7 +642,8 @@ small {
   background: #161616;
   cursor: pointer;
 }
-.ui-checkbox[data-state='checked'] {
+.ui-checkbox[data-state='checked'],
+.ui-checkbox[data-state='indeterminate'] {
   background: #d0d0d0;
   border-color: #d0d0d0;
 }

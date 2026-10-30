@@ -7,6 +7,7 @@ import {
   Icon,
 } from './components'
 import type { User, Project, ContainerRow } from './api'
+import QuickTip from './components/quickTip'
 export function Compute({
   user,
   projects,
@@ -90,9 +91,9 @@ export function Compute({
                           </a>
                         </td>
                         <td>
-                          <span title={row.connector_name}>
+                          <QuickTip portal content={row.connector_name}>
                             {row.host ?? row.connector_name}
-                          </span>
+                          </QuickTip>
                         </td>
                         <td>
                           <span

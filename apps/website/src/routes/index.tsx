@@ -20,8 +20,11 @@ function Home() {
   return (
     <Shell user={user} projects={projects} title="Overview">
       <Notice title="No projects yet">
-        {hasServer(user, 'projects.manage') ? (
+        {hasServer(user, 'projects.create') &&
+        hasServer(user, 'projects.manage') ? (
           <a href="/admin/projects">Create your first project</a>
+        ) : hasServer(user, 'projects.create') ? (
+          'Use the project selector to create your first project.'
         ) : (
           'Ask an administrator to grant you project access.'
         )}

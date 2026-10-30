@@ -7,6 +7,7 @@ export interface User {
 }
 export const serverCapabilities = [
   'users.manage',
+  'projects.create',
   'projects.manage',
   'connectors.manage',
   'inventory.manage',
@@ -14,7 +15,8 @@ export const serverCapabilities = [
 export type ServerCapability = (typeof serverCapabilities)[number]
 export const serverCapabilityLabels: Record<ServerCapability, string> = {
   'users.manage': 'Manage users',
-  'projects.manage': 'Manage projects and all project access',
+  'projects.create': 'Create projects',
+  'projects.manage': 'Manage all projects and project access',
   'connectors.manage': 'Manage connectors',
   'inventory.manage': 'Manage inventory assignments',
 }

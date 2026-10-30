@@ -61,6 +61,19 @@ export async function migrate() {
       `)
       await db.query('INSERT INTO migrations(version) VALUES(3)')
     }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=4'))
+        .rowCount
+    ) {
+      await db.query(`
+        ALTER TABLE users DROP CONSTRAINT users_capabilities_check;
+        ALTER TABLE users ADD CONSTRAINT users_capabilities_check
+          CHECK (capabilities <@ ARRAY['users.manage','projects.create','projects.manage','connectors.manage','inventory.manage']::text[]);
+        UPDATE users SET capabilities = array_append(capabilities, 'projects.create')
+          WHERE 'projects.manage' = ANY(capabilities) AND NOT ('projects.create' = ANY(capabilities));
+      `)
+      await db.query('INSERT INTO migrations(version) VALUES(4)')
+    }
   })
 }
 if (

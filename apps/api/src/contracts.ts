@@ -193,7 +193,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'post',
     '/admin/projects',
-    'Create project (projects.manage)',
+    'Create project (projects.create; creator receives Project Administrator access)',
     ok,
     project,
     true,

@@ -55,11 +55,15 @@ unavailable metrics are `null`. The website hides all stale metrics.
 ## Administration
 
 Server Administrators (`admin: true`, formerly super-admin) can use every route.
-Other accounts need the matching server capability: `projects.manage` for project
-administration, `users.manage` for account administration, `connectors.manage` for
+Other accounts need the matching server capability: `projects.create` for creating
+projects, `projects.manage` for server-wide project administration, `users.manage` for account administration, `connectors.manage` for
 connector administration, and `inventory.manage` for inventory and assignments.
 Project managers also have full access to all projects' members and containers.
-The other server capabilities do not grant project access.
+Creation and management are independent permissions. A creator without global
+project management receives Project Administrator membership in the new project,
+without access to other projects. The other server capabilities do not grant project access.
+Migration 4 grants `projects.create` to existing `projects.manage` accounts to
+preserve their creation access; subsequent grants are independent.
 
 | Method/path                                     | Input or behavior                                                                            |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
