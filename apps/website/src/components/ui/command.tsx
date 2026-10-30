@@ -54,7 +54,7 @@ export function CommandItem({
   return (
     <Primitive.Item
       className={clsx(
-        'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-[selected=true]:bg-secondary data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
+        'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-[selected=true]:bg-secondary data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50',
         className,
       )}
       {...props}

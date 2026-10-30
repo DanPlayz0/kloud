@@ -202,7 +202,10 @@ export function Shell({
                           : 'Coming in a later update'
                       }
                     >
-                      <span tabIndex={0} className="block w-full">
+                      <span
+                        tabIndex={0}
+                        className="block w-full cursor-not-allowed"
+                      >
                         <Button
                           className="nav-item deferred pointer-events-none"
                           disabled

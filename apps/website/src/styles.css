@@ -82,8 +82,24 @@ a,
   background: #252525;
 }
 .ui-button:disabled {
-  cursor: default;
   opacity: 0.4;
+}
+:is(
+  :disabled,
+  [data-disabled='true'],
+  button[aria-disabled='true'],
+  a[aria-disabled='true']
+),
+:is(
+    :disabled,
+    [data-disabled='true'],
+    button[aria-disabled='true'],
+    a[aria-disabled='true']
+  )
+  *,
+.ui-label:has(:disabled),
+.ui-checkbox:disabled + .ui-label {
+  cursor: not-allowed;
 }
 .ui-input,
 .ui-native-select {
@@ -649,7 +665,6 @@ small {
 }
 .ui-checkbox:disabled {
   opacity: 0.4;
-  cursor: default;
 }
 .admin-row {
   padding: 22px;

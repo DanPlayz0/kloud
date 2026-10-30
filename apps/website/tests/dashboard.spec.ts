@@ -264,14 +264,22 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
     })
     await page.setViewportSize({ width: 1793, height: 1376 })
     await page.getByRole('link', { name: 'Users', exact: true }).click()
+    await page.getByRole('button', { name: 'Invite user', exact: true }).click()
     await page
       .getByLabel('Username', { exact: true })
       .fill(`member-${id.slice(0, 8)}`)
-    await page.getByRole('button', { name: 'Invite user' }).click()
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Invite user' })
+      .click()
     await expect(page.getByRole('status')).toContainText('/enroll#')
-    const member = page
-      .locator('.user-row')
-      .filter({ hasText: `member-${id.slice(0, 8)}` })
+    await page
+      .getByRole('button', {
+        name: `Edit member-${id.slice(0, 8)}`,
+        exact: true,
+      })
+      .click()
+    const member = page.getByRole('dialog')
     await member.getByLabel('Miki', { exact: true }).check()
     await member.getByRole('button', { name: 'Save access' }).click()
     await expect(page.getByRole('status')).toContainText('Changes saved')

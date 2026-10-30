@@ -10,18 +10,12 @@ import { useEffect, useState, type FormEvent } from 'react'
 import {
   api,
   hasServer,
-  type ServerCapability,
   type User,
   type Project,
   type ContainerRow,
 } from './api'
 import { Shell, usePolling, ErrorMessage, Notice, Icon } from './components'
-import { ServerPermissionTree } from './components/server-permission-tree'
-type AdminUser = User & {
-  disabled: boolean
-  enrolled: boolean
-  projects: string[]
-}
+import { Users } from './components/users'
 type Connector = {
   id: string
   name: string
@@ -210,171 +204,6 @@ function Projects({
         </Notice>
       )}
     </>
-  )
-}
-function Users({
-  revision,
-  action,
-  current,
-  projects,
-}: {
-  revision: number
-  action: Action
-  current: User
-  projects: Project[]
-}) {
-  const { data, error } = usePolling<AdminUser[]>(
-    `/admin/users?revision=${revision}`,
-  )
-  const [admin, setAdmin] = useState(false)
-  const [capabilities, setCapabilities] = useState<ServerCapability[]>([])
-  function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const form = new FormData(e.currentTarget)
-    void action('/admin/users', 'POST', {
-      username: form.get('username'),
-      ...(current.admin ? { admin, capabilities } : {}),
-    })
-  }
-  return (
-    <>
-      <form className="inline-form bg-card border-border" onSubmit={submit}>
-        <Label>
-          Username
-          <Input
-            name="username"
-            required
-            maxLength={100}
-            pattern="[a-zA-Z0-9_.@\-]+"
-            autoComplete="off"
-          />
-        </Label>
-        {current.admin && (
-          <ServerPermissionTree
-            admin={admin}
-            capabilities={capabilities}
-            onChange={(admin, capabilities) => {
-              setAdmin(admin)
-              setCapabilities(capabilities)
-            }}
-          />
-        )}
-        <Button className="primary">Invite user</Button>
-      </form>
-      <ErrorMessage message={error} />
-      {data?.map((u) => (
-        <UserEditor
-          key={`${u.id}:${revision}`}
-          user={u}
-          current={current}
-          projects={projects}
-          action={action}
-        />
-      ))}
-    </>
-  )
-}
-function UserEditor({
-  user,
-  current,
-  projects,
-  action,
-}: {
-  user: AdminUser
-  current: User
-  projects: Project[]
-  action: Action
-}) {
-  const [selected, setSelected] = useState(user.projects),
-    [disabled, setDisabled] = useState(user.disabled),
-    [admin, setAdmin] = useState(user.admin),
-    [capabilities, setCapabilities] = useState<ServerCapability[]>(
-      user.capabilities ?? [],
-    )
-  const protectedAccount =
-    !current.admin && (user.admin || !!user.capabilities?.length)
-  return (
-    <div className="admin-row user-row bg-card border-border">
-      <div>
-        <strong>{user.username}</strong>
-        <small>
-          {user.admin ? 'Server Administrator' : 'Member'} ·{' '}
-          {user.enrolled ? 'Enrolled' : 'Enrollment required'}
-        </small>
-      </div>
-      <div className="membership-list">
-        {hasServer(current, 'projects.manage') &&
-          projects.map((p) => (
-            <Label className="checkbox" key={p.slug}>
-              <Checkbox
-                checked={selected.includes(p.slug)}
-                onCheckedChange={(checked) =>
-                  setSelected(
-                    checked === true
-                      ? [...selected, p.slug]
-                      : selected.filter((s) => s !== p.slug),
-                  )
-                }
-              />
-              {p.name}
-            </Label>
-          ))}
-        {admin && (
-          <small>Server Administrators can access every project.</small>
-        )}
-        {current.admin && (
-          <ServerPermissionTree
-            admin={admin}
-            capabilities={capabilities}
-            onChange={(admin, capabilities) => {
-              setAdmin(admin)
-              setCapabilities(capabilities)
-            }}
-          />
-        )}
-        {protectedAccount && (
-          <small>This account requires a Server Administrator to modify.</small>
-        )}
-      </div>
-      <div className="row-actions">
-        <Label className="checkbox">
-          <Checkbox
-            checked={disabled}
-            disabled={current.id === user.id || protectedAccount}
-            onCheckedChange={(checked) => setDisabled(checked === true)}
-          />
-          Disabled
-        </Label>
-        <Button
-          disabled={protectedAccount}
-          onClick={() => {
-            void action(`/admin/users/${user.id}`, 'PUT', {
-              disabled,
-              ...(hasServer(current, 'projects.manage')
-                ? { projects: selected }
-                : {}),
-              ...(current.admin ? { admin, capabilities } : {}),
-            })
-          }}
-        >
-          Save access
-        </Button>
-        {current.id !== user.id && !protectedAccount && (
-          <Button
-            onClick={() => {
-              if (
-                confirm(
-                  `Reset ${user.username}'s password and passkey enrollment? Existing sessions will end.`,
-                )
-              )
-                void action(`/admin/users/${user.id}/enrollment`, 'POST', {})
-            }}
-          >
-            Reset enrollment
-          </Button>
-        )}
-      </div>
-    </div>
   )
 }
 function Connectors({

@@ -169,9 +169,10 @@ test('server administrator delegates capability and delegated navigation stays s
     { name: 'session', value: sessions.server!, url: 'http://localhost:5174' },
   ])
   await page.goto('/admin/users')
-  const delegate = page
-    .locator('.user-row')
-    .filter({ has: page.getByText(`delegate-${suffix}`, { exact: true }) })
+  await page
+    .getByRole('button', { name: `Edit delegate-${suffix}`, exact: true })
+    .click()
+  const delegate = page.getByRole('dialog')
   await delegate.getByText('Manage connectors', { exact: true }).click()
   await delegate.getByRole('button', { name: 'Save access' }).click()
   await expect(page.getByRole('status')).toContainText('Changes saved')
@@ -204,7 +205,5 @@ test('server administrator delegates capability and delegated navigation stays s
   const server = page
     .locator('.user-row')
     .filter({ has: page.getByText(`server-${suffix}`, { exact: true }) })
-  await expect(
-    server.getByRole('button', { name: 'Save access' }),
-  ).toBeDisabled()
+  await expect(server.getByText('Server Administrator required')).toBeVisible()
 })
