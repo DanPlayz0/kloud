@@ -1,5 +1,7 @@
 import { serve } from '@hono/node-server'
 import { app } from './app.js'
+import { attachConnectors } from './connectors.js'
+import { pool } from './db.js'
 
 const port = Number(process.env.PORT ?? 3000)
 
@@ -10,7 +12,22 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 const server = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`API listening on http://localhost:${info.port}`)
 })
+const closeConnectors = attachConnectors(server as import('node:http').Server)
+const cleanup = setInterval(() => {
+  void pool
+    .query(
+      `WITH a AS (DELETE FROM challenges WHERE expires<now()), b AS (DELETE FROM sessions WHERE expires<now()), c AS (DELETE FROM invitations WHERE expires<now()) DELETE FROM login_attempts WHERE expires<now()`,
+    )
+    .catch((error) => console.error('Expiry cleanup failed:', error.message))
+}, 60000)
+cleanup.unref()
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => server.close())
+  process.once(signal, () => {
+    clearInterval(cleanup)
+    closeConnectors()
+    server.close(() => {
+      void pool.end()
+    })
+  })
 }

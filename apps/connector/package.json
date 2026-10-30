@@ -1,0 +1,21 @@
+{
+  "name": "@dedi-dash/connector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15"
+  },
+  "dependencies": {
+    "@dedi-dash/protocol": "workspace:*",
+    "ws": "^8.22.0"
+  }
+}

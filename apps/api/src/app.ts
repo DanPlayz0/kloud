@@ -1,6 +1,51 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
+import { HTTPException } from 'hono/http-exception'
+import { bodyLimit } from 'hono/body-limit'
+import { auth, requireUser, type Env } from './auth.js'
+import { dashboard } from './dashboard.js'
+import { publicOrigin } from './security.js'
+import { registerContracts } from './contracts.js'
 
-export const app = new OpenAPIHono()
+export const app = new OpenAPIHono<Env>()
+app.use(
+  '*',
+  bodyLimit({
+    maxSize: 65536,
+    onError: (c) => c.json({ error: 'Request too large' }, 413),
+  }),
+)
+app.use('*', async (c, next) => {
+  c.header('X-Content-Type-Options', 'nosniff')
+  c.header('Cache-Control', 'no-store')
+  if (
+    !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
+    c.req.header('origin') !== publicOrigin
+  )
+    return c.json({ error: 'Invalid request origin' }, 403)
+  await next()
+})
+app.onError((error, c) => {
+  if (error instanceof z.ZodError || error instanceof SyntaxError)
+    return c.json(
+      {
+        error: 'Invalid request',
+        details:
+          error instanceof z.ZodError
+            ? error.issues.map((i) => ({ path: i.path, message: i.message }))
+            : undefined,
+      },
+      400,
+    )
+  if (error instanceof HTTPException)
+    return c.json({ error: error.message }, error.status)
+  const code = (error as { code?: string }).code
+  if (code === '23505') return c.json({ error: 'Already exists' }, 409)
+  if (code === '23503')
+    return c.json({ error: 'Referenced resource does not exist' }, 400)
+  console.error('API error:', error.message)
+  return c.json({ error: 'Service unavailable' }, 503)
+})
+app.route('/auth', auth)
 
 const healthRoute = createRoute({
   method: 'get',
@@ -20,7 +65,15 @@ const healthRoute = createRoute({
 })
 
 app.openapi(healthRoute, (c) => c.json({ status: 'ok' as const }, 200))
+app.route('/', dashboard)
 
+app.use('/openapi.json', requireUser)
+app.openAPIRegistry.registerComponent('securitySchemes', 'session', {
+  type: 'apiKey',
+  in: 'cookie',
+  name: 'session',
+})
+registerContracts(app.openAPIRegistry)
 app.doc('/openapi.json', {
   openapi: '3.0.0',
   info: { title: 'Dedi Dash API', version: '0.1.0' },

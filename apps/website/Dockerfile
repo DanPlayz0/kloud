@@ -5,6 +5,8 @@ RUN npm install --global pnpm@12.16.1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/website/package.json ./apps/website/package.json
+COPY apps/connector/package.json ./apps/connector/package.json
+COPY apps/protocol ./apps/protocol
 RUN pnpm install --frozen-lockfile
 COPY tsconfig.base.json ./
 COPY apps/website ./apps/website

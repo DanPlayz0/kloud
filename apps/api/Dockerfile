@@ -5,6 +5,8 @@ RUN npm install --global pnpm@12.16.1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/website/package.json ./apps/website/package.json
+COPY apps/connector/package.json ./apps/connector/package.json
+COPY apps/protocol ./apps/protocol
 
 FROM base AS build
 RUN pnpm install --frozen-lockfile
@@ -14,7 +16,7 @@ COPY apps/api/src ./apps/api/src
 RUN pnpm --filter @dedi-dash/api run build
 
 FROM base AS production-dependencies
-RUN pnpm --filter @dedi-dash/api install --prod --frozen-lockfile
+RUN pnpm --filter @dedi-dash/api... install --prod --frozen-lockfile
 
 FROM node:26-bookworm-slim AS runtime
 ENV NODE_ENV=production
@@ -23,6 +25,7 @@ WORKDIR /app
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=production-dependencies --chown=node:node /app/apps/api/package.json ./apps/api/package.json
+COPY --from=production-dependencies --chown=node:node /app/apps/protocol ./apps/protocol
 COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
 USER node
 EXPOSE 3000

@@ -1,14 +1,21 @@
-import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
+import { Button } from '../components/ui/controls'
+import { createRootRoute, Outlet } from '@tanstack/react-router'
 
 export const Route = createRootRoute({
-  component: () => (
-    <main>
-      <header>
-        <Link to="/">Dedi Dash</Link>
-        <nav><Link to="/about">About</Link></nav>
-      </header>
-      <Outlet />
-    </main>
+  component: Outlet,
+  errorComponent: ({ error, reset }) => (
+    <div className="notice">
+      <h1>Unable to open this page</h1>
+      <p role="alert">
+        {error instanceof Error ? error.message : 'Unable to load this page'}
+      </p>
+      <Button onClick={reset}>Try again</Button> <a href="/">Go home</a>
+    </div>
   ),
-  notFoundComponent: () => <p>Page not found. <Link to="/">Go home</Link></p>,
+  notFoundComponent: () => (
+    <div className="notice">
+      <h1>Page not found</h1>
+      <a href="/">Go home</a>
+    </div>
+  ),
 })

@@ -1,22 +1,89 @@
+x-api-environment: &api-environment
+  DATABASE_URL: ${DATABASE_URL:-postgres://dedi_dash:dedi_dash_local@postgres:5432/dedi_dash}
+  PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
+  WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+
 services:
+  postgres:
+    image: postgres:17-alpine
+    labels:
+      dedi-dash.internal: 'true'
+    environment:
+      POSTGRES_USER: dedi_dash
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dedi_dash_local}
+      POSTGRES_DB: dedi_dash
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U dedi_dash -d dedi_dash']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    labels:
+      dedi-dash.internal: 'true'
+    environment: *api-environment
+    command: [node, apps/api/dist/migrate.js]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  connector:
+    profiles: [connector]
+    build:
+      context: .
+      dockerfile: apps/connector/Dockerfile
+    init: true
+    labels:
+      dedi-dash.internal: 'true'
+    environment:
+      API_URL: http://api:3000
+      CONNECTOR_TOKEN: ${CONNECTOR_TOKEN:-}
+      CONNECTOR_HOST: ${CONNECTOR_HOST:-docker-host}
+      DOCKER_SOCKET: /var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # The socket-owning group must be supplied for the non-root connector.
+    group_add:
+      - ${DOCKER_GID:-0}
+    depends_on:
+      api:
+        condition: service_healthy
+
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     init: true
+    labels:
+      dedi-dash.internal: 'true'
     environment:
-      PORT: "3000"
+      <<: *api-environment
+      PORT: '3000'
     ports:
-      - "3000:3000"
+      - '3000:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   website:
     build:
       context: .
       dockerfile: apps/website/Dockerfile
+    labels:
+      dedi-dash.internal: 'true'
     environment:
       API_UPSTREAM: api:3000
     ports:
-      - "8080:8080"
+      - '8080:8080'
     depends_on:
       api:
         condition: service_healthy
+
+volumes:
+  postgres-data:

@@ -1,23 +1,33 @@
 # Dedi Dash
 
-A pnpm workspaces monorepo with two private application packages in one Git repository:
+A pnpm workspaces monorepo for an authenticated Docker compute dashboard:
 
 - `apps/website`: Vite, React, TypeScript, and TanStack Router (file-based routes).
 - `apps/api`: Hono, TypeScript, and `@hono/zod-openapi` for Zod schemas and OpenAPI generation.
+- `apps/connector`: read-only Docker inventory and metrics over authenticated WebSocket.
+- `apps/protocol`: shared versioned connector validation and types.
+
+See [dashboard setup](docs/SETUP.md) for PostgreSQL, migrations, administrator
+bootstrap, passkey enrollment, Docker connectors, and deployment. See
+[API contracts](docs/API.md) for endpoint and connector protocol details.
 
 ## Getting started
 
-Use Node.js 22.12+ and pnpm 12.16.1 (pinned in `packageManager`). With a Corepack-enabled
-Node.js installation, run `corepack enable` to make the pinned pnpm version available.
+Use Node.js 22.12+ and pnpm 12.16.1 (pinned in `packageManager`).
+Install pnpm with `npm install --global pnpm@12.16.1` if needed.
 
 ```sh
 pnpm install
-pnpm dev
+pnpm --filter @dedi-dash/api migrate
+pnpm --filter @dedi-dash/api cli bootstrap owner
+pnpm --filter @dedi-dash/api dev
+pnpm --filter @dedi-dash/website dev
 ```
 
 The website runs at http://localhost:5173 and the API at http://localhost:3000.
 Vite proxies `/api/*` requests to the API during development (removing the `/api` prefix).
-The API offers `GET /health` and its generated specification at `GET /openapi.json`.
+Configure PostgreSQL and `apps/api/.env` first as described in the setup guide.
+The API offers public `GET /health` and authenticated `GET /openapi.json`.
 Set the `PORT` environment variable to change the API port; update the Vite proxy target to match.
 
 ## Commands
@@ -28,6 +38,7 @@ pnpm typecheck
 pnpm test
 pnpm --filter @dedi-dash/website dev
 pnpm --filter @dedi-dash/api dev
+pnpm --filter @dedi-dash/connector dev
 pnpm --filter @dedi-dash/api start
 pnpm --filter @dedi-dash/website preview
 ```
@@ -39,6 +50,10 @@ with the prefix removed. The Vite development proxy does not apply to production
 Workspace packages are declared in `pnpm-workspace.yaml` and share `pnpm-lock.yaml`.
 Use `pnpm install --frozen-lockfile` in CI to install the locked dependency versions.
 
+`pnpm dev` starts all three apps and requires a configured connector token.
+The connector sends Docker inventory every five seconds and serves local liveness
+at http://127.0.0.1:3001/health. Container lifecycle operations remain deferred.
+
 ## Website routes
 
 Add route files under `apps/website/src/routes`. The TanStack Router Vite plugin
@@ -49,8 +64,11 @@ Git and Docker build contexts; do not edit the generated route tree manually.
 - `__root.tsx`: shared layout and not-found page; `<Outlet />` renders the current page.
 - `index.tsx`: `/`.
 - `about.tsx`: `/about`.
-- `servers/index.tsx`: `/servers`.
-- `servers/$serverId.tsx`: `/servers/:serverId` (dynamic parameter).
+- `/login` and `/enroll`: password and passkey authentication.
+- `/projects/$projectSlug/compute/containers`: Docker compute.
+- `/projects/$projectSlug/compute/serverless`: Kubernetes placeholder.
+- `/projects/$projectSlug/applications/$appSlug`: application placeholder.
+- `/admin/$section`: super-admin projects, users, connectors, and inventory.
 
 Each page exports `Route = createFileRoute('/path')({ component: Page })` from
 `@tanstack/react-router`. The plugin keeps the route path in sync with the file.
@@ -66,9 +84,11 @@ docker compose up --build -d
 docker compose ps
 ```
 
+Copy `.env.example` to `.env` first. PostgreSQL and the one-shot migration service
+start before the API. Bootstrap an administrator using the setup guide.
 Open http://localhost:8080 for the website. Nginx serves the built SPA with a fallback
 for client-side routes and proxies `/api/*` to the API, removing the prefix.
-Check http://localhost:8080/api/health or view the specification at
+Check http://localhost:8080/api/health or, after signing in, view the specification at
 http://localhost:8080/api/openapi.json. The API is also available directly on port 3000.
 Both images include health checks and run as non-root users; Compose waits for the
 API to become healthy before starting the website.
@@ -79,6 +99,7 @@ context so pnpm can use the shared workspace lockfile:
 ```sh
 docker build -f apps/api/Dockerfile -t dedi-dash-api .
 docker build -f apps/website/Dockerfile -t dedi-dash-website .
+docker build -f apps/connector/Dockerfile -t dedi-dash-connector .
 ```
 
 The website container listens on port 8080 and uses `API_UPSTREAM=api:3000` by
@@ -86,6 +107,10 @@ default. When running the images outside Compose, put them on the same Docker
 network and name the API container `api`, or set `API_UPSTREAM` to its host and port.
 The upstream must resolve when Nginx starts. The API listens on port 3000 by default;
 set `PORT` and adjust port mappings and `API_UPSTREAM` together to change it.
+
+Include the optional connector with `docker compose --profile connector up --build -d`.
+It connects outbound to the API and publishes no host ports. Configure its token
+and Docker socket permissions as documented in [dashboard setup](docs/SETUP.md).
 
 ```sh
 docker compose down
