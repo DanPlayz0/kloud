@@ -51,10 +51,18 @@ test('deployment setup preserves the one-time secret through refresh, shows hist
       '/api/projects': [{ slug: 'demo', name: 'Demo' }],
       '/api/projects/demo/containers': [container],
       '/api/projects/demo/applications/web': { slug: 'web' },
+      '/api/projects/demo/services/web/configuration': {
+        revisions: [],
+        runs: [],
+      },
     }
     return route.fulfill({ json: fixtures[url] ?? { ok: true } })
   })
   await page.goto('/projects/demo/applications/web')
+  await page.getByRole('tab', { name: 'Deployments', exact: true }).click()
+  await page
+    .getByText('Existing Git deployment settings and history', { exact: true })
+    .click()
   await expect(
     page.getByRole('heading', { name: 'web deployments' }),
   ).toBeVisible()

@@ -128,7 +128,10 @@ export async function migrate() {
       `)
       await db.query('INSERT INTO migrations(version) VALUES(6)')
     }
-    if (!(await db.query('SELECT version FROM migrations WHERE version=7')).rowCount) {
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=7'))
+        .rowCount
+    ) {
       await db.query(`
         ALTER TABLE users DROP CONSTRAINT users_capabilities_check;
         ALTER TABLE users ADD CONSTRAINT users_capabilities_check CHECK
@@ -155,6 +158,40 @@ export async function migrate() {
         CREATE INDEX dns_member_grants_member ON dns_member_grants(user_id,project_slug);
       `)
       await db.query('INSERT INTO migrations(version) VALUES(7)')
+    }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=8'))
+        .rowCount
+    ) {
+      await db.query(`
+        ALTER TABLE connectors ADD COLUMN capabilities text[] NOT NULL DEFAULT '{}';
+        CREATE TABLE service_revisions (
+          id uuid PRIMARY KEY, project text NOT NULL, service text NOT NULL,
+          encrypted_config text NOT NULL, source_label text NOT NULL, connector_id uuid NOT NULL REFERENCES connectors ON DELETE CASCADE, created timestamptz NOT NULL DEFAULT now(),
+          FOREIGN KEY(project,service) REFERENCES services(project_slug,slug) ON DELETE CASCADE
+        );
+        CREATE TABLE service_runs (
+          id uuid PRIMARY KEY, revision uuid NOT NULL REFERENCES service_revisions ON DELETE CASCADE,
+          connector_id uuid NOT NULL REFERENCES connectors ON DELETE CASCADE,
+          status text NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','running','succeeded','failed')),
+          created timestamptz NOT NULL DEFAULT now(), started timestamptz, finished timestamptz,
+          log text NOT NULL DEFAULT '', artifacts jsonb, commit text, request_key uuid UNIQUE NOT NULL
+        );
+        CREATE INDEX service_runs_queue ON service_runs(connector_id,status,created);
+        ALTER TABLE deployments ADD COLUMN service_revision uuid REFERENCES service_revisions ON DELETE SET NULL;
+        CREATE TABLE service_domains (
+          id uuid PRIMARY KEY, project text NOT NULL, service text NOT NULL,
+          connector_id uuid NOT NULL REFERENCES connectors ON DELETE CASCADE,
+          config jsonb NOT NULL,
+          FOREIGN KEY(project,service) REFERENCES services(project_slug,slug) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX service_domains_route ON service_domains((config->>'hostname'),(config->>'path'));
+        CREATE TABLE proxy_status (
+          connector_id uuid PRIMARY KEY REFERENCES connectors ON DELETE CASCADE,
+          desired text, applied text, error text, updated timestamptz NOT NULL DEFAULT now()
+        );
+      `)
+      await db.query('INSERT INTO migrations(version) VALUES(8)')
     }
   })
 }

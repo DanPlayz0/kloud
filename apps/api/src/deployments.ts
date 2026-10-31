@@ -1,6 +1,11 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
-import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto'
+import {
+  createHmac,
+  createHash,
+  timingSafeEqual,
+  randomUUID,
+} from 'node:crypto'
 import { z } from 'zod'
 import { deploymentSchema } from '@dedi-dash/protocol'
 import { pool, transaction } from './db.js'
@@ -8,6 +13,12 @@ import { requireUser, type Env } from './auth.js'
 import { permissionTransaction, projectAccess } from './permissions.js'
 import { token, digest, publicOrigin } from './security.js'
 import { demandService } from './service-permissions.js'
+function deliveryKey(deployment: string, delivery: string) {
+  const hash = createHash('sha256')
+    .update(`${deployment}:${delivery}`)
+    .digest('hex')
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`
+}
 
 export function verifySignature(
   body: Uint8Array,
@@ -70,6 +81,19 @@ deploymentHooks.post('/hooks/github/:id', async (c) => {
         config.repository.toLowerCase()
     )
       return false
+    if (current.service_revision) {
+      await db.query(
+        `INSERT INTO service_runs(id,revision,connector_id,request_key,commit) VALUES($1,$2,$3,$4,$5) ON CONFLICT(request_key) DO NOTHING`,
+        [
+          randomUUID(),
+          current.service_revision,
+          current.connector_id,
+          deliveryKey(id, delivery),
+          payload.after,
+        ],
+      )
+      return true
+    }
     await db.query(
       `INSERT INTO deployment_builds(id,deployment_id,delivery,commit,config)
       VALUES($1,$2,$3,$4,$5) ON CONFLICT(deployment_id,delivery) DO NOTHING`,
@@ -117,6 +141,12 @@ deploymentHooks.post('/connectors/deployments/claim', async (c) => {
         [connector],
       )
       if (
+        (
+          await db.query(
+            "SELECT 1 FROM service_runs WHERE connector_id=$1 AND status='running'",
+            [connector],
+          )
+        ).rowCount ||
         (
           await db.query(
             `SELECT 1 FROM deployment_builds b JOIN deployments d ON d.id=b.deployment_id WHERE d.connector_id=$1 AND b.status='running'`,
@@ -222,7 +252,7 @@ deployments.post(base, async (c) => {
     if (body) {
       const deployment = (
         await db.query(
-          'SELECT id,config FROM deployments WHERE project=$1 AND application=$2 FOR UPDATE',
+          'SELECT id,config,connector_id,service_revision FROM deployments WHERE project=$1 AND application=$2 FOR UPDATE',
           [c.req.param('project'), c.req.param('application')],
         )
       ).rows[0]
@@ -232,6 +262,19 @@ deployments.post(base, async (c) => {
         throw new HTTPException(409, {
           message: 'Enable deployments before queuing a build',
         })
+      if (deployment.service_revision) {
+        await db.query(
+          'INSERT INTO service_runs(id,revision,connector_id,request_key,commit) VALUES($1,$2,$3,$4,$5)',
+          [
+            randomUUID(),
+            deployment.service_revision,
+            deployment.connector_id,
+            randomUUID(),
+            body.commit,
+          ],
+        )
+        return
+      }
       await db.query(
         'INSERT INTO deployment_builds(id,deployment_id,delivery,commit,config) VALUES($1,$2,$3,$4,$5)',
         [
@@ -343,7 +386,7 @@ deployments.put(base, async (c) => {
       return (
         await db.query(
           `INSERT INTO deployments(id,project,application,connector_id,config,webhook_secret) VALUES($1,$2,$3,$4,$5,$6)
-      ON CONFLICT(project,application) DO UPDATE SET connector_id=$4,config=$5 RETURNING id`,
+      ON CONFLICT(project,application) DO UPDATE SET connector_id=$4,config=$5,service_revision=NULL RETURNING id`,
           [
             randomUUID(),
             c.req.param('project'),

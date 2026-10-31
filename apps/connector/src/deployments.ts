@@ -6,6 +6,8 @@ import type { ConnectorConfig } from './config.js'
 import { engine, runCommand, dockerHost } from './deployment-process.js'
 export { repositoryPath, runCommand } from './deployment-process.js'
 import { sandboxBuild, cleanupExpiredBuilds } from './build-sandbox.js'
+import { applyRuntime } from './platform.js'
+import type { RuntimeConfig } from '@dedi-dash/protocol/platform'
 
 export function replacementSpec(
   original: any,
@@ -126,11 +128,13 @@ export function initialContainerSpec(job: DeploymentJob, image: string) {
   }
 }
 
-async function replaceContainer(
+export async function replaceContainer(
   job: DeploymentJob,
   socket: string,
   signal: AbortSignal,
   log: (s: string) => void,
+  imageOverride?: string,
+  runtime?: RuntimeConfig,
 ) {
   const name = job.config.container_name
   const original = job.config.managed
@@ -144,14 +148,16 @@ async function replaceContainer(
     throw new Error('Internal containers cannot be deployment targets')
   if (original?.Config.Labels?.['com.docker.compose.project'])
     throw new Error('Use Compose mode for Compose-managed containers')
-  const image = `dedi-dash/${job.deployment_id}:${job.commit}`
+  const image = imageOverride ?? `dedi-dash/${job.deployment_id}:${job.commit}`
   if (!original) {
     signal.throwIfAborted()
     const created = await engine(
       socket,
       'POST',
       `/containers/create?name=${encodeURIComponent(name)}`,
-      initialContainerSpec(job, image),
+      runtime
+        ? applyRuntime(initialContainerSpec(job, image), runtime)
+        : initialContainerSpec(job, image),
     )
     try {
       await engine(socket, 'POST', `/containers/${created.Id}/start`)
@@ -172,13 +178,22 @@ async function replaceContainer(
     'GET',
     `/images/${encodeURIComponent(image)}/json`,
   )
-  const spec = replacementSpec(
+  let spec = replacementSpec(
     original,
     image,
     job,
     oldImage.Config,
     newImage.Config,
   )
+  if (runtime)
+    spec = applyRuntime(
+      {
+        ...spec,
+        Env: newImage.Config.Env ?? [],
+        Healthcheck: newImage.Config.Healthcheck,
+      },
+      runtime,
+    )
   signal.throwIfAborted()
   const backup = `${name}-backup-${job.id}`
   let renamed = false,
@@ -247,10 +262,56 @@ export async function executeDeployment(
   config: ConnectorConfig,
   signal: AbortSignal,
   log: (s: string) => void,
+  runtime?: RuntimeConfig,
 ) {
   const project = await composeProject(job, config)
   const result = await sandboxBuild(job, config, project, signal, log)
-  await deployArtifact(job, config, result.directory, project, signal, log)
+  await deployArtifact(
+    job,
+    config,
+    result.directory,
+    project,
+    signal,
+    log,
+    runtime,
+  )
+  if (job.config.kind === 'dockerfile') {
+    const image = await engine(
+      config.dockerSocket,
+      'GET',
+      `/images/${encodeURIComponent(`dedi-dash/${job.deployment_id}:${job.commit}`)}/json`,
+    )
+    await engine(
+      config.dockerSocket,
+      'POST',
+      `/images/${encodeURIComponent(image.Id)}/tag?repo=dedi-dash%2Fretained&tag=${job.id}`,
+    )
+    return {
+      directory: result.directory,
+      project,
+      commit: job.commit,
+      image: `dedi-dash/retained:${job.id}`,
+    }
+  }
+  const manifestPath = join(result.directory, 'output', 'compose.json')
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+  let index = 0
+  for (const service of Object.values(manifest.services) as any[]) {
+    const image = await engine(
+      config.dockerSocket,
+      'GET',
+      `/images/${encodeURIComponent(service.image)}/json`,
+    )
+    const tag = `${job.id}-${index++}`
+    await engine(
+      config.dockerSocket,
+      'POST',
+      `/images/${encodeURIComponent(image.Id)}/tag?repo=dedi-dash%2Fretained&tag=${tag}`,
+    )
+    service.image = `dedi-dash/retained:${tag}`
+  }
+  await writeFile(manifestPath, JSON.stringify(manifest))
+  return { directory: result.directory, project, commit: job.commit }
 }
 
 /** A supplied local checkout is also built exclusively inside the helper. */
@@ -284,17 +345,26 @@ async function composeProject(job: DeploymentJob, config: ConnectorConfig) {
   return labels['com.docker.compose.project'] as string
 }
 
-async function deployArtifact(
+export async function deployArtifact(
   job: DeploymentJob,
   config: ConnectorConfig,
   directory: string,
   project: string,
   signal: AbortSignal,
   log: (s: string) => void,
+  runtime?: RuntimeConfig,
+  retainedImage?: string,
 ) {
   log('\nDeploying built artifacts on the service host.\n')
   if (job.config.kind === 'dockerfile')
-    return replaceContainer(job, config.dockerSocket, signal, log)
+    return replaceContainer(
+      job,
+      config.dockerSocket,
+      signal,
+      log,
+      retainedImage,
+      runtime,
+    )
   const manifest = JSON.parse(
     await readFile(join(directory, 'output', 'compose.json'), 'utf8'),
   )

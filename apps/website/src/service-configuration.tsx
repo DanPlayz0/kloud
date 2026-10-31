@@ -1,0 +1,694 @@
+import { useState } from 'react'
+import type {
+  PlatformConfig,
+  RuntimeConfig,
+} from '@dedi-dash/protocol/platform'
+import {
+  Button,
+  Input,
+  Label,
+  NativeSelect,
+  Textarea,
+} from './components/ui/controls'
+import { Card } from './components/ui/card'
+
+export interface Host {
+  id: string
+  name: string
+  capabilities: string[]
+  seen: string | null
+}
+export const emptyRuntime: RuntimeConfig = {
+  environment: {},
+  ports: [],
+  volumes: [],
+  networks: [],
+  restart: 'unless-stopped',
+}
+export function newConfig(): PlatformConfig {
+  return {
+    connector_id: '',
+    source: { type: 'image', image: '' },
+    runtime: { ...emptyRuntime },
+  }
+}
+export function SourceFields({
+  config,
+  onChange,
+  serviceType,
+}: {
+  config: PlatformConfig
+  onChange: (config: PlatformConfig) => void
+  serviceType?: 'application' | 'compose'
+}) {
+  const source = config.source
+  return (
+    <div className="space-y-4">
+      <Label>
+        Deployment source
+        <NativeSelect
+          value={
+            source.type === 'github'
+              ? source.config.kind === 'compose'
+                ? 'git-compose'
+                : 'dockerfile'
+              : source.type
+          }
+          onChange={(e) => {
+            const value = e.target.value
+            onChange({
+              ...config,
+              source:
+                value === 'image'
+                  ? { type: 'image', image: '' }
+                  : value === 'compose'
+                    ? { type: 'compose', content: '' }
+                    : {
+                        type: 'github',
+                        config: {
+                          connector_id: config.connector_id,
+                          container_name: 'managed',
+                          repository: '',
+                          branch: 'main',
+                          kind:
+                            value === 'dockerfile' ? 'dockerfile' : 'compose',
+                          build_file:
+                            value === 'dockerfile'
+                              ? 'Dockerfile'
+                              : 'compose.yaml',
+                          context: '.',
+                          service: 'app',
+                          enabled: true,
+                          managed: true,
+                        },
+                      },
+            })
+          }}
+        >
+          <option value="image" disabled={serviceType === 'compose'}>
+            Registry image
+          </option>
+          <option value="dockerfile" disabled={serviceType === 'compose'}>
+            GitHub Dockerfile
+          </option>
+          <option value="git-compose" disabled={serviceType === 'application'}>
+            GitHub Compose
+          </option>
+          <option value="compose" disabled={serviceType === 'application'}>
+            Pasted Compose
+          </option>
+        </NativeSelect>
+      </Label>
+      {source.type === 'image' && (
+        <>
+          <Label>
+            Image
+            <Input
+              required
+              placeholder="nginx:alpine"
+              value={source.image}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  source: { ...source, image: e.target.value },
+                })
+              }
+            />
+          </Label>
+          <Label>
+            Registry server (optional)
+            <Input
+              placeholder="ghcr.io"
+              value={source.registry?.server ?? ''}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  source: {
+                    ...source,
+                    registry: e.target.value
+                      ? {
+                          server: e.target.value,
+                          username: source.registry?.username ?? '',
+                          password: source.registry?.password ?? '',
+                        }
+                      : undefined,
+                  },
+                })
+              }
+            />
+          </Label>
+          {source.registry && (
+            <>
+              <Label>
+                Registry username
+                <Input
+                  required
+                  value={source.registry.username}
+                  onChange={(e) =>
+                    onChange({
+                      ...config,
+                      source: {
+                        ...source,
+                        registry: {
+                          ...source.registry!,
+                          username: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </Label>
+              <Label>
+                Registry password
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={source.registry.password}
+                  onChange={(e) =>
+                    onChange({
+                      ...config,
+                      source: {
+                        ...source,
+                        registry: {
+                          ...source.registry!,
+                          password: e.target.value,
+                        },
+                      },
+                    })
+                  }
+                />
+              </Label>
+            </>
+          )}
+        </>
+      )}
+      {source.type === 'compose' && (
+        <Label>
+          Compose definition
+          <Textarea
+            required
+            rows={12}
+            placeholder={'services:\n  web:\n    image: nginx:alpine'}
+            value={source.content}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                source: { ...source, content: e.target.value },
+              })
+            }
+          />
+          <span className="text-xs text-muted-foreground">
+            Compose owns environment, ports, volumes, networks, and health
+            checks. Use images here; use GitHub Compose for builds.
+          </span>
+        </Label>
+      )}
+      {source.type === 'github' && (
+        <>
+          <Label>
+            GitHub repository (owner/repo)
+            <Input
+              required
+              value={source.config.repository}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  source: {
+                    ...source,
+                    config: { ...source.config, repository: e.target.value },
+                  },
+                })
+              }
+            />
+          </Label>
+          <Label>
+            Branch
+            <Input
+              required
+              value={source.config.branch}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  source: {
+                    ...source,
+                    config: { ...source.config, branch: e.target.value },
+                  },
+                })
+              }
+            />
+          </Label>
+          <Label>
+            Build file
+            <Input
+              required
+              value={source.config.build_file}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  source: {
+                    ...source,
+                    config: { ...source.config, build_file: e.target.value },
+                  },
+                })
+              }
+            />
+          </Label>
+          <Label>
+            Build context / project directory
+            <Input
+              required
+              value={source.config.context}
+              onChange={(e) =>
+                onChange({
+                  ...config,
+                  source: {
+                    ...source,
+                    config: { ...source.config, context: e.target.value },
+                  },
+                })
+              }
+            />
+          </Label>
+        </>
+      )}
+    </div>
+  )
+}
+export function RuntimeFields({
+  value,
+  onChange,
+}: {
+  value: RuntimeConfig
+  onChange: (value: RuntimeConfig) => void
+}) {
+  const [variables, setVariables] = useState(() =>
+    Object.entries(value.environment).map(([name, secret]) => ({
+      name,
+      secret,
+    })),
+  )
+  function variable(index: number, field: 'name' | 'secret', text: string) {
+    const next = variables.map((v, i) =>
+      i === index ? { ...v, [field]: text } : v,
+    )
+    setVariables(next)
+    onChange({
+      ...value,
+      environment: Object.fromEntries(
+        next.filter((v) => v.name).map((v) => [v.name, v.secret]),
+      ),
+    })
+  }
+  return (
+    <div className="space-y-5">
+      <Card className="space-y-3 p-4">
+        <h2 className="font-semibold">Environment and secrets</h2>
+        <p className="text-xs text-muted-foreground">
+          Values are encrypted and masked on later reads.
+        </p>
+        {variables.map((v, i) => (
+          <div key={i} className="flex items-end gap-2">
+            <Label className="min-w-0 flex-1">
+              Variable name
+              <Input
+                pattern="[A-Za-z_][A-Za-z0-9_]*"
+                required
+                value={v.name}
+                onChange={(e) => variable(i, 'name', e.target.value)}
+              />
+            </Label>
+            <Label className="min-w-0 flex-1">
+              Value
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={v.secret}
+                onChange={(e) => variable(i, 'secret', e.target.value)}
+              />
+            </Label>
+            <Button
+              type="button"
+              aria-label={'Remove variable ' + (v.name || i)}
+              onClick={() => {
+                const next = variables.filter((_, j) => i !== j)
+                setVariables(next)
+                onChange({
+                  ...value,
+                  environment: Object.fromEntries(
+                    next.filter((v) => v.name).map((v) => [v.name, v.secret]),
+                  ),
+                })
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          onClick={() => setVariables([...variables, { name: '', secret: '' }])}
+        >
+          Add variable
+        </Button>
+      </Card>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Label>
+          Restart policy
+          <NativeSelect
+            value={value.restart}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                restart: e.target.value as RuntimeConfig['restart'],
+              })
+            }
+          >
+            {['unless-stopped', 'always', 'on-failure', 'no'].map((v) => (
+              <option key={v}>{v}</option>
+            ))}
+          </NativeSelect>
+        </Label>
+        <Label>
+          Memory limit (MiB)
+          <Input
+            type="number"
+            min={16}
+            value={value.memoryMb ?? ''}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                memoryMb: e.target.value ? Number(e.target.value) : undefined,
+              })
+            }
+          />
+        </Label>
+        <Label>
+          CPU limit
+          <Input
+            type="number"
+            min={0.1}
+            step={0.1}
+            value={value.cpus ?? ''}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                cpus: e.target.value ? Number(e.target.value) : undefined,
+              })
+            }
+          />
+        </Label>
+      </div>
+      <Card className="space-y-3 p-4">
+        <h2 className="font-semibold">Published ports</h2>
+        {value.ports.map((port, i) => (
+          <div key={i} className="flex flex-wrap items-end gap-2">
+            <Label className="min-w-24 flex-1">
+              Host port
+              <Input
+                type="number"
+                required
+                min={1}
+                max={65535}
+                value={port.host}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    ports: value.ports.map((p, j) =>
+                      i === j ? { ...p, host: Number(e.target.value) } : p,
+                    ),
+                  })
+                }
+              />
+            </Label>
+            <Label className="min-w-24 flex-1">
+              Container port
+              <Input
+                type="number"
+                required
+                min={1}
+                max={65535}
+                value={port.container}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    ports: value.ports.map((p, j) =>
+                      i === j ? { ...p, container: Number(e.target.value) } : p,
+                    ),
+                  })
+                }
+              />
+            </Label>
+            <Label>
+              Protocol
+              <NativeSelect
+                value={port.protocol}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    ports: value.ports.map((p, j) =>
+                      i === j
+                        ? { ...p, protocol: e.target.value as 'tcp' | 'udp' }
+                        : p,
+                    ),
+                  })
+                }
+              >
+                <option value="tcp">TCP</option>
+                <option value="udp">UDP</option>
+              </NativeSelect>
+            </Label>
+            <Button
+              type="button"
+              aria-label={'Remove port ' + port.host}
+              onClick={() =>
+                onChange({
+                  ...value,
+                  ports: value.ports.filter((_, j) => j !== i),
+                })
+              }
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          onClick={() =>
+            onChange({
+              ...value,
+              ports: [
+                ...value.ports,
+                { host: 8080, container: 80, protocol: 'tcp' },
+              ],
+            })
+          }
+        >
+          Add port
+        </Button>
+      </Card>
+      <Card className="space-y-3 p-4">
+        <h2 className="font-semibold">Persistent volumes</h2>
+        {value.volumes.map((volume, i) => (
+          <div key={i} className="flex flex-wrap items-end gap-2">
+            <Label className="min-w-24 flex-1">
+              Volume name
+              <Input
+                required
+                value={volume.source}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    volumes: value.volumes.map((v, j) =>
+                      i === j ? { ...v, source: e.target.value } : v,
+                    ),
+                  })
+                }
+              />
+            </Label>
+            <Label className="min-w-24 flex-1">
+              Mount path
+              <Input
+                required
+                placeholder="/data"
+                value={volume.target}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    volumes: value.volumes.map((v, j) =>
+                      i === j ? { ...v, target: e.target.value } : v,
+                    ),
+                  })
+                }
+              />
+            </Label>
+            <Label>
+              Access
+              <NativeSelect
+                value={String(volume.readOnly)}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    volumes: value.volumes.map((v, j) =>
+                      i === j
+                        ? { ...v, readOnly: e.target.value === 'true' }
+                        : v,
+                    ),
+                  })
+                }
+              >
+                <option value="false">Read and write</option>
+                <option value="true">Read only</option>
+              </NativeSelect>
+            </Label>
+            <Button
+              type="button"
+              aria-label={'Remove volume ' + volume.source}
+              onClick={() =>
+                onChange({
+                  ...value,
+                  volumes: value.volumes.filter((_, j) => j !== i),
+                })
+              }
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          onClick={() =>
+            onChange({
+              ...value,
+              volumes: [
+                ...value.volumes,
+                { source: 'data', target: '/data', readOnly: false },
+              ],
+            })
+          }
+        >
+          Add volume
+        </Button>
+      </Card>
+      <Label>
+        Networks
+        <Input
+          placeholder="app-network, shared-network"
+          defaultValue={value.networks.join(', ')}
+          onChange={(e) =>
+            onChange({
+              ...value,
+              networks: e.target.value
+                .split(',')
+                .map((v) => v.trim())
+                .filter(Boolean),
+            })
+          }
+        />
+        <span className="text-xs">
+          Comma-separated existing Docker network names.
+        </span>
+      </Label>
+      <Label>
+        Health check command
+        <Textarea
+          placeholder={'/bin/sh\n-c\ncurl --fail http://localhost:3000/health'}
+          defaultValue={value.healthcheck?.command.join('\n') ?? ''}
+          onChange={(e) =>
+            onChange({
+              ...value,
+              healthcheck: e.target.value
+                ? {
+                    command: e.target.value.split('\n'),
+                    intervalSeconds: value.healthcheck?.intervalSeconds ?? 30,
+                  }
+                : undefined,
+            })
+          }
+        />
+        <span className="text-xs">
+          One argument per line. Leave blank to use the image’s health check.
+        </span>
+      </Label>
+      {value.healthcheck && (
+        <Label>
+          Health check interval (seconds)
+          <Input
+            type="number"
+            min={1}
+            max={3600}
+            value={value.healthcheck.intervalSeconds}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                healthcheck: {
+                  ...value.healthcheck!,
+                  intervalSeconds: Number(e.target.value),
+                },
+              })
+            }
+          />
+        </Label>
+      )}
+    </div>
+  )
+}
+export function HostField({
+  config,
+  hosts,
+  onChange,
+}: {
+  config: PlatformConfig
+  hosts: Host[]
+  onChange: (config: PlatformConfig) => void
+}) {
+  return (
+    <Label>
+      Deployment host
+      <NativeSelect
+        required
+        value={config.connector_id}
+        onChange={(e) =>
+          onChange({
+            ...config,
+            connector_id: e.target.value,
+            source:
+              config.source.type === 'github'
+                ? {
+                    ...config.source,
+                    config: {
+                      ...config.source.config,
+                      connector_id: e.target.value,
+                      kind:
+                        config.source.config.kind === ('git-compose' as string)
+                          ? 'compose'
+                          : config.source.config.kind,
+                    },
+                  }
+                : config.source,
+          })
+        }
+      >
+        <option value="">Select a host</option>
+        {hosts.map((h) => (
+          <option
+            key={h.id}
+            value={h.id}
+            disabled={
+              !h.capabilities.includes('deploy') ||
+              !h.seen ||
+              Date.now() - Date.parse(h.seen) > 20000
+            }
+          >
+            {h.name}
+            {!h.capabilities.includes('deploy')
+              ? ' — deployments disabled'
+              : !h.seen || Date.now() - Date.parse(h.seen) > 20000
+                ? ' — disconnected'
+                : ''}
+          </option>
+        ))}
+      </NativeSelect>
+    </Label>
+  )
+}

@@ -25,6 +25,7 @@ export interface DeploymentJob {
 export const deploymentSchema: z.ZodType<DeploymentConfig>
 export const deploymentJobSchema: z.ZodType<DeploymentJob>
 export interface Container {
+  health?: 'healthy' | 'unhealthy' | 'starting'
   id: string
   name: string
   state:

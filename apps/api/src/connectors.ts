@@ -3,6 +3,7 @@ import { WebSocket, WebSocketServer } from 'ws'
 import { snapshotSchema } from '@dedi-dash/protocol'
 import { pool, transaction } from './db.js'
 import { digest } from './security.js'
+import { registerRpc, acceptRpc } from './connector-rpc.js'
 
 export async function acceptSnapshot(
   connector: string,
@@ -82,6 +83,7 @@ export function attachConnectors(server: Server) {
       wss.handleUpgrade(request, socket, head, (ws) => {
         connections.get(connector.id)?.terminate()
         connections.set(connector.id, ws)
+        registerRpc(connector.id, ws)
         let alive = true,
           busy = false
         ws.on('pong', () => {
@@ -112,6 +114,37 @@ export function attachConnectors(server: Server) {
             connections.delete(connector.id)
         })
         ws.on('message', (data, binary) => {
+          if (!binary && connections.get(connector.id) === ws) {
+            try {
+              const message = JSON.parse(data.toString())
+              if (message.type === 'operation-result') {
+                acceptRpc(connector.id, message)
+                return
+              }
+              if (message.type === 'capabilities') {
+                const allowed = ['runtime', 'deploy', 'proxy']
+                if (
+                  !Array.isArray(message.capabilities) ||
+                  message.capabilities.some(
+                    (v: unknown) => !allowed.includes(String(v)),
+                  )
+                ) {
+                  ws.close(1008)
+                  return
+                }
+                void pool
+                  .query(
+                    'UPDATE connectors SET capabilities=$2 WHERE id=$1 AND NOT revoked',
+                    [connector.id, message.capabilities],
+                  )
+                  .catch(() => ws.terminate())
+                return
+              }
+            } catch {
+              ws.close(1008)
+              return
+            }
+          }
           if (
             busy ||
             binary ||

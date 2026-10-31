@@ -8,6 +8,7 @@ import {
 } from './components'
 import type { User, Project, ContainerRow } from './api'
 import QuickTip from './components/quickTip'
+import { ContainerOperations } from './container-operations'
 export function Compute({
   user,
   projects,
@@ -29,6 +30,7 @@ export function Compute({
       projects={projects}
       project={project}
       title="Compute / Containers"
+      active="containers"
     >
       <div className="compute-content">
         <div className="page-heading">
@@ -73,6 +75,7 @@ export function Compute({
                       <th>STATUS</th>
                       <th>CPU USAGE</th>
                       <th>RAM USAGE</th>
+                      <th>ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -127,6 +130,12 @@ export function Compute({
                                 ? '—'
                                 : `${bytes(row.data.memory)}${row.data.memoryLimit ? ` / ${bytes(row.data.memoryLimit)}` : ''}`
                             }
+                          />
+                        </td>
+                        <td>
+                          <ContainerOperations
+                            project={project}
+                            container={row}
                           />
                         </td>
                       </tr>

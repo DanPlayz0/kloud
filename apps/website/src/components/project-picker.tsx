@@ -71,7 +71,7 @@ export function ProjectPicker({
     `${p.name}\n${p.slug}`.toLowerCase().includes(query.toLowerCase().trim()),
   )
   const navigate = (slug: string) =>
-    location.assign(`/projects/${encodeURIComponent(slug)}/compute/containers`)
+    location.assign(`/projects/${encodeURIComponent(slug)}/services`)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

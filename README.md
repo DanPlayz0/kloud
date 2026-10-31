@@ -7,6 +7,10 @@ A pnpm workspaces monorepo for an authenticated Docker compute dashboard:
 - `apps/connector`: read-only Docker inventory and metrics over authenticated WebSocket.
 - `apps/protocol`: shared versioned connector validation and types.
 
+Services is the deployment workspace; Containers provides runtime operations.
+See [service platform setup and limitations](docs/PLATFORM.md) for encrypted drafts,
+Git/image/Compose deployment, runtime permissions, rollback, and managed NGINX.
+
 See [dashboard setup](docs/SETUP.md) for PostgreSQL, migrations, administrator
 bootstrap, passkey enrollment, Docker connectors, and deployment. See
 [API contracts](docs/API.md) for endpoint and connector protocol details.
@@ -134,9 +138,9 @@ and Docker socket permissions as documented in [dashboard setup](docs/SETUP.md).
 ```sh
 docker compose down
 ```
+
 ## Cloud DNS
 
 Cloudflare connections support shared server providers, private project providers,
 and DNS delegation down to individual records. See [Cloud DNS setup](docs/DNS.md)
 for the required encryption key, token permissions, and sharing model.
-

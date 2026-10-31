@@ -4,6 +4,9 @@ import WebSocket from 'ws'
 import { readConfig } from './config.js'
 import { createCollector } from './docker.js'
 import { deploymentWorker } from './deployments.js'
+import { serviceWorker } from './platform.js'
+import { runtimeOperations } from './runtime.js'
+import { proxyWorker } from './proxy.js'
 
 const config = readConfig()
 const collectSnapshot = createCollector(config.dockerSocket, config.host)
@@ -12,6 +15,15 @@ if (!/^[A-Za-z0-9_-]{43}$/.test(config.token))
     'CONNECTOR_TOKEN must be a credential created in the dashboard',
   )
 const shutdown = new AbortController()
+const runtimeEnabled = process.env.RUNTIME_ENABLED === 'true'
+const proxyEnabled = process.env.PROXY_ENABLED === 'true'
+const runtime = runtimeOperations(config)
+const services = config.deploymentsEnabled
+  ? serviceWorker(config, shutdown.signal)
+  : Promise.resolve()
+const proxy = proxyEnabled
+  ? proxyWorker(config, shutdown.signal)
+  : Promise.resolve()
 const worker = config.deploymentsEnabled
   ? deploymentWorker(config, shutdown.signal)
   : Promise.resolve()
@@ -47,7 +59,7 @@ try {
       const ws = new WebSocket(url, {
         headers: { authorization: `Bearer ${config.token}` },
         handshakeTimeout: 5000,
-        maxPayload: 1024,
+        maxPayload: 65536,
       })
       current = ws
       let timer: NodeJS.Timeout | undefined,
@@ -85,12 +97,59 @@ try {
         heartbeat = setTimeout(() => ws.terminate(), 30000)
       }
       ws.on('open', () => {
+        ws.send(
+          JSON.stringify({
+            type: 'capabilities',
+            capabilities: [
+              ...(runtimeEnabled ? ['runtime'] : []),
+              ...(config.deploymentsEnabled ? ['deploy'] : []),
+              ...(proxyEnabled ? ['proxy'] : []),
+            ],
+          }),
+        )
         touch()
         void send()
       })
       ws.on('ping', touch)
       ws.on('message', (raw) => {
         try {
+          const message = JSON.parse(raw.toString())
+          if (message.type === 'operation') {
+            if (!runtimeEnabled || message.operation?.kind !== 'runtime') {
+              ws.send(
+                JSON.stringify({
+                  type: 'operation-result',
+                  id: message.id,
+                  error: 'Runtime operations are disabled',
+                }),
+              )
+              return
+            }
+            void runtime
+              .execute(message.operation)
+              .then((result) => {
+                if (ws.readyState === WebSocket.OPEN)
+                  ws.send(
+                    JSON.stringify({
+                      type: 'operation-result',
+                      id: message.id,
+                      result,
+                    }),
+                  )
+              })
+              .catch(() => {
+                if (ws.readyState === WebSocket.OPEN)
+                  ws.send(
+                    JSON.stringify({
+                      type: 'operation-result',
+                      id: message.id,
+                      error:
+                        'Runtime operation failed; inspect host state before retrying',
+                    }),
+                  )
+              })
+            return
+          }
           if (JSON.parse(raw.toString()).type === 'accepted') {
             awaiting = false
             apiReachable = true
@@ -105,6 +164,7 @@ try {
         console.error('Connector connection failed:', error.message),
       )
       ws.on('close', () => {
+        runtime.close()
         clearTimeout(timer)
         clearTimeout(heartbeat)
         apiReachable = false
@@ -121,5 +181,8 @@ try {
 } finally {
   shutdown.abort()
   await worker
+  await services
+  await proxy
+  runtime.close()
   health.close()
 }

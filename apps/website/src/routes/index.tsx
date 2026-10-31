@@ -8,7 +8,7 @@ export const Route = createFileRoute('/')({
       projects = await api<Project[]>('/projects')
     if (projects[0])
       throw redirect({
-        to: '/projects/$projectSlug/compute/containers',
+        to: '/projects/$projectSlug/services',
         params: { projectSlug: projects[0].slug },
       })
     return { user, projects }

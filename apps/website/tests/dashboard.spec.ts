@@ -35,7 +35,7 @@ test.afterAll(async () => {
   await db.end()
 })
 for (const creatorOnly of [false, true]) {
-  test(`sidebar creates a project as ${creatorOnly ? 'a project creator' : 'a server administrator'} and opens its Containers page`, async ({
+  test(`sidebar creates a project as ${creatorOnly ? 'a project creator' : 'a server administrator'} and opens its Services page`, async ({
     page,
     context,
   }) => {
@@ -71,12 +71,12 @@ for (const creatorOnly of [false, true]) {
       await dialog
         .getByRole('button', { name: 'Create project', exact: true })
         .click()
-      await expect(page).toHaveURL(`/projects/${slug}/compute/containers`)
+      await expect(page).toHaveURL(`/projects/${slug}/services`)
       await expect(
         page.getByRole('button', { name: 'Project', exact: true }),
       ).toContainText('Picker project')
       await expect(
-        page.getByRole('heading', { name: 'Containers', exact: true }),
+        page.getByRole('heading', { name: 'Services', exact: true }),
       ).toBeVisible()
       if (creatorOnly)
         await expect(
@@ -205,6 +205,7 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
       .getByRole('listbox', { name: 'Projects' })
       .getByRole('option', { name: /Miki/ })
       .click()
+    await page.getByRole('link', { name: 'Containers', exact: true }).click()
     await expect(page.getByRole('link', { name: /imgen/ })).toBeVisible()
     await expect(page.getByRole('link', { name: /worker/ })).toBeVisible()
     await page.screenshot({

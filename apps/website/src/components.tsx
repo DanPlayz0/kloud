@@ -112,7 +112,7 @@ export function Shell({
   user,
   projects,
   project,
-  active = 'containers',
+  active = 'services',
   title,
   children,
 }: {
@@ -197,11 +197,18 @@ export function Shell({
                     )
                     .map(([name, icon]) =>
                       name === 'Cloud DNS' && project ? (
-                        <a key={name} className={`nav-item ${active === 'dns' ? 'active' : ''}`} href={`/projects/${project}/dns`}><Icon name={icon} />Cloud DNS</a>
+                        <a
+                          key={name}
+                          className={`nav-item ${active === 'dns' ? 'active' : ''}`}
+                          href={`/projects/${project}/dns`}
+                        >
+                          <Icon name={icon} />
+                          Cloud DNS
+                        </a>
                       ) : name === 'Access' &&
-                      project &&
-                      projects.find((p) => p.slug === project)
-                        ?.can_manage_access ? (
+                        project &&
+                        projects.find((p) => p.slug === project)
+                          ?.can_manage_access ? (
                         <a
                           key={name}
                           className={`nav-item ${active === 'access' ? 'active' : ''}`}

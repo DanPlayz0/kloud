@@ -4,7 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./dns": { "types": "./dns.d.ts", "default": "./dns.js" },
+    "./platform": {
+      "types": "./platform.d.ts",
+      "default": "./platform.js"
+    },
+    "./dns": {
+      "types": "./dns.d.ts",
+      "default": "./dns.js"
+    },
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"

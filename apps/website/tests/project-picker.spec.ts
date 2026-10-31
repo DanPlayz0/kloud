@@ -65,9 +65,7 @@ test('searches names and slugs, preserves order, navigates with keyboard and res
   await search.fill('PRODUCTION')
   await search.press('ArrowDown')
   await search.press('Enter')
-  await expect(page).toHaveURL(
-    /\/projects\/production-services\/compute\/containers$/,
-  )
+  await expect(page).toHaveURL(/\/projects\/production-services\/services$/)
   await expect(picker).toContainText('Backend')
 })
 
@@ -191,7 +189,7 @@ test('dialog validates, preserves failures, blocks duplicate submission and open
   await expect(dialog).toBeVisible()
   expect(calls).toBe(2)
   finish!()
-  await expect(page).toHaveURL(/\/projects\/new-project\/compute\/containers$/)
+  await expect(page).toHaveURL(/\/projects\/new-project\/services$/)
 })
 
 for (const entry of ['picker', 'administration'] as const) {

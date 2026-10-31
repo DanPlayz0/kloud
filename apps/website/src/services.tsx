@@ -7,8 +7,10 @@ import {
   type Service,
   type ServiceList,
 } from './api'
-import { Shell, ErrorMessage, usePolling } from './components'
-import { Button, Input, Label, NativeSelect } from './components/ui/controls'
+import { Shell, ErrorMessage, usePolling, bytes } from './components'
+import type { ContainerRow } from './api'
+import { ServiceCreate } from './service-create'
+import { Button, Input, Label } from './components/ui/controls'
 import { Card } from './components/ui/card'
 import {
   Dialog,
@@ -34,8 +36,11 @@ export function ServicesPage({
   const [busy, setBusy] = useState(false)
   const path = `/projects/${project}/services`
   const { data, error: loadError } = usePolling<ServiceList>(path, revision)
+  const { data: containers, error: runtimeError } = usePolling<ContainerRow[]>(
+    `/projects/${project}/containers`,
+  )
   const filtered =
-    data?.services.filter((s) =>
+    data?.services?.filter((s) =>
       `${s.name} ${s.slug} ${s.type}`
         .toLowerCase()
         .includes(query.toLowerCase()),
@@ -93,7 +98,8 @@ export function ServicesPage({
           <div>
             <h1>Services</h1>
             <p className="text-muted-foreground">
-              Dockerfile applications and Docker Compose services.
+              Deploy applications and stacks. Monitor their health and manage
+              their configuration.
             </p>
           </div>
           {data?.can_create && (
@@ -123,70 +129,119 @@ export function ServicesPage({
           </p>
         )}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((service) => (
-            <Card key={service.slug} className="space-y-4 p-5">
-              <div className="flex items-start gap-3">
-                <Boxes size={20} />
-                <div className="min-w-0">
-                  <a
-                    className="font-semibold break-all"
-                    href={`/projects/${project}/applications/${service.slug}`}
-                  >
-                    {service.name}
-                  </a>
-                  <p className="text-sm text-muted-foreground">
-                    {service.type === 'compose'
-                      ? 'Docker Compose'
-                      : 'Dockerfile application'}
+          {filtered.map((service) => {
+            const runtime = containers?.filter(
+              (c) => c.application === service.slug,
+            )
+            const stale = runtime?.some(
+              (c) =>
+                c.stale || !c.seen || Date.now() - Date.parse(c.seen) > 20000,
+            )
+            return (
+              <Card key={service.slug} className="space-y-4 p-5">
+                <div className="flex items-start gap-3">
+                  <Boxes size={20} />
+                  <div className="min-w-0">
+                    <a
+                      className="font-semibold break-all"
+                      href={`/projects/${project}/applications/${service.slug}`}
+                    >
+                      {service.name}
+                    </a>
+                    <p className="text-sm text-muted-foreground">
+                      {service.type === 'compose'
+                        ? 'Docker Compose'
+                        : 'Application'}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground break-words">
+                  {service.description || service.slug}
+                </p>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">
+                    Runtime:{' '}
+                    {runtimeError
+                      ? 'Unavailable'
+                      : !runtime
+                        ? 'Loading'
+                        : stale
+                          ? 'Host disconnected'
+                          : !runtime.length
+                            ? 'Not deployed'
+                            : runtime.every(
+                                  (c) =>
+                                    c.data.state === 'running' &&
+                                    c.data.health !== 'unhealthy' &&
+                                    c.data.health !== 'starting',
+                                )
+                              ? 'Running'
+                              : 'Needs attention'}
+                  </p>
+                  {!!runtime?.length && (
+                    <>
+                      <p>
+                        {[
+                          ...new Set(
+                            runtime.map((c) => c.host ?? c.connector_name),
+                          ),
+                        ].join(', ')}
+                      </p>
+                      <p>
+                        {runtime.length} container
+                        {runtime.length === 1 ? '' : 's'} ·{' '}
+                        {stale
+                          ? 'Metrics unavailable'
+                          : `${runtime.reduce((sum, c) => sum + (c.data.cpu ?? 0), 0).toFixed(1)}% CPU · ${bytes(runtime.reduce((sum, c) => sum + (c.data.memory ?? 0), 0))} RAM`}
+                      </p>
+                    </>
+                  )}
+                  <p>
+                    {service.source_label ??
+                      (service.repository
+                        ? `${service.repository} · ${service.branch}`
+                        : 'Source not configured')}
+                  </p>
+                  <p>
+                    {service.deployment_status
+                      ? `Latest deployment: ${service.deployment_status}`
+                      : 'No deployments yet'}
                   </p>
                 </div>
-              </div>
-              <p className="text-sm text-muted-foreground break-words">
-                {service.description || service.slug}
-              </p>
-              <div className="space-y-1 text-sm text-muted-foreground">
-                <p>
-                  {service.repository
-                    ? `${service.repository} · ${service.branch}`
-                    : 'Source not configured'}
-                </p>
-                <p>
-                  {service.deployment_status
-                    ? `Latest deployment: ${service.deployment_status}`
-                    : 'No deployments yet'}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild>
-                  <a href={`/projects/${project}/applications/${service.slug}`}>
-                    Open service
-                  </a>
-                </Button>
-                {service.can_update && (
-                  <Button
-                    aria-label={`Edit ${service.name}`}
-                    onClick={() => {
-                      setError('')
-                      setEditing(service)
-                    }}
-                  >
-                    <Pencil size={16} />
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild>
+                    <a
+                      href={`/projects/${project}/applications/${service.slug}`}
+                    >
+                      Open service
+                    </a>
                   </Button>
-                )}
-                {service.can_delete && (
-                  <Button
-                    aria-label={`Remove ${service.name}`}
-                    onClick={() => {
-                      setError('')
-                      setRemoving(service)
-                    }}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
-                )}
-              </div>
-            </Card>
-          ))}
+                  {service.can_update && (
+                    <Button
+                      aria-label={`Edit ${service.name}`}
+                      onClick={() => {
+                        setError('')
+                        setEditing(service)
+                      }}
+                    >
+                      <Pencil size={16} />
+                    </Button>
+                  )}
+                  {service.can_delete && (
+                    <Button
+                      aria-label={`Remove ${service.name}`}
+                      onClick={() => {
+                        setError('')
+                        setRemoving(service)
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            )
+          })}
         </div>
         {data && !filtered.length && (
           <Card className="p-8 text-center text-muted-foreground">
@@ -202,73 +257,56 @@ export function ServicesPage({
           if (!busy && !open) setEditing(null)
         }}
       >
-        <DialogContent>
-          <DialogTitle>
-            {editing === 'new' ? 'Create service' : 'Edit service'}
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Services keep their identity and permissions across deployments.
-          </DialogDescription>
-          {editing && (
-            <form
-              key={editing === 'new' ? 'new' : editing.slug}
-              onSubmit={save}
-              className="mt-4 space-y-4"
-            >
-              <fieldset disabled={busy} className="space-y-4">
-                <Label>
-                  Name
-                  <Input
-                    name="name"
-                    required
-                    maxLength={100}
-                    defaultValue={editing === 'new' ? '' : editing.name}
-                  />
-                </Label>
-                {editing === 'new' && (
-                  <>
-                    <Label>
-                      Slug
-                      <Input
-                        name="slug"
-                        required
-                        pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                        maxLength={100}
-                        placeholder="my-service"
-                      />
-                    </Label>
-                    <Label>
-                      Service type
-                      <NativeSelect name="type">
-                        <option value="application">
-                          Dockerfile application
-                        </option>
-                        <option value="compose">Docker Compose</option>
-                      </NativeSelect>
-                    </Label>
-                  </>
-                )}
-                <Label>
-                  Description
-                  <Input
-                    name="description"
-                    maxLength={1000}
-                    defaultValue={editing === 'new' ? '' : editing.description}
-                  />
-                </Label>
-                <ErrorMessage message={error} />
-                <div className="flex justify-end gap-2">
-                  <Button type="button" onClick={() => setEditing(null)}>
-                    Cancel
-                  </Button>
-                  <Button variant="primary" disabled={busy}>
-                    {busy ? 'Saving…' : 'Save service'}
-                  </Button>
-                </div>
-              </fieldset>
-            </form>
-          )}
-        </DialogContent>
+        {editing === 'new' ? (
+          <ServiceCreate
+            key={revision}
+            project={project}
+            canDeploy={!!data?.can_deploy_all}
+          />
+        ) : (
+          <DialogContent>
+            <DialogTitle>Edit service</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Services keep their identity and permissions across deployments.
+            </DialogDescription>
+            {editing && (
+              <form
+                key={editing.slug}
+                onSubmit={save}
+                className="mt-4 space-y-4"
+              >
+                <fieldset disabled={busy} className="space-y-4">
+                  <Label>
+                    Name
+                    <Input
+                      name="name"
+                      required
+                      maxLength={100}
+                      defaultValue={editing.name}
+                    />
+                  </Label>
+                  <Label>
+                    Description
+                    <Input
+                      name="description"
+                      maxLength={1000}
+                      defaultValue={editing.description}
+                    />
+                  </Label>
+                  <ErrorMessage message={error} />
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" onClick={() => setEditing(null)}>
+                      Cancel
+                    </Button>
+                    <Button variant="primary" disabled={busy}>
+                      {busy ? 'Saving…' : 'Save service'}
+                    </Button>
+                  </div>
+                </fieldset>
+              </form>
+            )}
+          </DialogContent>
+        )}
       </Dialog>
       <Dialog
         open={removing !== null}

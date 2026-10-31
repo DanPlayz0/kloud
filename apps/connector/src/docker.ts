@@ -122,6 +122,15 @@ export async function collect(
           id: item.Id,
           name: item.Names?.[0]?.replace(/^\//, '') ?? item.Id.slice(0, 12),
           state: item.State,
+          ...(/\((healthy|unhealthy|health: starting)\)/.test(item.Status ?? '')
+            ? {
+                health: item.Status.includes('(unhealthy)')
+                  ? ('unhealthy' as const)
+                  : item.Status.includes('(healthy)')
+                    ? ('healthy' as const)
+                    : ('starting' as const),
+              }
+            : {}),
           project: project.success ? project.data : null,
           application: application.success ? application.data : null,
           ...usage,

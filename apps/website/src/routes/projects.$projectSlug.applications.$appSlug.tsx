@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { projectSession, api } from '../api'
 import { Shell } from '../components'
-import { DeploymentSettings } from '../deployments'
+import { ServiceDetail } from '../service-detail'
 export const Route = createFileRoute(
   '/projects/$projectSlug/applications/$appSlug',
 )({
@@ -26,11 +26,12 @@ function Page() {
       active="services"
       title={`Services / ${context.service.name ?? appSlug}`}
     >
-      <DeploymentSettings
+      <ServiceDetail
         project={projectSlug}
-        application={appSlug}
+        slug={appSlug}
+        name={context.service.name ?? appSlug}
         canDeploy={context.user.admin || !!context.service.can_deploy}
-        serviceType={context.service.type}
+        type={context.service.type}
       />
     </Shell>
   )

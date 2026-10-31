@@ -23,6 +23,7 @@ export default defineConfig({
         PUBLIC_ORIGIN: 'http://localhost:5174',
         WEBAUTHN_RP_ID: 'localhost',
         PORT: '3100',
+        PLATFORM_ENCRYPTION_KEY: 'ab'.repeat(32),
       },
       reuseExistingServer: false,
     },

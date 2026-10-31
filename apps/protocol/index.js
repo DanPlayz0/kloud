@@ -81,6 +81,7 @@ export const containerSchema = z
       'exited',
       'dead',
     ]),
+    health: z.enum(['healthy', 'unhealthy', 'starting']).optional(),
     project: slug.nullable(),
     application: slug.nullable(),
     cpu: z.number().finite().nonnegative().nullable(),

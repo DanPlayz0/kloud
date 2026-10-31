@@ -66,6 +66,7 @@ export interface ServiceGrant {
   service: string | null
 }
 export interface Service {
+  source_label?: string | null
   repository?: string | null
   branch?: string | null
   deployment_status?: 'queued' | 'running' | 'succeeded' | 'failed' | null
@@ -80,6 +81,7 @@ export interface Service {
 }
 export interface ServiceList {
   can_create: boolean
+  can_deploy_all?: boolean
   services: Service[]
 }
 export interface ProjectAccess {
@@ -106,6 +108,7 @@ export interface ContainerRow {
   data: {
     name: string
     state: string
+    health?: 'healthy' | 'unhealthy' | 'starting'
     cpu: number | null
     memory: number | null
     memoryLimit: number | null

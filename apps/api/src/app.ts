@@ -6,6 +6,7 @@ import { dashboard } from './dashboard.js'
 import { publicOrigin } from './security.js'
 import { registerContracts } from './contracts.js'
 import { deploymentHooks, deployments } from './deployments.js'
+import { platform, platformWorker } from './platform.js'
 
 export const app = new OpenAPIHono<Env>()
 app.use('*', (c, next) =>
@@ -29,7 +30,7 @@ app.use('*', async (c, next) => {
       c.req.method === 'POST'
     ) &&
     !(
-      /^\/connectors\/deployments\/(claim|[0-9a-f-]+\/result)$/.test(
+      /^\/connectors\/(?:deployments|platform)\/(claim|proxy|[0-9a-f-]+\/result)$/.test(
         c.req.path,
       ) && c.req.method === 'POST'
     )
@@ -79,7 +80,9 @@ const healthRoute = createRoute({
 
 app.openapi(healthRoute, (c) => c.json({ status: 'ok' as const }, 200))
 app.route('/', deploymentHooks)
+app.route('/', platformWorker)
 app.route('/', deployments)
+app.route('/', platform)
 app.route('/', dashboard)
 
 app.use('/openapi.json', requireUser)

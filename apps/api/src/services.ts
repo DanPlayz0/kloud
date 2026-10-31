@@ -24,15 +24,19 @@ services.get(base, async (c) => {
   const rows = (
     await pool.query(
       `SELECT s.*,d.config->>'repository' AS repository,d.config->>'branch' AS branch,
-        latest.status AS deployment_status,latest.created AS last_deployment
+        COALESCE(platform_run.status,latest.status) AS deployment_status,COALESCE(platform_run.created,latest.created) AS last_deployment,
+        revision.source_label
         FROM services s LEFT JOIN deployments d ON d.project=s.project_slug AND d.application=s.slug
         LEFT JOIN LATERAL (SELECT status,created FROM deployment_builds WHERE deployment_id=d.id ORDER BY created DESC,id DESC LIMIT 1) latest ON true
+        LEFT JOIN LATERAL (SELECT source_label FROM service_revisions WHERE project=s.project_slug AND service=s.slug ORDER BY created DESC,id DESC LIMIT 1) revision ON true
+        LEFT JOIN LATERAL (SELECT r.status,r.created FROM service_runs r JOIN service_revisions v ON v.id=r.revision WHERE v.project=s.project_slug AND v.service=s.slug ORDER BY r.created DESC,r.id DESC LIMIT 1) platform_run ON true
         WHERE s.project_slug=$1 ORDER BY s.name,s.slug`,
       [c.req.param('project')],
     )
   ).rows
   return c.json({
     can_create: access.allows('create'),
+    can_deploy_all: access.allows('deploy'),
     services: rows
       .filter((row) => access.allows('read', row.slug))
       .map((row) => ({
@@ -123,6 +127,21 @@ services.delete(`${base}/:service`, async (c) => {
         [c.req.param('project'), c.req.param('service')],
       )
     ).rows[0]
+    const revisions = await db.query(
+      'SELECT id FROM service_revisions WHERE project=$1 AND service=$2 FOR UPDATE',
+      [c.req.param('project'), c.req.param('service')],
+    )
+    if (
+      (
+        await db.query(
+          "SELECT 1 FROM service_runs WHERE revision=ANY($1::uuid[]) AND status='running'",
+          [revisions.rows.map((r) => r.id)],
+        )
+      ).rowCount
+    )
+      throw new HTTPException(409, {
+        message: 'Wait for the running deployment before removing this service',
+      })
     if (
       deployment &&
       (

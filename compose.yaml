@@ -3,6 +3,7 @@ x-api-environment: &api-environment
   PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:8080}
   WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
   DNS_ENCRYPTION_KEY: ${DNS_ENCRYPTION_KEY:-}
+  PLATFORM_ENCRYPTION_KEY: ${PLATFORM_ENCRYPTION_KEY:-}
 
 services:
   postgres:
@@ -48,6 +49,10 @@ services:
       CONNECTOR_HOST: ${CONNECTOR_HOST:-docker-host}
       DOCKER_SOCKET: /var/run/docker.sock
       DEPLOYMENTS_ENABLED: ${DEPLOYMENTS_ENABLED:-false}
+      RUNTIME_ENABLED: ${RUNTIME_ENABLED:-false}
+      PROXY_ENABLED: ${PROXY_ENABLED:-false}
+      PROXY_NGINX_IMAGE: ${PROXY_NGINX_IMAGE:-nginx:stable-alpine}
+      PROXY_CERTBOT_IMAGE: ${PROXY_CERTBOT_IMAGE:-certbot/certbot:latest}
       DEPLOYMENTS_DIR: /var/lib/dedi-dash/deployments
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

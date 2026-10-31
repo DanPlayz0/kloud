@@ -10,6 +10,11 @@ import { dnsGrantsSchema, dnsRecordSchema } from '@dedi-dash/protocol/dns'
 import { dnsProviderBody, dnsProviderUpdate, dnsDelegationBody } from './dns.js'
 import { serviceBody, serviceUpdateBody } from './services.js'
 import {
+  platformConfigSchema,
+  runtimeRequestSchema,
+  domainSchema,
+} from '@dedi-dash/protocol/platform'
+import {
   memberBody,
   projectInviteBody,
   settingsBody,
@@ -453,6 +458,31 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
         log: z.string().max(48000),
       }),
     ],
+    [
+      '/connectors/platform/claim',
+      'Claim the next saved service revision',
+      flexible,
+      z.object({}),
+    ],
+    [
+      '/connectors/platform/{id}/result',
+      'Finalize a service deployment owned by this connector',
+      flexible,
+      z.object({
+        status: z.enum(['succeeded', 'failed']),
+        log: z.string().max(48000),
+        artifacts: z.record(z.string(), z.string().max(500)).nullable(),
+      }),
+    ],
+    [
+      '/connectors/platform/proxy',
+      'Report applied proxy state and obtain desired routes',
+      flexible,
+      z.object({
+        applied: z.string().max(64).nullable(),
+        error: z.string().max(500).nullable(),
+      }),
+    ],
   ] as const) {
     registry.registerPath({
       method: 'post',
@@ -582,6 +612,101 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     dnsRecordSchema,
   )
   route('delete', `${recordsPath}/{record}`, 'Delete authorized DNS record', ok)
+  const platformPath = '/projects/{project}/services/{service}'
+  route(
+    'get',
+    '/projects/{project}/hosts',
+    'List deployment hosts and capabilities',
+    z.array(flexible),
+  )
+  route(
+    'get',
+    `${platformPath}/configuration`,
+    'List configuration revisions and deployment history',
+    flexible,
+  )
+  route(
+    'get',
+    `${platformPath}/configuration/{revision}`,
+    'Read configuration with masked secrets (deploy permission)',
+    flexible,
+  )
+  route(
+    'put',
+    `${platformPath}/configuration`,
+    'Save encrypted configuration draft',
+    flexible,
+    z.object({
+      config: platformConfigSchema,
+      previous: z.string().uuid().optional(),
+    }),
+    true,
+    201,
+  )
+  route(
+    'post',
+    `${platformPath}/deploy`,
+    'Deploy saved revision or roll back a successful run',
+    flexible,
+    z.object({
+      revision: z.string().uuid(),
+      request_key: z.string().uuid(),
+      commit: z.string().optional(),
+      rollback: z.string().uuid().optional(),
+    }),
+    true,
+    202,
+  )
+  route(
+    'get',
+    `${platformPath}/domains`,
+    'List domain routes and desired/applied proxy state',
+    z.array(flexible),
+  )
+  route(
+    'post',
+    `${platformPath}/domains`,
+    'Save a managed NGINX route; does not change DNS',
+    flexible,
+    z.object({ connector_id: z.string().uuid(), config: domainSchema }),
+    true,
+    201,
+  )
+  route(
+    'delete',
+    `${platformPath}/domains/{id}`,
+    'Remove a managed NGINX route',
+    flexible,
+  )
+  route(
+    'get',
+    '/projects/{project}/containers/{connector}/{container}/permissions',
+    'Read effective runtime operation permissions',
+    flexible,
+  )
+  route(
+    'post',
+    '/projects/{project}/containers/{connector}/{container}/operation',
+    'Perform authorized runtime operation through connector',
+    flexible,
+    runtimeRequestSchema,
+  )
+  registry.registerPath({
+    method: 'get',
+    path: '/projects/{project}/containers/{connector}/{container}/logs',
+    summary:
+      'Stream bounded container logs; grants and session are rechecked for each event',
+    tags: ['Projects'],
+    security: [{ session: [] }],
+    responses: {
+      200: {
+        description: 'Authenticated log stream',
+        content: { 'text/event-stream': { schema: z.string() } },
+      },
+      403: { description: 'Logs grant required' },
+      409: { description: 'Host unavailable' },
+    },
+  })
   registry.registerPath({
     method: 'post',
     path: '/hooks/github/{id}',

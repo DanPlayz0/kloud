@@ -58,6 +58,18 @@ export function Label({
     />
   )
 }
+export function Textarea({ className, ...props }: ComponentProps<'textarea'>) {
+  return (
+    <textarea
+      data-slot="textarea"
+      className={clsx(
+        'ui-input min-h-28 w-full bg-muted text-foreground border-border font-mono text-sm',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
 // NativeSelect is a shadcn/ui component; native platform selection preserves
 // keyboard and mobile behavior for these short project lists.
 export function NativeSelect({
