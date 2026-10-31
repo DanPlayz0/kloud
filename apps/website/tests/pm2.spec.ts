@@ -164,12 +164,26 @@ test('assign PM2 apps, delegate permissions, inspect workers and logs, and manag
   await expect(
     page.getByRole('heading', { name: 'PM2', exact: true }),
   ).toBeVisible()
-  await page.getByRole('button', { name: 'Expand node-api workers' }).click()
   await expect(
-    page.getByLabel('node-api workers', { exact: true }),
-  ).toContainText('PID 100')
-  await page.getByRole('button', { name: 'Open', exact: true }).click()
+    page.getByRole('button', { name: /Expand .* workers/ }),
+  ).toHaveCount(0)
+  await page.getByRole('cell', { name: 'PM2 test host', exact: true }).click()
   const dialog = page.getByRole('dialog')
+  await expect(
+    dialog.getByRole('heading', { name: 'node-api', exact: true }),
+  ).toBeFocused()
+  await expect(
+    dialog.getByLabel('node-api workers', { exact: true }),
+  ).toContainText('PID 100')
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  const opener = page.getByRole('button', {
+    name: 'Open node-api',
+    exact: true,
+  })
+  await expect(opener).toBeFocused()
+  await opener.press('Enter')
+  await expect(dialog).toBeVisible()
   await expect(dialog.getByLabel('Log output')).toContainText(
     'stdout worker all',
   )
@@ -225,7 +239,7 @@ test('assign PM2 apps, delegate permissions, inspect workers and logs, and manag
     { name: 'session', value: sessions.member, url: 'http://localhost:5174' },
   ])
   await page.goto(`/projects/${project}/compute/pm2`)
-  await page.getByRole('button', { name: 'Open', exact: true }).click()
+  await page.getByRole('button', { name: 'Open node-api', exact: true }).click()
   await expect(dialog.getByLabel('Log output')).toContainText('log-entry')
   await expect(
     dialog.getByRole('button', { name: 'delete', exact: true }),
@@ -255,7 +269,7 @@ test('assign PM2 apps, delegate permissions, inspect workers and logs, and manag
   await expect(
     page.getByRole('cell', { name: 'Stale', exact: true }),
   ).toBeVisible()
-  await page.getByRole('button', { name: 'Open', exact: true }).click()
+  await page.getByRole('button', { name: 'Open node-api', exact: true }).click()
   await expect(
     dialog.getByRole('button', { name: 'restart', exact: true }),
   ).toBeDisabled()
@@ -263,7 +277,7 @@ test('assign PM2 apps, delegate permissions, inspect workers and logs, and manag
   pauseSnapshots = false
   sendSnapshot()
   await page.reload()
-  await page.getByRole('button', { name: 'Open', exact: true }).click()
+  await page.getByRole('button', { name: 'Open node-api', exact: true }).click()
   await expect(
     dialog.getByRole('button', { name: 'delete', exact: true }),
   ).toBeEnabled()

@@ -1,16 +1,7 @@
 import { StatusBadge } from './components/ui/status-badge'
-import { Fragment, useEffect, useRef, useState } from 'react'
-import {
-  Activity,
-  ChevronDown,
-  ChevronRight,
-  FileText,
-  Pause,
-  Play,
-  RotateCw,
-  Square,
-  Trash2,
-} from 'lucide-react'
+import { InventoryCard } from './components/inventory-card'
+import { Fragment, useEffect, useRef, useState, type RefObject } from 'react'
+import { Activity, Pause, Play, RotateCw, Square, Trash2 } from 'lucide-react'
 import {
   pm2Actions,
   type Pm2Action,
@@ -129,7 +120,6 @@ export function Pm2Page({
                     'Memory',
                     'Uptime',
                     'Restarts',
-                    'Actions',
                   ].map((label) => (
                     <th key={label} scope="col" className="p-3">
                       {label}
@@ -164,7 +154,8 @@ function Pm2Row({
   project: string
   refresh: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
   const current = app.present && !stale(app)
   const cpu = app.workers.some((w) => w.cpu !== null)
     ? `${app.workers.reduce((v, w) => v + (w.cpu ?? 0), 0).toFixed(1)}%`
@@ -174,13 +165,18 @@ function Pm2Row({
     : '—'
   return (
     <Fragment>
-      <tr className="border-b border-border">
+      <tr
+        className="cursor-pointer border-b border-border hover:bg-muted focus-within:bg-muted"
+        onClick={() => setOpen(true)}
+      >
         <td className="p-3">
           <Button
-            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${app.name} workers`}
-            onClick={() => setExpanded((v) => !v)}
+            ref={trigger}
+            className="!border-0 !bg-transparent !p-0 font-medium hover:underline"
+            aria-label={`Open ${app.name}`}
+            aria-haspopup="dialog"
+            onClick={() => setOpen(true)}
           >
-            {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
             {app.name}
           </Button>
           <p className="mt-1 text-xs text-muted-foreground">{app.namespace}</p>
@@ -196,36 +192,15 @@ function Pm2Row({
         <td className="p-3">
           {current ? app.workers.reduce((v, w) => v + w.restarts, 0) : '—'}
         </td>
-        <td className="p-3">
-          <Pm2Operations app={app} project={project} refresh={refresh} />
-        </td>
       </tr>
-      {expanded && (
-        <tr>
-          <td colSpan={9} className="p-4 bg-background">
-            <div className="space-y-2" aria-label={`${app.name} workers`}>
-              {!app.workers.length && (
-                <p className="text-muted-foreground">No current workers.</p>
-              )}
-              {app.workers.map((w) => (
-                <p key={w.id} className="text-sm">
-                  #{w.id} · PID {w.pid} · {w.mode} ·{' '}
-                  <StatusBadge>
-                    {!app.present
-                      ? 'Unavailable'
-                      : stale(app)
-                        ? 'Stale'
-                        : w.status}
-                  </StatusBadge>{' '}
-                  · CPU {current && w.cpu !== null ? `${w.cpu}%` : '—'} · RAM{' '}
-                  {current ? bytes(w.memory) : '—'} · uptime{' '}
-                  {current ? uptime([w]) : '—'} · {w.restarts} restarts
-                </p>
-              ))}
-            </div>
-          </td>
-        </tr>
-      )}
+      <Pm2Operations
+        app={app}
+        project={project}
+        refresh={refresh}
+        open={open}
+        onOpenChange={setOpen}
+        trigger={trigger}
+      />
     </Fragment>
   )
 }
@@ -234,21 +209,31 @@ function Pm2Operations({
   app,
   project,
   refresh,
+  open,
+  onOpenChange,
+  trigger,
 }: {
   app: Pm2App
   project: string
   refresh: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  trigger: RefObject<HTMLButtonElement | null>
 }) {
-  const [open, setOpen] = useState(false),
-    [permissions, setPermissions] = useState<Permissions>(),
+  const [permissions, setPermissions] = useState<Permissions>(),
     [error, setError] = useState(''),
     [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false),
     [confirmAction, setConfirmAction] = useState<Pm2Action>()
   const submitting = useRef(false)
+  const title = useRef<HTMLHeadingElement>(null)
+  const current = app.present && !stale(app)
   const base = `/projects/${project}/pm2/${app.id}`
   useEffect(() => {
     if (!open) return
+    setError('')
+    setMessage('')
+    setPermissions(undefined)
     let active = true
     const load = () =>
       api<Permissions>(`${base}/permissions`)
@@ -307,29 +292,52 @@ function Pm2Operations({
       open={open}
       onOpenChange={(next) => {
         if (!busy) {
-          setOpen(next)
+          onOpenChange(next)
           if (!next) setConfirmAction(undefined)
         }
       }}
     >
-      <Button
-        onClick={() => {
-          setError('')
-          setMessage('')
-          setOpen(true)
+      <DialogContent
+        className="!max-w-4xl space-y-4"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          title.current?.focus()
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          trigger.current?.focus()
         }}
       >
-        <FileText size={16} aria-hidden="true" />
-        Open
-      </Button>
-      <DialogContent className="!max-w-4xl space-y-4">
-        <DialogTitle className="text-lg font-semibold break-all">
+        <DialogTitle
+          ref={title}
+          tabIndex={-1}
+          className="text-lg font-semibold break-all outline-none"
+        >
           {app.name}
         </DialogTitle>
         <DialogDescription>
-          {app.namespace} · {app.host ?? app.connector_name} ·{' '}
-          <StatusBadge>{status(app)}</StatusBadge>
+          {app.namespace} · {app.host ?? app.connector_name}
         </DialogDescription>
+        <section className="space-y-2" aria-label={`${app.name} workers`}>
+          <h3 className="text-sm font-medium">Workers</h3>
+          {!app.workers.length && (
+            <p className="text-sm text-muted-foreground">No current workers.</p>
+          )}
+          {app.workers.map((worker) => (
+            <p key={worker.id} className="text-sm">
+              #{worker.id} · PID {worker.pid} · {worker.mode}
+              {current && (
+                <>
+                  {' '}
+                  · <StatusBadge>{worker.status}</StatusBadge>
+                </>
+              )}{' '}
+              · CPU {current && worker.cpu !== null ? `${worker.cpu}%` : '—'} ·
+              RAM {current ? bytes(worker.memory) : '—'} · uptime{' '}
+              {current ? uptime([worker]) : '—'} · {worker.restarts} restarts
+            </p>
+          ))}
+        </section>
         <ErrorMessage message={error} />
         {message && <p role="status">{message}</p>}
         {!permissions && !error && <p role="status">Loading permissions…</p>}
@@ -346,6 +354,7 @@ function Pm2Operations({
             return (
               <QuickTip
                 key={action}
+                portal
                 content={
                   !allowed
                     ? `PM2 ${action === 'delete' ? 'Delete' : 'Manage'} permission required`
@@ -414,7 +423,7 @@ function Pm2Operations({
           )
         )}
         <div className="flex justify-end">
-          <Button disabled={busy} onClick={() => setOpen(false)}>
+          <Button disabled={busy} onClick={() => onOpenChange(false)}>
             Close
           </Button>
         </div>
@@ -584,9 +593,12 @@ export function Pm2Inventory({ projects }: { projects: Project[] }) {
         <p className="text-muted-foreground">No PM2 applications discovered.</p>
       )}
       {data?.map((app) => (
-        <form
+        <InventoryCard
           key={`${app.id}:${app.project_slug}:${revision}`}
-          className="flex flex-wrap items-end gap-3 rounded border border-border bg-card p-4"
+          name={app.name}
+          icon={Activity}
+          metadata={`${app.namespace} · ${app.host ?? app.connector_name}`}
+          status={<StatusBadge>{status(app)}</StatusBadge>}
           onSubmit={(e) => {
             e.preventDefault()
             void assign(
@@ -595,13 +607,6 @@ export function Pm2Inventory({ projects }: { projects: Project[] }) {
             )
           }}
         >
-          <div className="min-w-40 flex-1">
-            <strong className="break-all">{app.name}</strong>
-            <p className="text-sm text-muted-foreground">
-              {app.namespace} · {app.host ?? app.connector_name} ·{' '}
-              <StatusBadge>{status(app)}</StatusBadge>
-            </p>
-          </div>
           <Label>
             Project
             <NativeSelect
@@ -618,10 +623,12 @@ export function Pm2Inventory({ projects }: { projects: Project[] }) {
               ))}
             </NativeSelect>
           </Label>
-          <Button type="submit" disabled={busy}>
-            Save assignment
-          </Button>
-        </form>
+          <div className="inventory-card-actions">
+            <Button type="submit" disabled={busy}>
+              Save assignment
+            </Button>
+          </div>
+        </InventoryCard>
       ))}
     </section>
   )

@@ -1,4 +1,6 @@
 import { StatusBadge } from './components/ui/status-badge'
+import { Container } from 'lucide-react'
+import { InventoryCard } from './components/inventory-card'
 import { ProjectFields, projectFormValues } from './components/project-fields'
 import {
   Button,
@@ -341,8 +343,9 @@ function Inventory({
     `/admin/containers?revision=${revision}`,
   )
   return (
-    <>
-      <p className="helper">
+    <section className="space-y-4" aria-label="Container inventory">
+      <h2>Container inventory</h2>
+      <p className="text-sm text-muted-foreground">
         Enable discovery on a connector to assign unlabeled containers. Docker
         label assignments take precedence.
       </p>
@@ -361,7 +364,7 @@ function Inventory({
           labels to containers.
         </Notice>
       )}
-    </>
+    </section>
   )
 }
 function Assignment({
@@ -377,29 +380,31 @@ function Assignment({
     [application, setApplication] = useState(row.application ?? '')
   const path = `/admin/containers/${row.connector_id}/${row.container_id}`
   return (
-    <form
-      className="admin-row assignment-row bg-card border-border"
+    <InventoryCard
+      name={row.data.name}
+      icon={Container}
+      metadata={row.host ?? row.connector_name}
+      status={<StatusBadge>{row.stale ? 'Stale' : row.data.state}</StatusBadge>}
       onSubmit={(e) => {
         e.preventDefault()
         void action(path, 'PUT', { project, application })
       }}
     >
-      <div>
-        <strong>{row.data.name}</strong>
-        <small>
-          {row.host ?? row.connector_name} ·{' '}
-          <StatusBadge>{row.stale ? 'Stale' : row.data.state}</StatusBadge>
-        </small>
-      </div>
       {row.assignment === 'label' ? (
-        <span className="label-assignment">
-          {row.project} / {row.application}
-          <small>Assigned by Docker labels</small>
-        </span>
+        <div className="min-w-0 text-sm">
+          <p className="font-medium">
+            {row.project} / {row.application}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Assigned by Docker labels
+          </p>
+        </div>
       ) : (
         <>
           <Label>
-            <span className="sr-only">Project for {row.data.name}</span>
+            <span>
+              Project<span className="sr-only"> for {row.data.name}</span>
+            </span>
             <NativeSelect
               required
               value={project}
@@ -414,8 +419,9 @@ function Assignment({
             </NativeSelect>
           </Label>
           <Label>
-            <span className="sr-only">
-              Application slug for {row.data.name}
+            <span>
+              Application slug
+              <span className="sr-only"> for {row.data.name}</span>
             </span>
             <Input
               value={application}
@@ -426,19 +432,23 @@ function Assignment({
               placeholder="Application slug"
             />
           </Label>
-          <Button disabled={row.stale}>Assign</Button>
-          {row.assignment === 'manual' && (
-            <Button
-              type="button"
-              onClick={() => {
-                void action(path, 'PUT', null)
-              }}
-            >
-              Unassign
+          <div className="inventory-card-actions">
+            <Button type="submit" disabled={row.stale}>
+              Assign
             </Button>
-          )}
+            {row.assignment === 'manual' && (
+              <Button
+                type="button"
+                onClick={() => {
+                  void action(path, 'PUT', null)
+                }}
+              >
+                Unassign
+              </Button>
+            )}
+          </div>
         </>
       )}
-    </form>
+    </InventoryCard>
   )
 }
