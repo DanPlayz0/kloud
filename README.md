@@ -4,10 +4,13 @@ A pnpm workspaces monorepo for an authenticated Docker compute dashboard:
 
 - `apps/website`: Vite, React, TypeScript, and TanStack Router (file-based routes).
 - `apps/api`: Hono, TypeScript, and `@hono/zod-openapi` for Zod schemas and OpenAPI generation.
-- `apps/connector`: read-only Docker inventory and metrics over authenticated WebSocket.
+- `apps/connector`: Docker and optional PM2 inventory, metrics, and authorized operations over authenticated WebSocket.
 - `apps/protocol`: shared versioned connector validation and types.
 
 Services is the deployment workspace; Containers provides runtime operations.
+Compute / PM2 supports existing Node process manager applications, logs, project
+permissions, and lifecycle actions. See [PM2 setup](docs/PM2.md) for host and Docker
+connector configuration.
 See [service platform setup and limitations](docs/PLATFORM.md) for encrypted drafts,
 Git/image/Compose deployment, runtime permissions, rollback, and managed NGINX.
 

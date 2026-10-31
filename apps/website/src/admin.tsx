@@ -17,6 +17,7 @@ import {
 import { Shell, usePolling, ErrorMessage, Notice, Icon } from './components'
 import { Users } from './components/users'
 import { DnsProviders } from './dns'
+import { Pm2Inventory } from './pm2'
 type Connector = {
   id: string
   name: string
@@ -76,7 +77,7 @@ export function Admin({
     projects: 'Projects',
     users: 'Users',
     connectors: 'Connectors',
-    containers: 'Container inventory',
+    containers: 'Runtime inventory',
     dns: 'DNS providers',
   }
   return (
@@ -119,11 +120,14 @@ export function Admin({
           ) : section === 'connectors' ? (
             <Connectors revision={revision} action={action} />
           ) : (
-            <Inventory
-              revision={revision}
-              action={action}
-              projects={projectList}
-            />
+            <>
+              <Inventory
+                revision={revision}
+                action={action}
+                projects={projectList}
+              />
+              <Pm2Inventory projects={projectList} />
+            </>
           )}
         </fieldset>
       </section>

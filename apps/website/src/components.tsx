@@ -183,6 +183,13 @@ export function Shell({
                   <Icon name="network" />
                   Serverless<span className="soon">Soon</span>
                 </a>
+                <a
+                  className={active === 'pm2' ? 'nav-item active' : 'nav-item'}
+                  href={`/projects/${project}/compute/pm2`}
+                >
+                  <Icon name="activity" />
+                  PM2
+                </a>
               </div>
               {groups.map(([label, items]) => (
                 <div className="nav-group" key={label}>

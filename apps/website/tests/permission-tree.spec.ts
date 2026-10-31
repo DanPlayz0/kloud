@@ -32,6 +32,7 @@ async function fixtures(page: Page) {
       '/api/projects/demo/access': { grant_mode: 'id', members: [] },
       '/api/projects/demo/dns/access-scopes': { zones: [] },
       '/api/projects/demo/containers': [],
+      '/api/projects/demo/pm2': [],
     }
     return route.fulfill({ json: data[path] ?? { ok: true } })
   })
@@ -414,6 +415,7 @@ test('member dialog discards drafts, preserves failed saves, and closes after su
     role: 'admin',
     grants: [],
     service_grants: [],
+    pm2_grants: [],
   })
   await expect(dialog).toHaveCount(0)
   await expect(

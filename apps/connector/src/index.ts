@@ -7,28 +7,37 @@ import { deploymentWorker } from './deployments.js'
 import { serviceWorker } from './platform.js'
 import { runtimeOperations } from './runtime.js'
 import { proxyWorker } from './proxy.js'
+import { pm2Operations, socketTransport } from './pm2.js'
 
 const config = readConfig()
+const pm2 = config.pm2Enabled
+  ? pm2Operations(socketTransport(config.pm2Home))
+  : undefined
 const collectSnapshot = createCollector(config.dockerSocket, config.host)
 if (!/^[A-Za-z0-9_-]{43}$/.test(config.token))
   throw new Error(
     'CONNECTOR_TOKEN must be a credential created in the dashboard',
   )
 const shutdown = new AbortController()
-const runtimeEnabled = process.env.RUNTIME_ENABLED === 'true'
-const proxyEnabled = process.env.PROXY_ENABLED === 'true'
+const runtimeEnabled =
+  config.dockerEnabled && process.env.RUNTIME_ENABLED === 'true'
+const proxyEnabled =
+  config.dockerEnabled && process.env.PROXY_ENABLED === 'true'
 const runtime = runtimeOperations(config)
-const services = config.deploymentsEnabled
-  ? serviceWorker(config, shutdown.signal)
-  : Promise.resolve()
+const services =
+  config.dockerEnabled && config.deploymentsEnabled
+    ? serviceWorker(config, shutdown.signal)
+    : Promise.resolve()
 const proxy = proxyEnabled
   ? proxyWorker(config, shutdown.signal)
   : Promise.resolve()
-const worker = config.deploymentsEnabled
-  ? deploymentWorker(config, shutdown.signal)
-  : Promise.resolve()
+const worker =
+  config.dockerEnabled && config.deploymentsEnabled
+    ? deploymentWorker(config, shutdown.signal)
+    : Promise.resolve()
 let apiReachable = false,
   dockerReachable = false,
+  pm2Reachable = false,
   current: WebSocket | undefined
 const health = createServer((request, response) => {
   if (request.method !== 'GET' || request.url !== '/health') {
@@ -36,7 +45,14 @@ const health = createServer((request, response) => {
     return
   }
   response.writeHead(200, { 'content-type': 'application/json' })
-  response.end(JSON.stringify({ status: 'ok', apiReachable, dockerReachable }))
+  response.end(
+    JSON.stringify({
+      status: 'ok',
+      apiReachable,
+      dockerReachable,
+      pm2Reachable,
+    }),
+  )
 })
 health.listen(config.healthPort, '127.0.0.1')
 health.on('error', (error) => {
@@ -64,6 +80,37 @@ try {
       current = ws
       let timer: NodeJS.Timeout | undefined,
         awaiting = false
+      let pm2Timer: NodeJS.Timeout | undefined,
+        pm2Awaiting = false
+      const sendPm2 = async () => {
+        if (!pm2 || shutdown.signal.aborted) return
+        if (pm2Awaiting) {
+          ws.terminate()
+          return
+        }
+        let workers: Awaited<ReturnType<typeof pm2.collect>> = []
+        try {
+          workers = await pm2.collect()
+          pm2Reachable = true
+        } catch {
+          pm2Reachable = false
+        }
+        if (ws.readyState !== WebSocket.OPEN) return
+        const data = JSON.stringify({
+          version: 1,
+          type: 'pm2-snapshot',
+          host: config.host,
+          available: pm2Reachable,
+          workers,
+        })
+        if (Buffer.byteLength(data) > 2 * 1024 * 1024) {
+          ws.terminate()
+          return
+        }
+        pm2Awaiting = true
+        ws.send(data)
+        pm2Timer = setTimeout(() => void sendPm2(), config.pollIntervalMs)
+      }
       const send = async () => {
         if (awaiting) {
           ws.terminate()
@@ -102,19 +149,52 @@ try {
             type: 'capabilities',
             capabilities: [
               ...(runtimeEnabled ? ['runtime'] : []),
-              ...(config.deploymentsEnabled ? ['deploy'] : []),
+              ...(config.dockerEnabled && config.deploymentsEnabled
+                ? ['deploy']
+                : []),
               ...(proxyEnabled ? ['proxy'] : []),
+              ...(pm2 ? ['pm2'] : []),
             ],
           }),
         )
         touch()
-        void send()
+        if (config.dockerEnabled) void send()
+        if (pm2) void sendPm2()
       })
       ws.on('ping', touch)
       ws.on('message', (raw) => {
         try {
           const message = JSON.parse(raw.toString())
           if (message.type === 'operation') {
+            if (message.operation?.kind === 'pm2') {
+              void (
+                pm2
+                  ? pm2.execute(message.operation)
+                  : Promise.reject(new Error('PM2 disabled'))
+              )
+                .then((result) => {
+                  if (ws.readyState === WebSocket.OPEN)
+                    ws.send(
+                      JSON.stringify({
+                        type: 'operation-result',
+                        id: message.id,
+                        result,
+                      }),
+                    )
+                })
+                .catch(() => {
+                  if (ws.readyState === WebSocket.OPEN)
+                    ws.send(
+                      JSON.stringify({
+                        type: 'operation-result',
+                        id: message.id,
+                        error:
+                          'PM2 operation unavailable or failed; inspect host state before retrying',
+                      }),
+                    )
+                })
+              return
+            }
             if (!runtimeEnabled || message.operation?.kind !== 'runtime') {
               ws.send(
                 JSON.stringify({
@@ -151,7 +231,8 @@ try {
             return
           }
           if (JSON.parse(raw.toString()).type === 'accepted') {
-            awaiting = false
+            if (message.runtime === 'pm2') pm2Awaiting = false
+            else awaiting = false
             apiReachable = true
             backoff = 1000
             touch()
@@ -165,7 +246,9 @@ try {
       )
       ws.on('close', () => {
         runtime.close()
+        pm2?.close()
         clearTimeout(timer)
+        clearTimeout(pm2Timer)
         clearTimeout(heartbeat)
         apiReachable = false
         resolve()
@@ -184,5 +267,6 @@ try {
   await services
   await proxy
   runtime.close()
+  pm2?.close()
   health.close()
 }

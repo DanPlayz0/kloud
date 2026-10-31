@@ -7,6 +7,13 @@ import {
 import { serverCapabilities, grantSchema } from './permissions.js'
 import { serviceGrantsSchema } from './service-permissions.js'
 import { dnsGrantsSchema, dnsRecordSchema } from '@dedi-dash/protocol/dns'
+import {
+  pm2OperationSchema,
+  pm2ResultSchema,
+  pm2GrantsSchema,
+  pm2WorkerSchema,
+} from '@dedi-dash/protocol/pm2'
+import { pm2AssignmentSchema } from './pm2.js'
 import { dnsProviderBody, dnsProviderUpdate, dnsDelegationBody } from './dns.js'
 import { serviceBody, serviceUpdateBody } from './services.js'
 import {
@@ -39,6 +46,19 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     })
     .openapi('Project')
   const ok = z.object({ ok: z.literal(true) })
+  const pm2Row = z.object({
+    id: z.string().uuid(),
+    connector_id: z.string().uuid(),
+    connector_name: z.string(),
+    host: z.string().nullable(),
+    namespace: z.string(),
+    name: z.string(),
+    project_slug: z.string().nullable(),
+    present: z.boolean(),
+    stale: z.boolean(),
+    seen: z.string().nullable(),
+    workers: z.array(pm2WorkerSchema),
+  })
   const flexible = z.record(z.string(), z.unknown())
   const credentials = z.object({ username: z.string(), password: z.string() })
   const enrollment = z.object({ enrollmentUrl: z.string().url() })
@@ -119,6 +139,66 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
       },
     })
   }
+  route(
+    'get',
+    '/admin/pm2',
+    'Discover PM2 applications (inventory.manage)',
+    z.array(pm2Row),
+  )
+  route(
+    'put',
+    '/admin/pm2/{app}',
+    'Assign or unassign a PM2 application (inventory.manage)',
+    ok,
+    pm2AssignmentSchema,
+  )
+  route(
+    'get',
+    '/projects/{project}/pm2',
+    'List assigned PM2 applications with View grants',
+    z.array(pm2Row),
+  )
+  route(
+    'get',
+    '/projects/{project}/pm2/{app}/permissions',
+    'Read effective PM2 permissions',
+    z.object({
+      available: z.boolean(),
+      view: z.boolean(),
+      logs: z.boolean(),
+      manage: z.boolean(),
+      delete: z.boolean(),
+    }),
+  )
+  route(
+    'post',
+    '/projects/{project}/pm2/{app}/operation',
+    'Operate all current app workers; Manage or Delete grant required',
+    pm2ResultSchema,
+    pm2OperationSchema,
+  )
+  registry.registerPath({
+    method: 'get',
+    path: '/projects/{project}/pm2/{app}/logs',
+    summary: 'Recent PM2 output snapshots over SSE (Logs grant required)',
+    tags: ['Projects'],
+    security: [{ session: [] }],
+    request: {
+      params: z.object({ project: z.string(), app: z.string().uuid() }),
+      query: z.object({
+        stream: z.enum(['stdout', 'stderr']).optional(),
+        worker: z.string().regex(/^\d+$/).optional(),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Bounded log snapshots; unavailable event ends access',
+        content: { 'text/event-stream': { schema: z.string() } },
+      },
+      403: { description: 'PM2 Logs grant required' },
+      409: { description: 'PM2 inventory stale or unavailable' },
+    },
+  })
   route(
     'get',
     '/auth/setup',
@@ -323,6 +403,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
           role: z.enum(['admin', 'member']),
           grants: z.array(grantSchema),
           service_grants: serviceGrantsSchema,
+          pm2_grants: pm2GrantsSchema,
           dns_grants: dnsGrantsSchema,
         }),
       ),

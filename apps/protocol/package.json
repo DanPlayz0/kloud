@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./pm2": {
+      "types": "./pm2.d.ts",
+      "default": "./pm2.js"
+    },
     "./platform": {
       "types": "./platform.d.ts",
       "default": "./platform.js"

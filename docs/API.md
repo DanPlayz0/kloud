@@ -4,6 +4,8 @@ Browser-facing URLs use `/api`; the Hono server paths below omit that prefix.
 JSON mutations require `Origin` equal to `PUBLIC_ORIGIN`. Sessions are opaque
 HttpOnly, SameSite=Strict cookies, Secure under HTTPS. Responses are not cached.
 The protected OpenAPI document is available at `GET /openapi.json`.
+PM2 inventory, project grants, lifecycle RPC, and SSE log contracts are documented
+in [PM2 setup and API](PM2.md#api).
 
 Errors use `{ "error": "message" }`. Statuses include 400 invalid input, 401
 authentication required/failed, 403 forbidden, 404 missing or inaccessible project,

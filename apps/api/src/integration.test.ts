@@ -553,7 +553,7 @@ test(
           ).json()
           assert.equal(rows.length, 2)
           await pool.query(
-            `UPDATE connectors SET seen=now()-interval '21 seconds' WHERE id=$1`,
+            `UPDATE connectors SET seen=now()-interval '21 seconds',docker_seen=now()-interval '21 seconds' WHERE id=$1`,
             [connector.id],
           )
           rows = await (

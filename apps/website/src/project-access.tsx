@@ -1,5 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { ServiceGrantsEditor } from './service-grants'
+import { Pm2GrantsEditor } from './pm2-grants'
+import type { Pm2Grant } from '@dedi-dash/protocol/pm2'
 import { DnsMemberGrants } from './dns'
 import type { DnsGrant } from '@dedi-dash/protocol/dns'
 import type { Service, ServiceList, ServiceGrant } from './api'
@@ -197,7 +199,7 @@ export function ProjectAccessPage({
                       <td className="p-4 text-muted-foreground">
                         {member.role === 'admin'
                           ? 'Project Administrator'
-                          : `${member.grants.length} container grants · ${member.service_grants?.length ?? 0} service grants`}
+                          : `${member.grants.length} container grants · ${member.service_grants?.length ?? 0} service grants · ${member.pm2_grants?.length ?? 0} PM2 grants`}
                       </td>
                       <td className="p-4 text-muted-foreground">
                         {member.disabled ? 'Disabled' : 'Active'}
@@ -350,6 +352,7 @@ function MemberEditor({
   saving,
 }: MemberEditorProps & { onCancel: () => void; saving: boolean }) {
   const [saveError, setSaveError] = useState('')
+  const [pm2Grants, setPm2Grants] = useState<Pm2Grant[]>(member?.pm2_grants ?? [])
   const [dnsGrants, setDnsGrants] = useState<DnsGrant[]>(member?.dns_grants ?? [])
   const [role, setRole] = useState(member?.role ?? 'member')
   const [grants, setGrants] = useState<Grant[]>(member?.grants ?? [])
@@ -395,6 +398,7 @@ function MemberEditor({
       role,
       grants,
       service_grants: serviceGrants,
+      pm2_grants: pm2Grants,
       ...(JSON.stringify(dnsGrants) !== JSON.stringify(member?.dns_grants ?? []) || !member ? {dns_grants: dnsGrants} : {}),
       ...(!member
         ? { username: new FormData(e.currentTarget).get('username') }
@@ -453,6 +457,12 @@ function MemberEditor({
           value={serviceGrants}
           onChange={setServiceGrants}
           services={services}
+          disabled={role === 'admin'}
+        />
+        <Pm2GrantsEditor
+          project={project}
+          value={pm2Grants}
+          onChange={setPm2Grants}
           disabled={role === 'admin'}
         />
         <DnsMemberGrants project={project} grants={dnsGrants} onChange={setDnsGrants} disabled={role === 'admin'}/>
@@ -581,6 +591,8 @@ function MemberEditor({
             saving ||
             (!!member &&
               role === member.role &&
+              JSON.stringify(pm2Grants) ===
+                JSON.stringify(member.pm2_grants ?? []) &&
               JSON.stringify(grants) === JSON.stringify(member.grants) &&
               JSON.stringify(dnsGrants) === JSON.stringify(member.dns_grants ?? []) &&
               JSON.stringify(serviceGrants) ===

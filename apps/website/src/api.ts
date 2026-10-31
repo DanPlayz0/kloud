@@ -46,6 +46,7 @@ export interface Grant {
   target: string | null
 }
 export interface ProjectMember {
+  pm2_grants?: import('@dedi-dash/protocol/pm2').Pm2Grant[]
   dns_grants?: import('@dedi-dash/protocol/dns').DnsGrant[]
   id: string
   username: string
@@ -128,14 +129,16 @@ export async function api<T = unknown>(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
+  const timeout =
+    path.includes('/pm2/') && path.endsWith('/operation') ? 40000 : 10000
   const response = await fetch(`/api${path}`, {
     method,
     credentials: 'same-origin',
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
-      : AbortSignal.timeout(10000),
+      ? AbortSignal.any([signal, AbortSignal.timeout(timeout)])
+      : AbortSignal.timeout(timeout),
   })
   if (response.status === 401 && !path.startsWith('/auth/')) {
     window.location.assign(

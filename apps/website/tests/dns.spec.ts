@@ -107,7 +107,7 @@ async function mockDns(page: Page, member = false) {
       }
     else if (path.startsWith('/projects/discord/access/members')) {
       writes.push({ path, body })
-    } else if (path.endsWith('/containers')) data = []
+    } else if (path.endsWith('/containers') || path.endsWith('/pm2')) data = []
     else if (path.endsWith('/services'))
       data = { services: [], can_create: false }
     else if (path.endsWith('/auth/setup')) data = { required: false }

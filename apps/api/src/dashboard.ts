@@ -47,8 +47,8 @@ const username = z
 const projectBody = z.object({ slug, name: z.string().min(1).max(100) })
 
 // Only effective assignments leave the API; all unlabeled inventory remains admin-only.
-export const inventoryQuery = `SELECT c.id AS connector_id,c.name AS connector_name,c.host,c.seen,
-  (c.seen IS NULL OR c.seen < now()-interval '20 seconds' OR c.revoked) AS stale,
+export const inventoryQuery = `SELECT c.id AS connector_id,c.name AS connector_name,c.host,c.docker_seen AS seen,
+  (c.docker_seen IS NULL OR c.docker_seen < now()-interval '20 seconds' OR c.revoked) AS stale,
   i.container_id,i.data,
   COALESCE(p.slug, a.project_slug) AS project,
   CASE WHEN p.slug IS NOT NULL THEN i.data->>'application' ELSE a.application END AS application,

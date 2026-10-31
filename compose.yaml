@@ -48,6 +48,8 @@ services:
       CONNECTOR_TOKEN: ${CONNECTOR_TOKEN:-}
       CONNECTOR_HOST: ${CONNECTOR_HOST:-docker-host}
       DOCKER_SOCKET: /var/run/docker.sock
+      DOCKER_ENABLED: ${DOCKER_ENABLED:-true}
+      PM2_ENABLED: ${PM2_ENABLED:-false}
       DEPLOYMENTS_ENABLED: ${DEPLOYMENTS_ENABLED:-false}
       RUNTIME_ENABLED: ${RUNTIME_ENABLED:-false}
       PROXY_ENABLED: ${PROXY_ENABLED:-false}

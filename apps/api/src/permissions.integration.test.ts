@@ -469,6 +469,7 @@ test(
                 role: 'admin',
                 grants: [],
                 service_grants: [],
+                pm2_grants: [],
                 dns_grants: [],
               },
             ])

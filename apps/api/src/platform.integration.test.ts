@@ -71,7 +71,7 @@ test(
         [member],
       )
       await pool.query(
-        "INSERT INTO connectors(id,name,token,capabilities,seen) VALUES($1,'Host',$2,ARRAY['deploy','runtime','proxy'],now())",
+        "INSERT INTO connectors(id,name,token,capabilities,seen,docker_seen) VALUES($1,'Host',$2,ARRAY['deploy','runtime','proxy'],now(),now())",
         [host, digest(credential)],
       )
       const base = '/projects/demo/services/web'

@@ -214,7 +214,7 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
     })
     clearInterval(interval)
     await db.query(
-      `UPDATE connectors SET seen=now()-interval '21 seconds' WHERE id=$1`,
+      `UPDATE connectors SET seen=now()-interval '21 seconds',docker_seen=now()-interval '21 seconds' WHERE id=$1`,
       [connectorID],
     )
     await page.reload()

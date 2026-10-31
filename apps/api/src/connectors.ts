@@ -4,6 +4,7 @@ import { snapshotSchema } from '@dedi-dash/protocol'
 import { pool, transaction } from './db.js'
 import { digest } from './security.js'
 import { registerRpc, acceptRpc } from './connector-rpc.js'
+import { acceptPm2Snapshot } from './pm2-inventory.js'
 
 export async function acceptSnapshot(
   connector: string,
@@ -20,7 +21,7 @@ export async function acceptSnapshot(
     )
     if (!active.rowCount || !isCurrent()) return false
     const result = await db.query(
-      'UPDATE connectors SET host=$1,seen=now() WHERE id=$2 AND NOT revoked RETURNING discovery',
+      'UPDATE connectors SET host=$1,seen=now(),docker_seen=now() WHERE id=$2 AND NOT revoked RETURNING discovery',
       [snapshot.host, connector],
     )
     if (!result.rowCount) return false
@@ -84,8 +85,8 @@ export function attachConnectors(server: Server) {
         connections.get(connector.id)?.terminate()
         connections.set(connector.id, ws)
         registerRpc(connector.id, ws)
-        let alive = true,
-          busy = false
+        let alive = true
+        const busy = new Set<string>()
         ws.on('pong', () => {
           alive = true
         })
@@ -114,39 +115,7 @@ export function attachConnectors(server: Server) {
             connections.delete(connector.id)
         })
         ws.on('message', (data, binary) => {
-          if (!binary && connections.get(connector.id) === ws) {
-            try {
-              const message = JSON.parse(data.toString())
-              if (message.type === 'operation-result') {
-                acceptRpc(connector.id, message)
-                return
-              }
-              if (message.type === 'capabilities') {
-                const allowed = ['runtime', 'deploy', 'proxy']
-                if (
-                  !Array.isArray(message.capabilities) ||
-                  message.capabilities.some(
-                    (v: unknown) => !allowed.includes(String(v)),
-                  )
-                ) {
-                  ws.close(1008)
-                  return
-                }
-                void pool
-                  .query(
-                    'UPDATE connectors SET capabilities=$2 WHERE id=$1 AND NOT revoked',
-                    [connector.id, message.capabilities],
-                  )
-                  .catch(() => ws.terminate())
-                return
-              }
-            } catch {
-              ws.close(1008)
-              return
-            }
-          }
           if (
-            busy ||
             binary ||
             connections.get(connector.id) !== ws ||
             ws.readyState !== WebSocket.OPEN
@@ -154,22 +123,80 @@ export function attachConnectors(server: Server) {
             ws.close(1008, 'Invalid message')
             return
           }
-          busy = true
+          let message: any
+          try {
+            message = JSON.parse(data.toString())
+          } catch {
+            ws.close(1008)
+            return
+          }
+          if (
+            !message ||
+            typeof message !== 'object' ||
+            Array.isArray(message)
+          ) {
+            ws.close(1008, 'Invalid message')
+            return
+          }
+          if (message.type === 'operation-result') {
+            acceptRpc(connector.id, message)
+            return
+          }
+          if (message.type === 'capabilities') {
+            const allowed = ['runtime', 'deploy', 'proxy', 'pm2']
+            if (
+              !Array.isArray(message.capabilities) ||
+              message.capabilities.some(
+                (v: unknown) => !allowed.includes(String(v)),
+              )
+            ) {
+              ws.close(1008)
+              return
+            }
+            void pool
+              .query(
+                'UPDATE connectors SET capabilities=$2 WHERE id=$1 AND NOT revoked',
+                [connector.id, message.capabilities],
+              )
+              .catch(() => ws.terminate())
+            return
+          }
+          if (
+            !['snapshot', 'pm2-snapshot'].includes(message.type) ||
+            busy.has(message.type)
+          ) {
+            ws.close(1008, 'Invalid message')
+            return
+          }
+          const type: string = message.type
+          busy.add(type)
           void (async () => {
-            const accepted = await acceptSnapshot(
+            const accepted = await (
+              message.type === 'pm2-snapshot'
+                ? acceptPm2Snapshot
+                : acceptSnapshot
+            )(
               connector.id,
-              JSON.parse(data.toString()),
+              message,
               () =>
                 connections.get(connector.id) === ws &&
                 ws.readyState === WebSocket.OPEN,
             )
             if (!accepted) ws.close(1008, 'Credential revoked')
             else if (ws.readyState === WebSocket.OPEN)
-              ws.send(JSON.stringify({ type: 'accepted', version: 1 }))
+              ws.send(
+                JSON.stringify({
+                  type: 'accepted',
+                  version: 1,
+                  ...(message.type === 'pm2-snapshot'
+                    ? { runtime: 'pm2' }
+                    : {}),
+                }),
+              )
           })()
             .catch(() => ws.close(1008, 'Snapshot rejected'))
             .finally(() => {
-              busy = false
+              busy.delete(type)
             })
         })
       })

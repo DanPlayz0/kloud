@@ -1,4 +1,10 @@
+import { homedir } from 'node:os'
+import { resolve } from 'node:path'
+
 export interface ConnectorConfig {
+  dockerEnabled: boolean
+  pm2Enabled: boolean
+  pm2Home: string
   apiUrl: URL
   pollIntervalMs: number
   healthPort: number
@@ -45,6 +51,9 @@ export function readConfig(
   if (!apiUrl.pathname.endsWith('/')) apiUrl.pathname += '/'
 
   return {
+    dockerEnabled: env.DOCKER_ENABLED !== 'false',
+    pm2Enabled: env.PM2_ENABLED === 'true',
+    pm2Home: resolve(env.PM2_HOME ?? `${homedir()}/.pm2`),
     deploymentsEnabled: env.DEPLOYMENTS_ENABLED === 'true',
     deploymentsDir: env.DEPLOYMENTS_DIR ?? './deployments',
     buildHelperImage:

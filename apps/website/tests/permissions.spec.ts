@@ -46,7 +46,7 @@ test.beforeAll(async () => {
     [ids.owner, ids.member, project],
   )
   await db.query(
-    'INSERT INTO connectors(id,name,token,seen) VALUES($1,$2,$3,now())',
+    'INSERT INTO connectors(id,name,token,seen,docker_seen) VALUES($1,$2,$3,now(),now())',
     [
       connector,
       'Permission host',
@@ -109,7 +109,7 @@ test('project administrator configures matching, mixed grants, invitations and m
     name: `Edit member-${suffix}`,
     exact: true,
   })
-  await expect(member.getByLabel('Grant target')).toHaveValue('name')
+  await expect(member.getByLabel('Grant target', { exact: true })).toHaveValue('name')
   await member
     .getByLabel('Container', { exact: true })
     .selectOption(`${connector}:${'a'.repeat(64)}`)
@@ -127,7 +127,7 @@ test('project administrator configures matching, mixed grants, invitations and m
   await page
     .getByRole('button', { name: `Edit member-${suffix}`, exact: true })
     .click()
-  await expect(member.getByLabel('Grant target')).toHaveValue('id')
+  await expect(member.getByLabel('Grant target', { exact: true })).toHaveValue('id')
   await expect(member.getByText(/name: allowed-web/).first()).toBeVisible()
   await member.getByRole('button', { name: 'Cancel', exact: true }).click()
   await page

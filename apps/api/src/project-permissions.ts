@@ -5,6 +5,8 @@ import { z } from 'zod'
 import type { PoolClient } from 'pg'
 import type { Env } from './auth.js'
 import { pool } from './db.js'
+import { pm2GrantsSchema } from '@dedi-dash/protocol/pm2'
+import { savePm2Grants } from './pm2-permissions.js'
 import { dnsGrantsSchema } from '@dedi-dash/protocol/dns'
 import { saveDnsGrants } from './dns.js'
 import {
@@ -26,6 +28,7 @@ export const projectPermissions = new Hono<Env>()
 export const memberBody = z
   .object({
     role: z.enum(['member', 'admin']),
+    pm2_grants: pm2GrantsSchema.optional(),
     service_grants: serviceGrantsSchema.optional(),
     dns_grants: dnsGrantsSchema.optional(),
     grants: z
@@ -112,6 +115,7 @@ projectPermissions.get('/projects/:project/access', async (c) => {
   const members = (
     await pool.query(
       `SELECT u.id,u.username,u.disabled,m.role,
+    COALESCE((SELECT json_agg(json_build_object('capability',g.capability,'app',g.app) ORDER BY g.capability,g.app) FROM pm2_grants g WHERE g.user_id=u.id AND g.project_slug=m.project_slug),'[]') AS pm2_grants,
     COALESCE((SELECT json_agg(dg.rule) FROM dns_member_grants dg WHERE dg.user_id=u.id AND dg.project_slug=m.project_slug),'[]') AS dns_grants,
     COALESCE((SELECT json_agg(json_build_object('capability',sg.capability,'service',sg.service) ORDER BY sg.capability,sg.service) FROM service_grants sg WHERE sg.user_id=u.id AND sg.project_slug=m.project_slug),'[]') AS service_grants,
     COALESCE((SELECT json_agg(json_build_object('capability',g.capability,'kind',g.kind,'connector_id',g.connector_id,'target',g.target) ORDER BY g.capability,g.kind,g.target)
@@ -184,6 +188,7 @@ projectPermissions.post('/projects/:project/access/members', async (c) => {
         [user.id, project, body.role],
       )
       await saveGrants(db, user.id, project, body.grants)
+      await savePm2Grants(db, user.id, project, body.pm2_grants)
       await saveServiceGrants(db, user.id, project, body.service_grants)
       await saveDnsGrants(db, actor, user.id, project, body.dns_grants)
       return { ok: true, ...(enrollmentUrl ? { enrollmentUrl } : {}) }
@@ -206,6 +211,7 @@ projectPermissions.put('/projects/:project/access/members/:id', async (c) => {
     if (!updated.rowCount)
       throw new HTTPException(404, { message: 'Member not found' })
     await saveGrants(db, id, project, body.grants)
+    await savePm2Grants(db, id, project, body.pm2_grants)
     await saveServiceGrants(db, id, project, body.service_grants)
     await saveDnsGrants(db, actor, id, project, body.dns_grants)
     await protectAdministrators(db, before)

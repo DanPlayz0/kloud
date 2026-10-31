@@ -193,6 +193,33 @@ export async function migrate() {
       `)
       await db.query('INSERT INTO migrations(version) VALUES(8)')
     }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=9'))
+        .rowCount
+    ) {
+      await db.query(`
+        ALTER TABLE connectors ADD COLUMN docker_seen timestamptz;
+        UPDATE connectors SET docker_seen=seen;
+        ALTER TABLE connectors ADD COLUMN pm2_seen timestamptz;
+        ALTER TABLE connectors ADD COLUMN pm2_available boolean NOT NULL DEFAULT false;
+        CREATE TABLE pm2_apps (
+          id uuid PRIMARY KEY, connector_id uuid NOT NULL REFERENCES connectors ON DELETE CASCADE,
+          namespace text NOT NULL, name text NOT NULL,
+          project_slug text REFERENCES projects ON DELETE SET NULL,
+          workers jsonb NOT NULL DEFAULT '[]', present boolean NOT NULL DEFAULT true,
+          UNIQUE(connector_id,namespace,name)
+        );
+        CREATE INDEX pm2_apps_project ON pm2_apps(project_slug);
+        CREATE TABLE pm2_grants (
+          user_id uuid NOT NULL, project_slug text NOT NULL,
+          capability text NOT NULL CHECK(capability IN ('view','logs','manage','delete')),
+          app uuid REFERENCES pm2_apps ON DELETE CASCADE,
+          FOREIGN KEY(user_id,project_slug) REFERENCES memberships ON DELETE CASCADE,
+          UNIQUE NULLS NOT DISTINCT(user_id,project_slug,capability,app)
+        );
+        INSERT INTO migrations(version) VALUES(9);
+      `)
+    }
   })
 }
 if (

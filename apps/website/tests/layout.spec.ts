@@ -33,6 +33,7 @@ async function fixtures(page: Page) {
       '/api/auth/me': owner,
       '/api/projects': [project],
       '/api/admin/projects': [project],
+      '/api/admin/pm2': [],
       '/api/admin/containers/projects': [project],
       '/api/admin/users': [
         { ...owner, disabled: false, enrolled: true, projects: [project.slug] },

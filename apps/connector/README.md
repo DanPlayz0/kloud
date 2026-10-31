@@ -1,4 +1,8 @@
-# Docker connector
+# Server connector
+
+The connector also supports existing Linux PM2 instances, independently of Docker.
+See [PM2 setup](../../docs/PM2.md) for `PM2_ENABLED`, `PM2_HOME`, PM2-only hosts,
+Docker socket/log mounts, and project permissions.
 
 The connector collects read-only Docker inventory and CPU/RAM usage and sends
 validated full snapshots to the API over an authenticated outbound WebSocket.
