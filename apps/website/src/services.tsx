@@ -9,7 +9,6 @@ import {
 } from './api'
 import { Shell, ErrorMessage, usePolling, bytes } from './components'
 import type { ContainerRow } from './api'
-import { ServiceCreate } from './service-create'
 import { Button, Input, Label } from './components/ui/controls'
 import { Card } from './components/ui/card'
 import {
@@ -31,7 +30,7 @@ export function ServicesPage({
   const [revision, setRevision] = useState(0)
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
-  const [editing, setEditing] = useState<Service | 'new' | null>(null)
+  const [editing, setEditing] = useState<Service | null>(null)
   const [removing, setRemoving] = useState<Service | null>(null)
   const [busy, setBusy] = useState(false)
   const path = `/projects/${project}/services`
@@ -54,15 +53,8 @@ export function ServicesPage({
       const body = {
         name: form.get('name'),
         description: form.get('description'),
-        ...(editing === 'new'
-          ? { slug: form.get('slug'), type: form.get('type') }
-          : {}),
       }
-      await api(
-        editing === 'new' ? path : `${path}/${editing?.slug}`,
-        editing === 'new' ? 'POST' : 'PUT',
-        body,
-      )
+      await api(`${path}/${editing?.slug}`, 'PUT', body)
       setEditing(null)
       setRevision((n) => n + 1)
     } catch (e) {
@@ -103,14 +95,11 @@ export function ServicesPage({
             </p>
           </div>
           {data?.can_create && (
-            <Button
-              variant="primary"
-              onClick={() => {
-                setError('')
-                setEditing('new')
-              }}
-            >
-              <Plus size={16} /> Create service
+            <Button variant="primary" asChild>
+              <a href={`/projects/${project}/services/new`}>
+                <Plus size={16} />
+                Create service
+              </a>
             </Button>
           )}
         </div>
@@ -257,56 +246,44 @@ export function ServicesPage({
           if (!busy && !open) setEditing(null)
         }}
       >
-        {editing === 'new' ? (
-          <ServiceCreate
-            key={revision}
-            project={project}
-            canDeploy={!!data?.can_deploy_all}
-          />
-        ) : (
-          <DialogContent>
-            <DialogTitle>Edit service</DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              Services keep their identity and permissions across deployments.
-            </DialogDescription>
-            {editing && (
-              <form
-                key={editing.slug}
-                onSubmit={save}
-                className="mt-4 space-y-4"
-              >
-                <fieldset disabled={busy} className="space-y-4">
-                  <Label>
-                    Name
-                    <Input
-                      name="name"
-                      required
-                      maxLength={100}
-                      defaultValue={editing.name}
-                    />
-                  </Label>
-                  <Label>
-                    Description
-                    <Input
-                      name="description"
-                      maxLength={1000}
-                      defaultValue={editing.description}
-                    />
-                  </Label>
-                  <ErrorMessage message={error} />
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" onClick={() => setEditing(null)}>
-                      Cancel
-                    </Button>
-                    <Button variant="primary" disabled={busy}>
-                      {busy ? 'Saving…' : 'Save service'}
-                    </Button>
-                  </div>
-                </fieldset>
-              </form>
-            )}
-          </DialogContent>
-        )}
+        <DialogContent>
+          <DialogTitle>Edit service</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Services keep their identity and permissions across deployments.
+          </DialogDescription>
+          {editing && (
+            <form key={editing.slug} onSubmit={save} className="mt-4 space-y-4">
+              <fieldset disabled={busy} className="space-y-4">
+                <Label>
+                  Name
+                  <Input
+                    name="name"
+                    required
+                    maxLength={100}
+                    defaultValue={editing.name}
+                  />
+                </Label>
+                <Label>
+                  Description
+                  <Input
+                    name="description"
+                    maxLength={1000}
+                    defaultValue={editing.description}
+                  />
+                </Label>
+                <ErrorMessage message={error} />
+                <div className="flex justify-end gap-2">
+                  <Button type="button" onClick={() => setEditing(null)}>
+                    Cancel
+                  </Button>
+                  <Button variant="primary" disabled={busy}>
+                    {busy ? 'Saving…' : 'Save service'}
+                  </Button>
+                </div>
+              </fieldset>
+            </form>
+          )}
+        </DialogContent>
       </Dialog>
       <Dialog
         open={removing !== null}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type {
   PlatformConfig,
   RuntimeConfig,
@@ -11,6 +11,7 @@ import {
   Textarea,
 } from './components/ui/controls'
 import { Card } from './components/ui/card'
+import { CollapsibleSection } from './components/ui/collapsible'
 
 export interface Host {
   id: string
@@ -36,74 +37,87 @@ export function SourceFields({
   config,
   onChange,
   serviceType,
+  mode,
 }: {
   config: PlatformConfig
   onChange: (config: PlatformConfig) => void
   serviceType?: 'application' | 'compose'
+  mode?: 'create'
 }) {
   const source = config.source
   return (
     <div className="space-y-4">
-      <Label>
-        Deployment source
-        <NativeSelect
-          value={
-            source.type === 'github'
-              ? source.config.kind === 'compose'
-                ? 'git-compose'
-                : 'dockerfile'
-              : source.type
-          }
-          onChange={(e) => {
-            const value = e.target.value
-            onChange({
-              ...config,
-              source:
-                value === 'image'
-                  ? { type: 'image', image: '' }
-                  : value === 'compose'
-                    ? { type: 'compose', content: '' }
-                    : {
-                        type: 'github',
-                        config: {
-                          connector_id: config.connector_id,
-                          container_name: 'managed',
-                          repository: '',
-                          branch: 'main',
-                          kind:
-                            value === 'dockerfile' ? 'dockerfile' : 'compose',
-                          build_file:
-                            value === 'dockerfile'
-                              ? 'Dockerfile'
-                              : 'compose.yaml',
-                          context: '.',
-                          service: 'app',
-                          enabled: true,
-                          managed: true,
-                        },
-                      },
-            })
-          }}
-        >
-          <option value="image" disabled={serviceType === 'compose'}>
-            Registry image
-          </option>
-          <option value="dockerfile" disabled={serviceType === 'compose'}>
-            GitHub Dockerfile
-          </option>
-          <option value="git-compose" disabled={serviceType === 'application'}>
-            GitHub Compose
-          </option>
-          <option value="compose" disabled={serviceType === 'application'}>
-            Pasted Compose
-          </option>
-        </NativeSelect>
-      </Label>
+      {mode !== 'create' && (
+        <>
+          {' '}
+          <Label>
+            Deployment source
+            <NativeSelect
+              value={
+                source.type === 'github'
+                  ? source.config.kind === 'compose'
+                    ? 'git-compose'
+                    : 'dockerfile'
+                  : source.type
+              }
+              onChange={(e) => {
+                const value = e.target.value
+                onChange({
+                  ...config,
+                  source:
+                    value === 'image'
+                      ? { type: 'image', image: '' }
+                      : value === 'compose'
+                        ? { type: 'compose', content: '' }
+                        : {
+                            type: 'github',
+                            config: {
+                              connector_id: config.connector_id,
+                              container_name: 'managed',
+                              repository: '',
+                              branch: 'main',
+                              kind:
+                                value === 'dockerfile'
+                                  ? 'dockerfile'
+                                  : 'compose',
+                              build_file:
+                                value === 'dockerfile'
+                                  ? 'Dockerfile'
+                                  : 'compose.yaml',
+                              context: '.',
+                              service: 'app',
+                              enabled: true,
+                              managed: true,
+                            },
+                          },
+                })
+              }}
+            >
+              <option value="image" disabled={serviceType === 'compose'}>
+                Registry image
+              </option>
+              <option value="dockerfile" disabled={serviceType === 'compose'}>
+                GitHub Dockerfile
+              </option>
+              <option
+                value="git-compose"
+                disabled={serviceType === 'application'}
+              >
+                GitHub Compose
+              </option>
+              <option value="compose" disabled={serviceType === 'application'}>
+                Pasted Compose
+              </option>
+            </NativeSelect>
+          </Label>
+        </>
+      )}
       {source.type === 'image' && (
         <>
           <Label>
             Image
             <Input
+              data-source-input
               required
               placeholder="nginx:alpine"
               value={source.image}
@@ -115,78 +129,85 @@ export function SourceFields({
               }
             />
           </Label>
-          <Label>
-            Registry server (optional)
-            <Input
-              placeholder="ghcr.io"
-              value={source.registry?.server ?? ''}
-              onChange={(e) =>
-                onChange({
-                  ...config,
-                  source: {
-                    ...source,
-                    registry: e.target.value
-                      ? {
-                          server: e.target.value,
-                          username: source.registry?.username ?? '',
-                          password: source.registry?.password ?? '',
-                        }
-                      : undefined,
-                  },
-                })
-              }
-            />
-          </Label>
-          {source.registry && (
-            <>
-              <Label>
-                Registry username
-                <Input
-                  required
-                  value={source.registry.username}
-                  onChange={(e) =>
-                    onChange({
-                      ...config,
-                      source: {
-                        ...source,
-                        registry: {
-                          ...source.registry!,
-                          username: e.target.value,
+          <CreationSettings
+            compact={mode === 'create'}
+            title="Registry credentials"
+            count={source.registry ? 1 : 0}
+          >
+            <Label>
+              Registry server (optional)
+              <Input
+                placeholder="ghcr.io"
+                value={source.registry?.server ?? ''}
+                onChange={(e) =>
+                  onChange({
+                    ...config,
+                    source: {
+                      ...source,
+                      registry: e.target.value
+                        ? {
+                            server: e.target.value,
+                            username: source.registry?.username ?? '',
+                            password: source.registry?.password ?? '',
+                          }
+                        : undefined,
+                    },
+                  })
+                }
+              />
+            </Label>
+            {source.registry && (
+              <>
+                <Label>
+                  Registry username
+                  <Input
+                    required
+                    value={source.registry.username}
+                    onChange={(e) =>
+                      onChange({
+                        ...config,
+                        source: {
+                          ...source,
+                          registry: {
+                            ...source.registry!,
+                            username: e.target.value,
+                          },
                         },
-                      },
-                    })
-                  }
-                />
-              </Label>
-              <Label>
-                Registry password
-                <Input
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  value={source.registry.password}
-                  onChange={(e) =>
-                    onChange({
-                      ...config,
-                      source: {
-                        ...source,
-                        registry: {
-                          ...source.registry!,
-                          password: e.target.value,
+                      })
+                    }
+                  />
+                </Label>
+                <Label>
+                  Registry password
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={source.registry.password}
+                    onChange={(e) =>
+                      onChange({
+                        ...config,
+                        source: {
+                          ...source,
+                          registry: {
+                            ...source.registry!,
+                            password: e.target.value,
+                          },
                         },
-                      },
-                    })
-                  }
-                />
-              </Label>
-            </>
-          )}
+                      })
+                    }
+                  />
+                </Label>
+              </>
+            )}
+          </CreationSettings>
         </>
       )}
       {source.type === 'compose' && (
         <Label>
           Compose definition
           <Textarea
+            data-source-input
             required
             rows={12}
             placeholder={'services:\n  web:\n    image: nginx:alpine'}
@@ -198,10 +219,15 @@ export function SourceFields({
               })
             }
           />
-          <span className="text-xs text-muted-foreground">
-            Compose owns environment, ports, volumes, networks, and health
-            checks. Use images here; use GitHub Compose for builds.
-          </span>
+          {mode !== 'create' && (
+            <>
+              {' '}
+              <span className="text-xs text-muted-foreground">
+                Compose owns environment, ports, volumes, networks, and health
+                checks. Use images here; use GitHub Compose for builds.
+              </span>
+            </>
+          )}
         </Label>
       )}
       {source.type === 'github' && (
@@ -209,6 +235,7 @@ export function SourceFields({
           <Label>
             GitHub repository (owner/repo)
             <Input
+              data-source-input
               required
               value={source.config.repository}
               onChange={(e) =>
@@ -222,54 +249,75 @@ export function SourceFields({
               }
             />
           </Label>
-          <Label>
-            Branch
-            <Input
-              required
-              value={source.config.branch}
-              onChange={(e) =>
-                onChange({
-                  ...config,
-                  source: {
-                    ...source,
-                    config: { ...source.config, branch: e.target.value },
-                  },
-                })
-              }
-            />
-          </Label>
-          <Label>
-            Build file
-            <Input
-              required
-              value={source.config.build_file}
-              onChange={(e) =>
-                onChange({
-                  ...config,
-                  source: {
-                    ...source,
-                    config: { ...source.config, build_file: e.target.value },
-                  },
-                })
-              }
-            />
-          </Label>
-          <Label>
-            Build context / project directory
-            <Input
-              required
-              value={source.config.context}
-              onChange={(e) =>
-                onChange({
-                  ...config,
-                  source: {
-                    ...source,
-                    config: { ...source.config, context: e.target.value },
-                  },
-                })
-              }
-            />
-          </Label>
+          <CreationSettings
+            compact={mode === 'create'}
+            title="Build settings"
+            count={
+              Number(source.config.branch !== 'main') +
+              Number(
+                source.config.build_file !==
+                  (source.config.kind === 'dockerfile'
+                    ? 'Dockerfile'
+                    : 'compose.yaml'),
+              ) +
+              Number(source.config.context !== '.')
+            }
+          >
+            <Label>
+              Branch
+              <Input
+                data-config-path="source.config.branch"
+                data-source-input
+                required
+                value={source.config.branch}
+                onChange={(e) =>
+                  onChange({
+                    ...config,
+                    source: {
+                      ...source,
+                      config: { ...source.config, branch: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Label>
+            <Label>
+              Build file
+              <Input
+                data-config-path="source.config.build_file"
+                data-source-input
+                required
+                value={source.config.build_file}
+                onChange={(e) =>
+                  onChange({
+                    ...config,
+                    source: {
+                      ...source,
+                      config: { ...source.config, build_file: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Label>
+            <Label>
+              Build context / project directory
+              <Input
+                data-config-path="source.config.context"
+                data-source-input
+                required
+                value={source.config.context}
+                onChange={(e) =>
+                  onChange({
+                    ...config,
+                    source: {
+                      ...source,
+                      config: { ...source.config, context: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Label>
+          </CreationSettings>
         </>
       )}
     </div>
@@ -278,9 +326,11 @@ export function SourceFields({
 export function RuntimeFields({
   value,
   onChange,
+  compact = false,
 }: {
   value: RuntimeConfig
   onChange: (value: RuntimeConfig) => void
+  compact?: boolean
 }) {
   const [variables, setVariables] = useState(() =>
     Object.entries(value.environment).map(([name, secret]) => ({
@@ -302,7 +352,12 @@ export function RuntimeFields({
   }
   return (
     <div className="space-y-5">
-      <Card className="space-y-3 p-4">
+      <CreationSettings
+        compact={compact}
+        card
+        title="Environment and secrets"
+        count={Object.keys(value.environment).length}
+      >
         <h2 className="font-semibold">Environment and secrets</h2>
         <p className="text-xs text-muted-foreground">
           Values are encrypted and masked on later reads.
@@ -351,55 +406,70 @@ export function RuntimeFields({
         >
           Add variable
         </Button>
-      </Card>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Label>
-          Restart policy
-          <NativeSelect
-            value={value.restart}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                restart: e.target.value as RuntimeConfig['restart'],
-              })
-            }
-          >
-            {['unless-stopped', 'always', 'on-failure', 'no'].map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </NativeSelect>
-        </Label>
-        <Label>
-          Memory limit (MiB)
-          <Input
-            type="number"
-            min={16}
-            value={value.memoryMb ?? ''}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                memoryMb: e.target.value ? Number(e.target.value) : undefined,
-              })
-            }
-          />
-        </Label>
-        <Label>
-          CPU limit
-          <Input
-            type="number"
-            min={0.1}
-            step={0.1}
-            value={value.cpus ?? ''}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                cpus: e.target.value ? Number(e.target.value) : undefined,
-              })
-            }
-          />
-        </Label>
-      </div>
-      <Card className="space-y-3 p-4">
+      </CreationSettings>
+      <CreationSettings
+        compact={compact}
+        title="Resources and restart"
+        count={
+          Number(!!value.memoryMb) +
+          Number(!!value.cpus) +
+          Number(value.restart !== 'unless-stopped')
+        }
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          <Label>
+            Restart policy
+            <NativeSelect
+              value={value.restart}
+              onChange={(e) =>
+                onChange({
+                  ...value,
+                  restart: e.target.value as RuntimeConfig['restart'],
+                })
+              }
+            >
+              {['unless-stopped', 'always', 'on-failure', 'no'].map((v) => (
+                <option key={v}>{v}</option>
+              ))}
+            </NativeSelect>
+          </Label>
+          <Label>
+            Memory limit (MiB)
+            <Input
+              type="number"
+              min={16}
+              value={value.memoryMb ?? ''}
+              onChange={(e) =>
+                onChange({
+                  ...value,
+                  memoryMb: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+            />
+          </Label>
+          <Label>
+            CPU limit
+            <Input
+              type="number"
+              min={0.1}
+              step={0.1}
+              value={value.cpus ?? ''}
+              onChange={(e) =>
+                onChange({
+                  ...value,
+                  cpus: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+            />
+          </Label>
+        </div>
+      </CreationSettings>
+      <CreationSettings
+        compact={compact}
+        card
+        title="Published ports"
+        count={value.ports.length}
+      >
         <h2 className="font-semibold">Published ports</h2>
         {value.ports.map((port, i) => (
           <div key={i} className="flex flex-wrap items-end gap-2">
@@ -486,8 +556,13 @@ export function RuntimeFields({
         >
           Add port
         </Button>
-      </Card>
-      <Card className="space-y-3 p-4">
+      </CreationSettings>
+      <CreationSettings
+        compact={compact}
+        card
+        title="Persistent volumes"
+        count={value.volumes.length}
+      >
         <h2 className="font-semibold">Persistent volumes</h2>
         {value.volumes.map((volume, i) => (
           <div key={i} className="flex flex-wrap items-end gap-2">
@@ -569,67 +644,81 @@ export function RuntimeFields({
         >
           Add volume
         </Button>
-      </Card>
-      <Label>
-        Networks
-        <Input
-          placeholder="app-network, shared-network"
-          defaultValue={value.networks.join(', ')}
-          onChange={(e) =>
-            onChange({
-              ...value,
-              networks: e.target.value
-                .split(',')
-                .map((v) => v.trim())
-                .filter(Boolean),
-            })
-          }
-        />
-        <span className="text-xs">
-          Comma-separated existing Docker network names.
-        </span>
-      </Label>
-      <Label>
-        Health check command
-        <Textarea
-          placeholder={'/bin/sh\n-c\ncurl --fail http://localhost:3000/health'}
-          defaultValue={value.healthcheck?.command.join('\n') ?? ''}
-          onChange={(e) =>
-            onChange({
-              ...value,
-              healthcheck: e.target.value
-                ? {
-                    command: e.target.value.split('\n'),
-                    intervalSeconds: value.healthcheck?.intervalSeconds ?? 30,
-                  }
-                : undefined,
-            })
-          }
-        />
-        <span className="text-xs">
-          One argument per line. Leave blank to use the image’s health check.
-        </span>
-      </Label>
-      {value.healthcheck && (
+      </CreationSettings>
+      <CreationSettings
+        compact={compact}
+        title="Networks"
+        count={value.networks.length}
+      >
         <Label>
-          Health check interval (seconds)
+          Networks
           <Input
-            type="number"
-            min={1}
-            max={3600}
-            value={value.healthcheck.intervalSeconds}
+            placeholder="app-network, shared-network"
+            defaultValue={value.networks.join(', ')}
             onChange={(e) =>
               onChange({
                 ...value,
-                healthcheck: {
-                  ...value.healthcheck!,
-                  intervalSeconds: Number(e.target.value),
-                },
+                networks: e.target.value
+                  .split(',')
+                  .map((v) => v.trim())
+                  .filter(Boolean),
               })
             }
           />
+          <span className="text-xs">
+            Comma-separated existing Docker network names.
+          </span>
         </Label>
-      )}
+      </CreationSettings>
+      <CreationSettings
+        compact={compact}
+        title="Health check"
+        count={value.healthcheck ? 1 : 0}
+      >
+        <Label>
+          Health check command
+          <Textarea
+            placeholder={
+              '/bin/sh\n-c\ncurl --fail http://localhost:3000/health'
+            }
+            defaultValue={value.healthcheck?.command.join('\n') ?? ''}
+            onChange={(e) =>
+              onChange({
+                ...value,
+                healthcheck: e.target.value
+                  ? {
+                      command: e.target.value.split('\n'),
+                      intervalSeconds: value.healthcheck?.intervalSeconds ?? 30,
+                    }
+                  : undefined,
+              })
+            }
+          />
+          <span className="text-xs">
+            One argument per line. Leave blank to use the image’s health check.
+          </span>
+        </Label>
+        {value.healthcheck && (
+          <Label>
+            Health check interval (seconds)
+            <Input
+              type="number"
+              min={1}
+              max={3600}
+              value={value.healthcheck.intervalSeconds}
+              onChange={(e) =>
+                onChange({
+                  ...value,
+                  healthcheck: {
+                    ...value.healthcheck!,
+                    intervalSeconds: Number(e.target.value),
+                  },
+                })
+              }
+            />
+          </Label>
+        )}
+      </CreationSettings>
     </div>
   )
 }
@@ -690,5 +779,31 @@ export function HostField({
         ))}
       </NativeSelect>
     </Label>
+  )
+}
+
+function CreationSettings({
+  compact,
+  title,
+  count,
+  children,
+  card = false,
+}: {
+  compact?: boolean
+  title: string
+  count: number
+  children: ReactNode
+  card?: boolean
+}) {
+  if (compact)
+    return (
+      <CollapsibleSection title={title} count={count}>
+        <div className="space-y-4 [&>h2]:hidden [&>p]:hidden">{children}</div>
+      </CollapsibleSection>
+    )
+  return card ? (
+    <Card className="space-y-3 p-4">{children}</Card>
+  ) : (
+    <>{children}</>
   )
 }

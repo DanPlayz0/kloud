@@ -70,21 +70,30 @@ test('create Dockerfile and Compose services, configure initial deployment, and 
     ['Web application', 'web', 'application'],
     ['Compose stack', 'stack', 'compose'],
   ]) {
-    await page.getByRole('button', { name: 'Create service' }).click()
-    const dialog = page.getByRole('dialog')
-    await dialog.getByLabel('Name', { exact: true }).fill(name!)
-    await dialog.getByLabel('Slug', { exact: true }).fill(slug!)
-    await dialog
-      .getByLabel('Deployment source')
-      .selectOption(type === 'application' ? 'dockerfile' : 'git-compose')
-    await dialog
+    await db.query('UPDATE connectors SET seen=now() WHERE id=$1', [connector])
+    await page.getByRole('link', { name: 'Create service' }).click()
+    await expect(page).toHaveURL(`/projects/${project}/services/new`)
+    await page
+      .getByRole('button', {
+        name: type === 'application' ? 'GitHub application' : 'GitHub Compose',
+        exact: true,
+      })
+      .click()
+    await page.getByLabel('Service name', { exact: true }).fill(name!)
+    await page
+      .getByRole('button', { name: 'Advanced settings', exact: true })
+      .click()
+    await page.getByLabel('Slug', { exact: true }).fill(slug!)
+    await page
       .getByLabel('GitHub repository (owner/repo)')
       .fill('owner/repository')
-    await dialog.getByRole('button', { name: 'Continue' }).click()
-    await dialog.getByLabel('Deployment host').selectOption(connector)
-    await dialog.getByRole('button', { name: 'Continue' }).click()
-    await dialog.getByRole('button', { name: 'Continue' }).click()
-    await dialog.getByRole('button', { name: 'Save draft' }).click()
+    await expect(
+      page.getByRole('button', {
+        name: `Deploy to Service host ${suffix}`,
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click()
     await expect(
       page.getByRole('heading', { name: name!, exact: true }),
     ).toBeVisible()
@@ -129,7 +138,7 @@ test('create Dockerfile and Compose services, configure initial deployment, and 
     page.getByRole('link', { name: 'Compose stack', exact: true }),
   ).toHaveCount(0)
   await expect(
-    page.getByRole('button', { name: 'Create service', exact: true }),
+    page.getByRole('link', { name: 'Create service', exact: true }),
   ).toHaveCount(0)
   await page.getByRole('link', { name: 'Web application', exact: true }).click()
   await expect(
@@ -165,15 +174,23 @@ test('image and pasted Compose drafts preserve secrets and expose structured run
     await db.query('UPDATE connectors SET seen=now() WHERE id=$1', [connector])
     await page.goto(`/projects/${project}/services`)
     await page
-      .getByRole('button', { name: 'Create service', exact: true })
+      .getByRole('link', { name: 'Create service', exact: true })
       .click()
-    const dialog = page.getByRole('dialog')
+    await page
+      .getByRole('button', {
+        name: source === 'image' ? 'Docker image' : 'Docker Compose',
+        exact: true,
+      })
+      .click()
+    const dialog = page
     await dialog
-      .getByLabel('Name', { exact: true })
+      .getByLabel('Service name', { exact: true })
       .fill(source === 'image' ? 'Registry app' : 'Pasted stack')
-    await dialog.getByLabel('Deployment source').selectOption(source)
     if (source === 'image') {
       await dialog.getByLabel('Image', { exact: true }).fill('nginx:alpine')
+      await page
+        .getByRole('button', { name: 'Registry credentials', exact: true })
+        .click()
       await dialog.getByLabel('Registry server (optional)').fill('ghcr.io')
       await dialog.getByLabel('Registry username').fill('owner')
       await dialog.getByLabel('Registry password').fill('registry-password')
@@ -183,20 +200,28 @@ test('image and pasted Compose drafts preserve secrets and expose structured run
         .fill(
           'services:\n  web:\n    image: nginx:alpine\n    environment:\n      TOKEN: compose-secret\n',
         )
-    await dialog.getByRole('button', { name: 'Continue' }).click()
-    await dialog.getByLabel('Deployment host').selectOption(connector)
-    await dialog.getByRole('button', { name: 'Continue' }).click()
     if (source === 'image') {
+      await page
+        .getByRole('button', { name: 'Environment and secrets', exact: true })
+        .click()
       await dialog.getByRole('button', { name: 'Add variable' }).click()
       await dialog.getByLabel('Variable name').fill('TOKEN')
       await dialog.getByLabel('Value', { exact: true }).fill('runtime-secret')
+      await page
+        .getByRole('button', { name: 'Published ports', exact: true })
+        .click()
       await dialog.getByRole('button', { name: 'Add port' }).click()
       await dialog.getByLabel('Host port').fill('18080')
+      await page
+        .getByRole('button', { name: 'Persistent volumes', exact: true })
+        .click()
       await dialog.getByRole('button', { name: 'Add volume' }).click()
       await dialog.getByLabel('Volume name').fill('app-data')
+      await page
+        .getByRole('button', { name: 'Resources and restart', exact: true })
+        .click()
       await dialog.getByLabel('Memory limit (MiB)').fill('128')
     }
-    await dialog.getByRole('button', { name: 'Continue' }).click()
     await dialog
       .getByRole('button', { name: 'Save draft', exact: true })
       .click()
