@@ -1,5 +1,5 @@
 {
-  "name": "@dedi-dash/api",
+  "name": "@kloud/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@dedi-dash/protocol": "workspace:*",
+    "@kloud/protocol": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.6.3",
     "@simplewebauthn/server": "^14.0.3",

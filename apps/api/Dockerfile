@@ -13,10 +13,10 @@ RUN pnpm install --frozen-lockfile
 COPY tsconfig.base.json ./
 COPY apps/api/tsconfig.json ./apps/api/tsconfig.json
 COPY apps/api/src ./apps/api/src
-RUN pnpm --filter @dedi-dash/api run build
+RUN pnpm --filter @kloud/api run build
 
 FROM base AS production-dependencies
-RUN pnpm --filter @dedi-dash/api... install --prod --frozen-lockfile
+RUN pnpm --filter @kloud/api... install --prod --frozen-lockfile
 
 FROM node:26-bookworm-slim AS runtime
 ENV NODE_ENV=production

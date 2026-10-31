@@ -96,5 +96,5 @@ app.openAPIRegistry.registerComponent('securitySchemes', 'session', {
 registerContracts(app.openAPIRegistry)
 app.doc('/openapi.json', {
   openapi: '3.0.0',
-  info: { title: 'Dedi Dash API', version: '0.1.0' },
+  info: { title: 'Kloud API', version: '0.1.0' },
 })

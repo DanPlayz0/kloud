@@ -15,7 +15,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'pnpm --filter @dedi-dash/api dev',
+      command: 'pnpm --filter @kloud/api dev',
       cwd: '../..',
       url: 'http://localhost:3100/health',
       env: {

@@ -4,7 +4,7 @@ import type { PoolClient } from 'pg'
 import type { User } from './auth.js'
 import { pool } from './db.js'
 import { projectAccess } from './permissions.js'
-import { slug } from '@dedi-dash/protocol'
+import { slug } from '@kloud/protocol'
 
 export const serviceCapabilities = [
   'read',

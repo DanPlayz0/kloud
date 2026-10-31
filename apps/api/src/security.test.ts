@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { hashPassword, verifyPassword, token, digest } from './security.js'
-import { snapshotSchema } from '@dedi-dash/protocol'
+import { snapshotSchema } from '@kloud/protocol'
 test('passwords are salted and credentials compare correctly', async () => {
   const a = await hashPassword('correct horse battery staple'),
     b = await hashPassword('correct horse battery staple')

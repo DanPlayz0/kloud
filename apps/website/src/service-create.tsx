@@ -14,7 +14,7 @@ import {
 import {
   platformConfigSchema,
   type PlatformConfig,
-} from '@dedi-dash/protocol/platform'
+} from '@kloud/protocol/platform'
 import { api, type Project, type User } from './api'
 import { Shell, usePolling, ErrorMessage } from './components'
 import {
@@ -234,7 +234,7 @@ export function ServiceCreatePage({
               config: {
                 ...config.source.config,
                 connector_id: config.connector_id,
-                container_name: `dedi-${project}-${slug}`,
+                container_name: `kloud-${project}-${slug}`,
               },
             }
           : config.source,

@@ -16,7 +16,7 @@ import {
   type Pm2Logs,
   type Pm2Result,
   type Pm2Worker,
-} from '@dedi-dash/protocol/pm2'
+} from '@kloud/protocol/pm2'
 import { api, type Project, type User } from './api'
 import { Shell, usePolling, ErrorMessage, Notice, bytes } from './components'
 import { Button, Checkbox, Label, NativeSelect } from './components/ui/controls'

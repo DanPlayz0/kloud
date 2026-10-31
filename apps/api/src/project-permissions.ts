@@ -5,9 +5,9 @@ import { z } from 'zod'
 import type { PoolClient } from 'pg'
 import type { Env } from './auth.js'
 import { pool } from './db.js'
-import { pm2GrantsSchema } from '@dedi-dash/protocol/pm2'
+import { pm2GrantsSchema } from '@kloud/protocol/pm2'
 import { savePm2Grants } from './pm2-permissions.js'
-import { dnsGrantsSchema } from '@dedi-dash/protocol/dns'
+import { dnsGrantsSchema } from '@kloud/protocol/dns'
 import { saveDnsGrants } from './dns.js'
 import {
   serviceGrantsSchema,

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
-import { slug } from '@dedi-dash/protocol'
+import { slug } from '@kloud/protocol'
 import type { Env } from './auth.js'
 import { pool } from './db.js'
 import { permissionTransaction } from './permissions.js'

@@ -6,7 +6,7 @@ import {
   type DnsAction,
   type DnsGrant,
   type DnsRule,
-} from '@dedi-dash/protocol/dns'
+} from '@kloud/protocol/dns'
 import { projectAccess } from './permissions.js'
 import type { User } from './auth.js'
 import { pool } from './db.js'

@@ -11,7 +11,7 @@ import { request as httpRequest } from 'node:http'
 import { executeServiceRun } from './platform.js'
 import { readConfig } from './config.js'
 import { renderNginx } from './proxy.js'
-import { domainSchema } from '@dedi-dash/protocol/platform'
+import { domainSchema } from '@kloud/protocol/platform'
 import { runtimeOperations } from './runtime.js'
 const docker = (...args: string[]) =>
   execFileSync('docker', args, {
@@ -42,10 +42,10 @@ test(
   async () => {
     const suffix = randomUUID().slice(0, 8),
       service = `web-${suffix}`,
-      name = `dedi-platformtest-${service}`,
-      volume = `dedi-platform-test-${suffix}`,
+      name = `kloud-platformtest-${service}`,
+      volume = `kloud-platform-test-${suffix}`,
       stack = `stack-${suffix}`
-    const root = await mkdtemp(join(tmpdir(), 'dedi-platform-test-'))
+    const root = await mkdtemp(join(tmpdir(), 'kloud-platform-test-'))
     const config = readConfig({ ...process.env, DEPLOYMENTS_DIR: root })
     const job: any = {
       id: randomUUID(),
@@ -195,17 +195,17 @@ test(
         'ps',
         '-aq',
         '--filter',
-        `label=com.docker.compose.project=dedi-platformtest-${stack}`,
+        `label=com.docker.compose.project=kloud-platformtest-${stack}`,
       )
         .split('\n')
         .filter(Boolean)
       if (ids.length) docker('rm', '--force', ...ids)
-      for (const v of [volume, `dedi-platformtest-${stack}_data`])
+      for (const v of [volume, `kloud-platformtest-${stack}_data`])
         try {
           docker('volume', 'rm', v)
         } catch {}
       try {
-        docker('network', 'rm', `dedi-platformtest-${stack}_default`)
+        docker('network', 'rm', `kloud-platformtest-${stack}_default`)
       } catch {}
       await rm(root, { recursive: true, force: true })
     }
@@ -216,10 +216,10 @@ test(
   { skip: process.env.RUN_PLATFORM_DOCKER !== '1', timeout: 120000 },
   async () => {
     const suffix = randomUUID().slice(0, 8),
-      network = `dedi-proxy-test-${suffix}`,
-      backend = `dedi-proxy-backend-${suffix}`,
-      proxy = `dedi-proxy-test-${suffix}`
-    const root = await mkdtemp(join(tmpdir(), 'dedi-proxy-test-'))
+      network = `kloud-proxy-test-${suffix}`,
+      backend = `kloud-proxy-backend-${suffix}`,
+      proxy = `kloud-proxy-test-${suffix}`
+    const root = await mkdtemp(join(tmpdir(), 'kloud-proxy-test-'))
     let socket: WebSocket | undefined
     try {
       docker('network', 'create', network)

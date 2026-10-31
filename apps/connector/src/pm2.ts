@@ -7,7 +7,7 @@ import {
   pm2WorkerSchema,
   type Pm2Request,
   type Pm2Worker,
-} from '@dedi-dash/protocol/pm2'
+} from '@kloud/protocol/pm2'
 
 export interface Pm2Transport {
   call(method: string, args: unknown, timeout?: number): Promise<any>

@@ -8,7 +8,7 @@ import {
 import { imageTag, runtimeCompose } from './build-helper.js'
 import { readConfig } from './config.js'
 import { commandEnvironment } from './deployment-process.js'
-import type { DeploymentJob } from '@dedi-dash/protocol'
+import type { DeploymentJob } from '@kloud/protocol'
 
 const job: DeploymentJob = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -18,7 +18,7 @@ const job: DeploymentJob = {
   commit: 'a'.repeat(40),
   config: {
     connector_id: '00000000-0000-4000-8000-000000000003',
-    container_name: 'dedi-demo-web',
+    container_name: 'kloud-demo-web',
     repository: 'owner/repo',
     branch: 'main',
     kind: 'dockerfile',
@@ -129,7 +129,7 @@ test('runtime Compose manifest contains images only and retains service runtime 
     PASSWORD: 'literal$value',
   })
   assert.deepEqual(runtime.services.web.ports, ['8080:80'])
-  assert.equal(runtime.services.db.labels['dedi-dash.application'], 'web')
+  assert.equal(runtime.services.db.labels['kloud.application'], 'web')
   assert.deepEqual(runtime.volumes, { state: {} })
   assert.ok(model.services.web.build)
   assert.notEqual(imageTag(job, 0), imageTag(job, 1))
@@ -150,12 +150,12 @@ test('crash recovery scopes cleanup to the connector and expires only old build 
         {
           Id: 'expired',
           Created: (now - 41 * 60 * 1000) / 1000,
-          Labels: { 'dedi-dash.role': 'buildkit' },
+          Labels: { 'kloud.role': 'buildkit' },
         },
         {
           Id: 'current',
           Created: now / 1000,
-          Labels: { 'dedi-dash.role': 'build-helper' },
+          Labels: { 'kloud.role': 'build-helper' },
         },
         { Id: 'runtime', Created: 0, Labels: {} },
       ]
@@ -163,11 +163,11 @@ test('crash recovery scopes cleanup to the connector and expires only old build 
       return {
         Volumes: [
           {
-            Name: 'dedi-build-expired-workspace',
+            Name: 'kloud-build-expired-workspace',
             CreatedAt: new Date(now - 41 * 60 * 1000).toISOString(),
           },
           {
-            Name: 'dedi-build-current-workspace',
+            Name: 'kloud-build-current-workspace',
             CreatedAt: new Date(now).toISOString(),
           },
         ],
@@ -175,7 +175,7 @@ test('crash recovery scopes cleanup to the connector and expires only old build 
     return [
       {
         Id: 'network',
-        Name: 'dedi-build-expired-net',
+        Name: 'kloud-build-expired-net',
         Created: new Date(now - 41 * 60 * 1000).toISOString(),
       },
     ]
@@ -188,13 +188,13 @@ test('crash recovery scopes cleanup to the connector and expires only old build 
   )
   assert.deepEqual(removed, [
     '/containers/expired?force=true&v=true',
-    '/volumes/dedi-build-expired-workspace',
+    '/volumes/kloud-build-expired-workspace',
     '/networks/network',
   ])
   assert.ok(
     queries.every(
       (q) =>
-        q.includes('dedi-dash.owner=') && q.includes('dedi-dash.internal=true'),
+        q.includes('kloud.owner=') && q.includes('kloud.internal=true'),
     ),
   )
   assert.ok(queries.every((q) => !q.includes('credential')))

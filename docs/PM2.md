@@ -33,8 +33,8 @@ and an explicit `PM2_HOME`.
 Build from the repository root:
 
 ```sh
-docker build -f apps/connector/Dockerfile -t dedi-dash-connector:local .
-docker run -d --name dedi-connector --init \
+docker build -f apps/connector/Dockerfile -t kloud-connector:local .
+docker run -d --name kloud-connector --init \
   --user "$(id -u app):$(id -g app)" \
   --env API_URL=https://dashboard.example.com/api/ \
   --env CONNECTOR_TOKEN="$CONNECTOR_TOKEN" \
@@ -43,7 +43,7 @@ docker run -d --name dedi-connector --init \
   --env PM2_ENABLED=true \
   --env PM2_HOME=/home/app/.pm2 \
   --mount type=bind,src=/home/app/.pm2,dst=/home/app/.pm2,readonly \
-  dedi-dash-connector:local
+  kloud-connector:local
 ```
 
 Use the host PM2 user's numeric UID/GID. Mount the PM2 home directory, rather
@@ -141,9 +141,9 @@ submit scripts, shell commands, environment updates, log paths, or PM2 patterns.
 `pnpm test`, `pnpm typecheck`, and `pnpm build` cover the workspace. Set
 `TEST_DATABASE_URL` to an isolated PostgreSQL database for API integration tests.
 Run the PM2 browser suite with `E2E_DATABASE_URL` pointing to a migrated isolated
-database: `pnpm --filter @dedi-dash/website test:e2e pm2.spec.ts`.
+database: `pnpm --filter @kloud/website test:e2e pm2.spec.ts`.
 On an isolated Linux test host, run the real daemon tests with
-`LIVE_PM2_TESTS=true pnpm --filter @dedi-dash/connector exec tsx --test src/pm2.live.test.ts`.
+`LIVE_PM2_TESTS=true pnpm --filter @kloud/connector exec tsx --test src/pm2.live.test.ts`.
 They create and remove their own temporary PM2 home and fork/cluster apps. The
 `PM2_LIVE_HOME` option is reserved for the disposable cross-container fixture;
 never point it at a production PM2 home.

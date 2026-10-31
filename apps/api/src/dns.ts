@@ -10,7 +10,7 @@ import {
   type DnsRule,
   type DnsGrant,
   type DnsLiveRecord,
-} from '@dedi-dash/protocol/dns'
+} from '@kloud/protocol/dns'
 import type { Env, User } from './auth.js'
 import { pool } from './db.js'
 import {

@@ -1,5 +1,8 @@
 # Server connector
 
+For prebuilt GHCR images and a standalone Compose deployment on a separate server,
+see [published container images](../../docs/CONTAINER_IMAGES.md).
+
 The connector also supports existing Linux PM2 instances, independently of Docker.
 See [PM2 setup](../../docs/PM2.md) for `PM2_ENABLED`, `PM2_HOME`, PM2-only hosts,
 Docker socket/log mounts, and project permissions.
@@ -22,9 +25,9 @@ API base (`https://dashboard.example.com/api/` behind the website proxy), and
 configure the local `DOCKER_SOCKET` and socket permissions.
 
 ```sh
-pnpm --filter @dedi-dash/connector dev
-pnpm --filter @dedi-dash/connector build
-pnpm --filter @dedi-dash/connector start
+pnpm --filter @kloud/connector dev
+pnpm --filter @kloud/connector build
+pnpm --filter @kloud/connector start
 ```
 
 The default Unix socket is `/var/run/docker.sock`; Windows uses
@@ -33,8 +36,8 @@ bounded concurrency and a ten-second deadline. The connector reconnects with
 backoff and reports API/Docker reachability at loopback-only
 `http://127.0.0.1:3001/health`. Liveness stays healthy during upstream outages.
 
-Containers labeled `dedi-dash.internal=true` are excluded. Only the explicit
-`dedi-dash.project` and `dedi-dash.application` label values are transmitted;
+Containers labeled `kloud.internal=true` are excluded. Only the explicit
+`kloud.project` and `kloud.application` label values are transmitted;
 environment variables and arbitrary labels are never included.
 
 CPU usage is calculated from successive samples retained by the collector. The

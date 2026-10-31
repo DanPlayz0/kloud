@@ -1,4 +1,37 @@
-# Dashboard setup
+# Kloud setup
+
+## Upgrading an existing installation
+
+The Kloud rename changes package scopes to `@kloud/*`, Docker labels to
+`kloud.*`, generated container and image names to `kloud-*` or `kloud/*`,
+and the default deployment path to `/var/lib/kloud/deployments`.
+Reinstall workspace dependencies and rebuild all images and connectors together.
+
+Before upgrading an existing host, back up PostgreSQL and deployment storage.
+Keep its existing database credentials in `DATABASE_URL`; the new `kloud`
+database/user defaults apply only to new PostgreSQL volumes. Configure the
+PostgreSQL service with `POSTGRES_USER`, `POSTGRES_DB`, and `POSTGRES_PASSWORD`
+in `.env` to match an existing volume; its health check uses those values.
+For a volume initialized before the rename, the original user and database
+are `dedi_dash` and the original local development password is
+`dedi_dash_local`. Keep those values and the matching `DATABASE_URL` for that
+volume, or use the credentials you set when it was initialized. Changing
+container environment variables does not rename an existing database or role.
+If migration reports `password authentication failed for user "kloud"` and
+PostgreSQL reports `role "kloud" does not exist`, restore these original
+connection settings and run `docker compose up -d --build` again.
+Keep the existing Compose project name so its named volumes are reused.
+Keep the existing `DEPLOYMENTS_DIR` and bind mounts, or copy the deployment
+directory to the new path while deployments are stopped. Preserve encryption
+keys, retained images, and checkout paths required by historical rollbacks.
+
+Recreate managed containers with the new `kloud.project`, `kloud.application`,
+and `kloud.internal` labels before enabling runtime operations. Update manual
+labels and recreate internal helper containers as well. During a maintenance
+window, stop and remove the previous managed NGINX container before enabling
+the new `kloud-nginx` container, reusing the proxy and certificate storage.
+The source rename does not migrate running infrastructure automatically.
+Existing passkeys remain valid when the origin and relying-party ID stay the same.
 
 The website requires password **and** passkey authentication. PostgreSQL stores
 accounts, sessions, project access, connector credentials, inventory, and manual
@@ -16,7 +49,7 @@ assignments. There is no public signup, password-only login, or demo-data fallba
 5. In **Administration → Projects**, create a project. In **Connectors**, create
    a connector and copy its token immediately; it cannot be retrieved later.
 
-Local Compose uses the development database password `dedi_dash_local`. For
+Local Compose uses the development database password `kloud_local`. For
 production, set a strong `POSTGRES_PASSWORD` and the matching password in
 `DATABASE_URL` before creating the PostgreSQL volume. Changing the environment
 does not change a password in an existing volume.
@@ -40,7 +73,7 @@ requests. A read-only socket mount does not itself restrict Docker API methods.
 
 For a separate host, install the workspace and build the connector, copy
 `apps/connector/.env.example` to `apps/connector/.env`, configure it, then run
-`pnpm --filter @dedi-dash/connector start`. Use `API_URL=https://dashboard.example.com/api/`
+`pnpm --filter @kloud/connector start`. Use `API_URL=https://dashboard.example.com/api/`
 for an externally hosted dashboard. Windows defaults to `//./pipe/docker_engine`;
 set `DOCKER_SOCKET` explicitly if your Docker engine uses a different named pipe.
 
@@ -65,8 +98,8 @@ For automatic assignment, label containers when creating them:
 
 ```yaml
 labels:
-  dedi-dash.project: miki
-  dedi-dash.application: imgen
+  kloud.project: miki
+  kloud.application: imgen
 ```
 
 Create the project in the dashboard first. Slugs contain lowercase letters,
@@ -78,7 +111,7 @@ on the connector, opens **Inventory**, and chooses a project and application slu
 Assignments are stored in PostgreSQL and do not change Docker labels. Valid label
 assignments take precedence. Disabling discovery hides unassigned inventory while
 preserving existing manual assignments. Recreating a container changes its Docker
-ID and requires reassignment. Dashboard services use `dedi-dash.internal=true` and
+ID and requires reassignment. Dashboard services use `kloud.internal=true` and
 are excluded before transmission, even with discovery enabled.
 
 ## Users and recovery
@@ -103,16 +136,16 @@ a fresh enrollment link. It never grants a password-only session.
 Use Node 22.12+ and the pinned pnpm version. Start a local PostgreSQL instance:
 
 ```sh
-docker run --name dedi-dash-postgres -e POSTGRES_USER=dedi_dash -e POSTGRES_PASSWORD=dedi_dash_local -e POSTGRES_DB=dedi_dash -p 127.0.0.1:5432:5432 -v dedi-dash-dev-postgres:/var/lib/postgresql/data -d postgres:17-alpine
+docker run --name kloud-postgres -e POSTGRES_USER=kloud -e POSTGRES_PASSWORD=kloud_local -e POSTGRES_DB=kloud -p 127.0.0.1:5432:5432 -v kloud-dev-postgres:/var/lib/postgresql/data -d postgres:17-alpine
 ```
 
 Copy `apps/api/.env.example` to `apps/api/.env`, then:
 
 ```sh
 pnpm install
-pnpm --filter @dedi-dash/api migrate
-pnpm --filter @dedi-dash/api dev
-pnpm --filter @dedi-dash/website dev
+pnpm --filter @kloud/api migrate
+pnpm --filter @kloud/api dev
+pnpm --filter @kloud/website dev
 ```
 
 The development website runs at `http://localhost:5173`; `/api/*` is proxied to
@@ -130,8 +163,8 @@ PostgreSQL database before `pnpm test`. Tests create and remove their own isolat
 schema. Without that variable, database integration is explicitly skipped.
 
 For browser coverage, set `E2E_DATABASE_URL` to a **separate migrated test database**,
-run `pnpm --filter @dedi-dash/website exec playwright install chromium`, then
-`pnpm --filter @dedi-dash/website test:e2e`. The suite starts its API on port 3100
+run `pnpm --filter @kloud/website exec playwright install chromium`, then
+`pnpm --filter @kloud/website test:e2e`. The suite starts its API on port 3100
 and website on 5174, uses a virtual passkey authenticator, and saves desktop/mobile
 screenshots under `apps/website/test-results`. Test users and inventory are removed
 after the run. Do not point browser tests at a production database.

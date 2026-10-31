@@ -6,7 +6,7 @@ import {
   dnsRecordSchema,
   dnsRuleSchema,
   type DnsRule,
-} from '@dedi-dash/protocol/dns'
+} from '@kloud/protocol/dns'
 import {
   allowsDns,
   dnsName,

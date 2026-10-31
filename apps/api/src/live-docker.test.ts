@@ -6,7 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import pg from 'pg'
 import { createServer } from 'node:net'
 
-// Opt-in: requires built dedi-dash-api/connector images and Docker Desktop's
+// Opt-in: requires built kloud-api/connector images and Docker Desktop's
 // host.docker.internal routing. All containers and the database schema are isolated.
 test(
   'packaged connector sends live Docker metrics, reconnects and honors revocation',
@@ -19,10 +19,10 @@ test(
       execFileSync('docker', args, { encoding: 'utf8', timeout: 30000 }).trim()
     const suffix = randomUUID().slice(0, 8),
       schema = `live_${suffix.replaceAll('-', '')}`
-    const apiName = `dedi-dash-verify-api-${suffix}`,
-      websiteName = `dedi-dash-verify-website-${suffix}`,
-      connectorName = `dedi-dash-verify-connector-${suffix}`,
-      fixtureName = `dedi-dash-verify-fixture-${suffix}`
+    const apiName = `kloud-verify-api-${suffix}`,
+      websiteName = `kloud-verify-website-${suffix}`,
+      connectorName = `kloud-verify-connector-${suffix}`,
+      fixtureName = `kloud-verify-fixture-${suffix}`
     const names: string[] = []
     const database = new pg.Pool({
       connectionString: process.env.TEST_DATABASE_URL,
@@ -66,7 +66,7 @@ test(
         '--name',
         apiName,
         '--label',
-        'dedi-dash.internal=true',
+        'kloud.internal=true',
         '-e',
         `DATABASE_URL=${remoteDB.href}`,
         '-e',
@@ -76,7 +76,7 @@ test(
         '-p',
         `127.0.0.1:${port}:3000`,
         '-d',
-        'dedi-dash-api',
+        'kloud-api',
       )
       names.push(apiName)
       await waitUntil(async () => {
@@ -91,13 +91,13 @@ test(
         '--name',
         websiteName,
         '--label',
-        'dedi-dash.internal=true',
+        'kloud.internal=true',
         '-e',
         `API_UPSTREAM=host.docker.internal:${port}`,
         '-p',
         '127.0.0.1::8080',
         '-d',
-        'dedi-dash-website',
+        'kloud-website',
       )
       names.push(websiteName)
       const websitePort = docker('port', websiteName, '8080/tcp')
@@ -128,9 +128,9 @@ test(
         '--name',
         fixtureName,
         '--label',
-        'dedi-dash.project=live',
+        'kloud.project=live',
         '--label',
-        'dedi-dash.application=imgen',
+        'kloud.application=imgen',
         '-d',
         'postgres:17-alpine',
         'sleep',
@@ -142,7 +142,7 @@ test(
         '--name',
         connectorName,
         '--label',
-        'dedi-dash.internal=true',
+        'kloud.internal=true',
         '--group-add',
         '0',
         '-v',
@@ -154,7 +154,7 @@ test(
         '-e',
         'CONNECTOR_HOST=live-docker',
         '-d',
-        'dedi-dash-connector',
+        'kloud-connector',
       )
       names.push(connectorName)
       await waitUntil(async () =>

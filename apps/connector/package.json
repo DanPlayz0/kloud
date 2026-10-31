@@ -1,5 +1,5 @@
 {
-  "name": "@dedi-dash/connector",
+  "name": "@kloud/connector",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
     "tsx": "^4.23.15"
   },
   "dependencies": {
-    "@dedi-dash/protocol": "workspace:*",
+    "@kloud/protocol": "workspace:*",
     "pm2": "7.1.1",
     "ws": "^8.22.0"
   }

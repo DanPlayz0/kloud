@@ -116,7 +116,7 @@ auth.post('/setup/options', async (c) => {
     await requireEmptyUsers(db)
     const userID = randomUUID()
     const options = await generateRegistrationOptions({
-      rpName: 'Dedi Dash',
+      rpName: 'Kloud',
       rpID,
       userName: body.username.toLowerCase(),
       userID: new TextEncoder().encode(userID),
@@ -332,7 +332,7 @@ auth.post('/enroll/options', async (c) => {
   if (!invitation)
     return c.json({ error: 'Invitation is invalid or expired' }, 400)
   const options = await generateRegistrationOptions({
-    rpName: 'Dedi Dash',
+    rpName: 'Kloud',
     rpID,
     userName: invitation.username,
     userID: new TextEncoder().encode(invitation.user_id),

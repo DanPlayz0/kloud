@@ -504,6 +504,7 @@ small {
 .notice > svg {
   width: 28px;
   height: 28px;
+  margin-inline: auto;
   margin-bottom: 20px;
   color: #555;
 }

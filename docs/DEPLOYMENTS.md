@@ -6,7 +6,7 @@ build file, and build context/project directory. Services have persistent identi
 and permissions, independent of container IDs.
 
 Services own their deployment configuration and history, and create containers on the
-first build. Dockerfile services use the reserved name `dedi-<project>-<service>`;
+first build. Dockerfile services use the reserved name `kloud-<project>-<service>`;
 Compose services use a stable project name derived from the deployment ID and deploy
 every service in the Compose file, including dependencies. Assignment labels apply
 to every container. Image-only Compose services are supported alongside builds.
@@ -50,19 +50,19 @@ import. Retained Compose source directories support runtime bind mounts.
 
 ## Enable the worker
 
-1. Run `pnpm --filter @dedi-dash/api migrate` to apply pending migrations, or restart the
+1. Run `pnpm --filter @kloud/api migrate` to apply pending migrations, or restart the
    Compose stack so the migration service runs before the API.
 2. Set `DEPLOYMENTS_ENABLED=true` on the connector. The default is `false`.
    Native connectors need Docker CLI and Compose on PATH. Git and Buildx run in
    the helper image. Docker control commands use the configured `DOCKER_SOCKET`.
 3. Set `DEPLOYMENTS_DIR` to a persistent directory writable by the connector user.
-   The image defaults to `/var/lib/dedi-dash/deployments`. For containerized
+   The image defaults to `/var/lib/kloud/deployments`. For containerized
    connectors, bind mount that directory at the **same absolute host path** so
    Compose relative bind mounts resolve on the Docker daemon's host.
    On Linux, prepare the directory for the image's non-root user (UID 1000):
 
    ```sh
-   sudo install -d -o 1000 -g 1000 /var/lib/dedi-dash/deployments
+   sudo install -d -o 1000 -g 1000 /var/lib/kloud/deployments
    docker compose -f compose.yaml -f compose.deployments.yaml --profile connector up --build -d
    ```
 
@@ -74,7 +74,7 @@ import. Retained Compose source directories support runtime bind mounts.
    connector, build it once from the repository root:
 
    ```sh
-   docker build -f apps/connector/Dockerfile --target build-helper -t dedi-dash-build-helper:local .
+   docker build -f apps/connector/Dockerfile --target build-helper -t kloud-build-helper:local .
    ```
 
    `DEPLOYMENTS_HELPER_IMAGE` selects that image. The default builder is

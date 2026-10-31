@@ -10,7 +10,7 @@ import {
   type DnsGrant,
   type DnsRecord,
   type DnsLiveRecord,
-} from '@dedi-dash/protocol/dns'
+} from '@kloud/protocol/dns'
 import { api, type Project, type User } from './api'
 import { Shell, ErrorMessage, usePolling } from './components'
 import {

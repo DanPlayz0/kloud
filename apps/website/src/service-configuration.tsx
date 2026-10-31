@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import type {
   PlatformConfig,
   RuntimeConfig,
-} from '@dedi-dash/protocol/platform'
+} from '@kloud/protocol/platform'
 import {
   Button,
   Input,

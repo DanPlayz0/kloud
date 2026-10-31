@@ -11,15 +11,15 @@ RUN pnpm install --frozen-lockfile
 COPY tsconfig.base.json ./
 COPY apps/connector/tsconfig.json ./apps/connector/tsconfig.json
 COPY apps/connector/src ./apps/connector/src
-RUN pnpm --filter @dedi-dash/connector run build
+RUN pnpm --filter @kloud/connector run build
 
 FROM docker:29-cli AS docker-cli
 FROM node:26-bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* \
-  && mkdir -p /var/lib/dedi-dash/deployments && chown node:node /var/lib/dedi-dash/deployments
+  && mkdir -p /var/lib/kloud/deployments && chown node:node /var/lib/kloud/deployments
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins /usr/local/libexec/docker/cli-plugins
-ENV DEPLOYMENTS_DIR=/var/lib/dedi-dash/deployments
+ENV DEPLOYMENTS_DIR=/var/lib/kloud/deployments
 ENV NODE_ENV=production
 ENV API_URL=http://api:3000
 ENV HEALTH_PORT=3001

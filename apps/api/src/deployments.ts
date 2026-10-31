@@ -7,7 +7,7 @@ import {
   randomUUID,
 } from 'node:crypto'
 import { z } from 'zod'
-import { deploymentSchema } from '@dedi-dash/protocol'
+import { deploymentSchema } from '@kloud/protocol'
 import { pool, transaction } from './db.js'
 import { requireUser, type Env } from './auth.js'
 import { permissionTransaction, projectAccess } from './permissions.js'
@@ -328,7 +328,7 @@ deployments.put(base, async (c) => {
         config.managed &&
         (!service ||
           config.container_name !==
-            `dedi-${c.req.param('project')}-${c.req.param('application')}`)
+            `kloud-${c.req.param('project')}-${c.req.param('application')}`)
       )
         throw new HTTPException(400, {
           message:

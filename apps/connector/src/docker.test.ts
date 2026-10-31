@@ -23,8 +23,8 @@ test('collector excludes dashboard infrastructure, sanitizes labels, handles sto
       Names: ['/worker'],
       State: 'running',
       Labels: {
-        'dedi-dash.project': 'miki',
-        'dedi-dash.application': 'imgen',
+        'kloud.project': 'miki',
+        'kloud.application': 'imgen',
         secret: 'never-send',
       },
     },
@@ -32,13 +32,13 @@ test('collector excludes dashboard infrastructure, sanitizes labels, handles sto
       Id: 'b'.repeat(64),
       Names: ['/postgres'],
       State: 'running',
-      Labels: { 'dedi-dash.internal': 'true' },
+      Labels: { 'kloud.internal': 'true' },
     },
     {
       Id: 'c'.repeat(64),
       Names: ['/stopped'],
       State: 'exited',
-      Labels: { 'dedi-dash.project': '../invalid' },
+      Labels: { 'kloud.project': '../invalid' },
     },
   ]
   const requests: string[] = []

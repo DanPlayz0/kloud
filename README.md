@@ -1,4 +1,4 @@
-# Dedi Dash
+# Kloud
 
 A pnpm workspaces monorepo for an authenticated Docker compute dashboard:
 
@@ -25,9 +25,9 @@ Install pnpm with `npm install --global pnpm@12.16.1` if needed.
 
 ```sh
 pnpm install
-pnpm --filter @dedi-dash/api migrate
-pnpm --filter @dedi-dash/api dev
-pnpm --filter @dedi-dash/website dev
+pnpm --filter @kloud/api migrate
+pnpm --filter @kloud/api dev
+pnpm --filter @kloud/website dev
 ```
 
 The website runs at http://localhost:5173 and the API at http://localhost:3000.
@@ -44,11 +44,11 @@ Set the `PORT` environment variable to change the API port; update the Vite prox
 pnpm build
 pnpm typecheck
 pnpm test
-pnpm --filter @dedi-dash/website dev
-pnpm --filter @dedi-dash/api dev
-pnpm --filter @dedi-dash/connector dev
-pnpm --filter @dedi-dash/api start
-pnpm --filter @dedi-dash/website preview
+pnpm --filter @kloud/website dev
+pnpm --filter @kloud/api dev
+pnpm --filter @kloud/connector dev
+pnpm --filter @kloud/api start
+pnpm --filter @kloud/website preview
 ```
 
 Build before running the API start command or website preview. For deployment, serve
@@ -103,6 +103,11 @@ Vite dev server after changing the plugin configuration.
 
 ## Docker
 
+GitHub Actions automatically publishes API, website, connector, and build-helper
+images to GHCR. See [published container images](docs/CONTAINER_IMAGES.md) for
+publishing triggers, image names, and a standalone connector Compose setup that
+requires no source checkout on the server.
+
 Run both production apps from the repository root:
 
 ```sh
@@ -123,9 +128,9 @@ Each app has a multi-stage Dockerfile. Always use the repository root as the bui
 context so pnpm can use the shared workspace lockfile:
 
 ```sh
-docker build -f apps/api/Dockerfile -t dedi-dash-api .
-docker build -f apps/website/Dockerfile -t dedi-dash-website .
-docker build -f apps/connector/Dockerfile -t dedi-dash-connector .
+docker build -f apps/api/Dockerfile -t kloud-api .
+docker build -f apps/website/Dockerfile -t kloud-website .
+docker build -f apps/connector/Dockerfile -t kloud-connector .
 ```
 
 The website container listens on port 8080 and uses `API_UPSTREAM=api:3000` by

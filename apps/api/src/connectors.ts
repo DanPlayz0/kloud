@@ -1,6 +1,6 @@
 import type { Server } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
-import { snapshotSchema } from '@dedi-dash/protocol'
+import { snapshotSchema } from '@kloud/protocol'
 import { pool, transaction } from './db.js'
 import { digest } from './security.js'
 import { registerRpc, acceptRpc } from './connector-rpc.js'

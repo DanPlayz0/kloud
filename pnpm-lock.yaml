@@ -178,7 +178,7 @@ importers:
 
   apps/api:
     dependencies:
-      '@dedi-dash/protocol':
+      '@kloud/protocol':
         specifier: workspace:*
         version: link:../protocol
       '@hono/node-server':
@@ -215,7 +215,7 @@ importers:
 
   apps/connector:
     dependencies:
-      '@dedi-dash/protocol':
+      '@kloud/protocol':
         specifier: workspace:*
         version: link:../protocol
       pm2:
@@ -240,7 +240,7 @@ importers:
 
   apps/website:
     dependencies:
-      '@dedi-dash/protocol':
+      '@kloud/protocol':
         specifier: workspace:*
         version: link:../protocol
       '@radix-ui/react-checkbox':

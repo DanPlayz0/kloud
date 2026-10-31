@@ -46,8 +46,8 @@ export interface Grant {
   target: string | null
 }
 export interface ProjectMember {
-  pm2_grants?: import('@dedi-dash/protocol/pm2').Pm2Grant[]
-  dns_grants?: import('@dedi-dash/protocol/dns').DnsGrant[]
+  pm2_grants?: import('@kloud/protocol/pm2').Pm2Grant[]
+  dns_grants?: import('@kloud/protocol/dns').DnsGrant[]
   id: string
   username: string
   disabled: boolean

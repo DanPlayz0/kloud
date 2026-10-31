@@ -69,7 +69,7 @@ function Login() {
         <div className="auth-mark">
           <Icon />
         </div>
-        <p className="eyebrow">DEDI DASH</p>
+        <p className="eyebrow">KLOUD</p>
         <h1>
           {setup && !created
             ? 'Create your Server Administrator account'

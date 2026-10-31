@@ -5,8 +5,8 @@ import { createHash } from 'node:crypto'
 import {
   platformConfigSchema,
   type RuntimeConfig,
-} from '@dedi-dash/protocol/platform'
-import type { DeploymentJob } from '@dedi-dash/protocol'
+} from '@kloud/protocol/platform'
+import type { DeploymentJob } from '@kloud/protocol'
 import type { ConnectorConfig } from './config.js'
 import { engine, runCommand, dockerHost } from './deployment-process.js'
 import {
@@ -92,7 +92,7 @@ export async function executeServiceRun(
         ...desired.source.config,
         connector_id: desired.connector_id,
         managed: true,
-        container_name: `dedi-${job.project}-${job.service}`,
+        container_name: `kloud-${job.project}-${job.service}`,
       },
     }
     if (!/^[a-f0-9]{40}$/.test(gitJob.commit))
@@ -169,7 +169,7 @@ export async function executeServiceRun(
         commit: '0'.repeat(40),
         config: {
           connector_id: desired.connector_id,
-          container_name: `dedi-${job.project}-${job.service}`,
+          container_name: `kloud-${job.project}-${job.service}`,
           managed: true,
           kind: 'dockerfile',
           repository: 'unused/unused',
@@ -191,9 +191,9 @@ export async function executeServiceRun(
       await engine(
         config.dockerSocket,
         'POST',
-        `/images/${encodeURIComponent(inspected.Id)}/tag?repo=dedi-dash%2Fretained&tag=${job.id}`,
+        `/images/${encodeURIComponent(inspected.Id)}/tag?repo=kloud%2Fretained&tag=${job.id}`,
       )
-      return { image: `dedi-dash/retained:${job.id}` }
+      return { image: `kloud/retained:${job.id}` }
     }
     const source = join(directory, 'compose.yaml')
     log('Validating Compose definition.\n')
@@ -202,7 +202,7 @@ export async function executeServiceRun(
       ...docker,
       'compose',
       '--project-name',
-      `dedi-${job.project}-${job.service}`,
+      `kloud-${job.project}-${job.service}`,
       '--file',
       source,
     ]
@@ -236,8 +236,8 @@ export async function executeServiceRun(
         throw new Error('Use named volumes or absolute bind paths')
       service.labels = {
         ...service.labels,
-        'dedi-dash.project': job.project,
-        'dedi-dash.application': job.service,
+        'kloud.project': job.project,
+        'kloud.application': job.service,
       }
       if (job.artifacts?.[name]) service.image = job.artifacts[name]
     }
@@ -258,7 +258,7 @@ export async function executeServiceRun(
       ...docker,
       'compose',
       '--project-name',
-      `dedi-${job.project}-${job.service}`,
+      `kloud-${job.project}-${job.service}`,
       '--file',
       runtime,
     ]
@@ -279,11 +279,11 @@ export async function executeServiceRun(
         'GET',
         `/images/${encodeURIComponent(service.image)}/json`,
       )
-      const pinned = `dedi-dash/retained:${job.id}-${name}`
+      const pinned = `kloud/retained:${job.id}-${name}`
       await engine(
         config.dockerSocket,
         'POST',
-        `/images/${encodeURIComponent(image.Id)}/tag?repo=dedi-dash%2Fretained&tag=${encodeURIComponent(`${job.id}-${name}`)}`,
+        `/images/${encodeURIComponent(image.Id)}/tag?repo=kloud%2Fretained&tag=${encodeURIComponent(`${job.id}-${name}`)}`,
       )
       artifacts[name] = pinned
       service.image = pinned

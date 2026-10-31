@@ -10,8 +10,8 @@ import {
   type Pm2Transport,
 } from './pm2.js'
 import { readConfig } from './config.js'
-import { pm2SnapshotSchema } from '@dedi-dash/protocol/pm2'
-import { snapshotSchema } from '@dedi-dash/protocol'
+import { pm2SnapshotSchema } from '@kloud/protocol/pm2'
+import { snapshotSchema } from '@kloud/protocol'
 
 const worker = (id: number, name = 'web', namespace = 'default') => ({
   pm_id: id,
@@ -209,7 +209,7 @@ test('operations serialize per app, and disconnect prevents subsequent worker mu
   })
 })
 test('bounded logs deduplicate shared files and handle rotation, truncation, streams and missing files', async () => {
-  const folder = await mkdtemp(join(tmpdir(), 'dedi-pm2-'))
+  const folder = await mkdtemp(join(tmpdir(), 'kloud-pm2-'))
   try {
     const path = join(folder, 'out.log'),
       errPath = join(folder, 'err.log')
@@ -274,7 +274,7 @@ test('bounded logs deduplicate shared files and handle rotation, truncation, str
   }
 })
 test('missing PM2 home never creates files or launches a daemon', async () => {
-  const folder = await mkdtemp(join(tmpdir(), 'dedi-pm2-missing-'))
+  const folder = await mkdtemp(join(tmpdir(), 'kloud-pm2-missing-'))
   try {
     const transport = socketTransport(join(folder, 'absent'))
     await assert.rejects(transport.call('getMonitorData', {}))

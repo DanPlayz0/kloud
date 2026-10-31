@@ -8,7 +8,7 @@ remain supported.
 
 ## Enable features
 
-Apply migrations with `pnpm --filter @dedi-dash/api migrate`. Migration 8 adds
+Apply migrations with `pnpm --filter @kloud/api migrate`. Migration 8 adds
 encrypted configuration revisions, deployment runs, connector capabilities, and routes.
 Set `PLATFORM_ENCRYPTION_KEY` on the API to 32 random bytes represented as 64 hex
 characters. Keep this key stable and back it up separately from PostgreSQL. Losing
@@ -108,7 +108,7 @@ not covered by local tests. No comparative NGINX/Traefik throughput claim is mad
 `TEST_DATABASE_URL` to an isolated PostgreSQL database for API integration tests.
 Set `E2E_DATABASE_URL` to a migrated isolated database for Playwright.
 
-Run `RUN_PLATFORM_DOCKER=1 pnpm --filter @dedi-dash/connector exec tsx --test src/platform.live.test.ts`
+Run `RUN_PLATFORM_DOCKER=1 pnpm --filter @kloud/connector exec tsx --test src/platform.live.test.ts`
 with Docker available for image/Compose replacement, rollback, volume retention,
 and NGINX graceful reload checks under HTTP and WebSocket traffic. These use isolated
 container/network names and ephemeral published ports; they do not modify running

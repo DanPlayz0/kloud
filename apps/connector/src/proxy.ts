@@ -9,7 +9,7 @@ import {
 import { resolve, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
-import { domainSchema, type Domain } from '@dedi-dash/protocol/platform'
+import { domainSchema, type Domain } from '@kloud/protocol/platform'
 import type { ConnectorConfig } from './config.js'
 import { engine, dockerHost, runCommand } from './deployment-process.js'
 import { platformPost } from './platform.js'
@@ -55,7 +55,7 @@ export async function proxyWorker(
   signal: AbortSignal,
 ) {
   const root = resolve(config.deploymentsDir, 'proxy'),
-    name = 'dedi-dash-nginx'
+    name = 'kloud-nginx'
   await mkdir(root, { recursive: true, mode: 0o700 })
   await mkdir(join(root, 'acme'), { recursive: true, mode: 0o755 })
   await chmod(join(root, 'acme'), 0o755)
@@ -87,7 +87,7 @@ export async function proxyWorker(
   }
   const mount = [
     '--mount',
-    `type=bind,source=${root},target=/etc/dedi,readonly`,
+    `type=bind,source=${root},target=/etc/kloud,readonly`,
     '--mount',
     `type=bind,source=${join(root, 'acme')},target=/var/www/acme,readonly`,
     '--mount',
@@ -99,13 +99,13 @@ export async function proxyWorker(
       'run',
       '--rm',
       '--label',
-      'dedi-dash.internal=true',
+      'kloud.internal=true',
       ...mount,
       image,
       'nginx',
       '-t',
       '-c',
-      '/etc/dedi/candidate.conf',
+      '/etc/kloud/candidate.conf',
     ])
     let old: string | undefined
     try {
@@ -128,8 +128,8 @@ export async function proxyWorker(
       }
       if (proxy) {
         if (
-          proxy.Config.Labels?.['dedi-dash.internal'] !== 'true' ||
-          proxy.Config.Labels?.['dedi-dash.proxy'] !== 'true'
+          proxy.Config.Labels?.['kloud.internal'] !== 'true' ||
+          proxy.Config.Labels?.['kloud.proxy'] !== 'true'
         )
           throw new Error('Proxy container name is already occupied')
         if (!proxy.State.Running)
@@ -141,7 +141,7 @@ export async function proxyWorker(
           '-s',
           'reload',
           '-c',
-          '/etc/dedi/active.conf',
+          '/etc/kloud/active.conf',
         ])
       } else {
         await run([
@@ -150,9 +150,9 @@ export async function proxyWorker(
           '--name',
           name,
           '--label',
-          'dedi-dash.internal=true',
+          'kloud.internal=true',
           '--label',
-          'dedi-dash.proxy=true',
+          'kloud.proxy=true',
           '--restart',
           'unless-stopped',
           '--publish',
@@ -165,7 +165,7 @@ export async function proxyWorker(
           '-g',
           'daemon off;',
           '-c',
-          '/etc/dedi/active.conf',
+          '/etc/kloud/active.conf',
         ])
       }
       const revision = content.match(/return 200 '([a-f0-9]{64})'/)?.[1]
@@ -198,7 +198,7 @@ export async function proxyWorker(
           '-s',
           'reload',
           '-c',
-          '/etc/dedi/active.conf',
+          '/etc/kloud/active.conf',
         ]).catch(() => {})
       }
       throw e
@@ -226,9 +226,9 @@ export async function proxyWorker(
           `/containers/${encodeURIComponent(domain.container)}/json`,
         )
         if (
-          target.Config.Labels?.['dedi-dash.project'] !== route.project ||
-          target.Config.Labels?.['dedi-dash.application'] !== route.service ||
-          target.Config.Labels?.['dedi-dash.internal'] === 'true'
+          target.Config.Labels?.['kloud.project'] !== route.project ||
+          target.Config.Labels?.['kloud.application'] !== route.service ||
+          target.Config.Labels?.['kloud.internal'] === 'true'
         )
           throw new Error('Route target is not owned by its service')
         const address =
@@ -307,7 +307,7 @@ export async function proxyWorker(
             'run',
             '--rm',
             '--label',
-            'dedi-dash.internal=true',
+            'kloud.internal=true',
             '--mount',
             `type=bind,source=${join(root, 'acme')},target=/var/www/acme`,
             '--mount',
@@ -329,7 +329,7 @@ export async function proxyWorker(
         Date.now() - renewal > 12 * 60 * 60 * 1000 &&
         targets.some((t) => t.certificate)
       ) {
-        const marker = join(root, 'certificates', '.dedi-renewed')
+        const marker = join(root, 'certificates', '.kloud-renewed')
         const before = await stat(marker)
           .then((s) => s.mtimeMs)
           .catch(() => 0)
@@ -337,7 +337,7 @@ export async function proxyWorker(
           'run',
           '--rm',
           '--label',
-          'dedi-dash.internal=true',
+          'kloud.internal=true',
           '--mount',
           `type=bind,source=${join(root, 'acme')},target=/var/www/acme`,
           '--mount',
@@ -345,7 +345,7 @@ export async function proxyWorker(
           process.env.PROXY_CERTBOT_IMAGE ?? 'certbot/certbot:latest',
           'renew',
           '--deploy-hook',
-          'touch /etc/letsencrypt/.dedi-renewed',
+          'touch /etc/letsencrypt/.kloud-renewed',
           '--webroot',
           '-w',
           '/var/www/acme',
@@ -360,7 +360,7 @@ export async function proxyWorker(
             'nginx',
             '-t',
             '-c',
-            '/etc/dedi/active.conf',
+            '/etc/kloud/active.conf',
           ])
           await run([
             'exec',
@@ -369,7 +369,7 @@ export async function proxyWorker(
             '-s',
             'reload',
             '-c',
-            '/etc/dedi/active.conf',
+            '/etc/kloud/active.conf',
           ])
         }
         renewal = Date.now()

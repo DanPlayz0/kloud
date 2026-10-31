@@ -208,11 +208,11 @@ for (const entry of ['picker', 'administration'] as const) {
 
     const name = page.getByLabel('Project name')
     const slug = page.getByLabel('Project slug')
-    await name.fill("Dedi's Dashboard")
-    await expect(slug).toHaveValue('dedis-dashboard')
-    await name.fill('  Dédi’s Dashboard / Production!  ')
-    await expect(slug).toHaveValue('dedis-dashboard-production')
-    await name.fill("Dedi's Dashboard")
+    await name.fill("Kloud's Dashboard")
+    await expect(slug).toHaveValue('klouds-dashboard')
+    await name.fill('  Klóud’s Dashboard / Production!  ')
+    await expect(slug).toHaveValue('klouds-dashboard-production')
+    await name.fill("Kloud's Dashboard")
 
     let calls = 0
     const conflict =
@@ -221,8 +221,8 @@ for (const entry of ['picker', 'administration'] as const) {
       if (route.request().method() !== 'POST') return route.fallback()
       calls++
       expect(route.request().postDataJSON()).toEqual({
-        name: "Dedi's Dashboard",
-        slug: 'dedis-dashboard',
+        name: "Kloud's Dashboard",
+        slug: 'klouds-dashboard',
       })
       await route.fulfill({ status: 409, json: { error: conflict } })
     })
@@ -231,8 +231,8 @@ for (const entry of ['picker', 'administration'] as const) {
       .click()
     await expect(page.getByRole('alert')).toHaveText(conflict)
     expect(calls).toBe(1)
-    await expect(name).toHaveValue("Dedi's Dashboard")
-    await expect(slug).toHaveValue('dedis-dashboard')
+    await expect(name).toHaveValue("Kloud's Dashboard")
+    await expect(slug).toHaveValue('klouds-dashboard')
 
     await slug.fill('custom-project')
     await name.fill('Another name')

@@ -3,16 +3,16 @@ import {
   slug,
   deploymentSchema,
   deploymentJobSchema,
-} from '@dedi-dash/protocol'
+} from '@kloud/protocol'
 import { serverCapabilities, grantSchema } from './permissions.js'
 import { serviceGrantsSchema } from './service-permissions.js'
-import { dnsGrantsSchema, dnsRecordSchema } from '@dedi-dash/protocol/dns'
+import { dnsGrantsSchema, dnsRecordSchema } from '@kloud/protocol/dns'
 import {
   pm2OperationSchema,
   pm2ResultSchema,
   pm2GrantsSchema,
   pm2WorkerSchema,
-} from '@dedi-dash/protocol/pm2'
+} from '@kloud/protocol/pm2'
 import { pm2AssignmentSchema } from './pm2.js'
 import { dnsProviderBody, dnsProviderUpdate, dnsDelegationBody } from './dns.js'
 import { serviceBody, serviceUpdateBody } from './services.js'
@@ -20,7 +20,7 @@ import {
   platformConfigSchema,
   runtimeRequestSchema,
   domainSchema,
-} from '@dedi-dash/protocol/platform'
+} from '@kloud/protocol/platform'
 import {
   memberBody,
   projectInviteBody,

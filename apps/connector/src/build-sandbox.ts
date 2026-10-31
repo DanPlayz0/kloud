@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, stat, unlink } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { buildArtifactSchema, type DeploymentJob } from '@dedi-dash/protocol'
+import { buildArtifactSchema, type DeploymentJob } from '@kloud/protocol'
 import type { ConnectorConfig } from './config.js'
 import { engine, runCommand, dockerHost } from './deployment-process.js'
 
@@ -15,7 +15,7 @@ export function buildkitSpec(
     Image: config.buildkitImage,
     User: '1000:1000',
     Cmd: ['--addr', 'tcp://0.0.0.0:1234', '--oci-worker-snapshotter=native'],
-    Labels: { ...labels, 'dedi-dash.role': 'buildkit' },
+    Labels: { ...labels, 'kloud.role': 'buildkit' },
     HostConfig: {
       NetworkMode: network,
       Memory: config.buildMemoryMb * 1024 * 1024,
@@ -63,7 +63,7 @@ export function helperSpec(
     ],
     Labels: {
       ...labels,
-      'dedi-dash.role':
+      'kloud.role':
         phase === 'checkout' ? 'source-checkout' : 'build-helper',
     },
     HostConfig: {
@@ -101,11 +101,11 @@ export async function sandboxBuild(
     .digest('hex')
     .slice(0, 20)
   const labels = {
-    'dedi-dash.internal': 'true',
-    'dedi-dash.build': job.id,
-    'dedi-dash.owner': owner,
+    'kloud.internal': 'true',
+    'kloud.build': job.id,
+    'kloud.owner': owner,
   }
-  const name = `dedi-build-${job.id}`
+  const name = `kloud-build-${job.id}`
   const network = `${name}-net`,
     volume = `${name}-workspace`
   const docker = (args: string[], output = log) =>
@@ -234,7 +234,7 @@ export async function sandboxBuild(
       ),
     )
     const allowed = new RegExp(
-      `^dedi-dash/${job.deployment_id}:${job.commit}(?:-[0-9]+)?$`,
+      `^kloud/${job.deployment_id}:${job.commit}(?:-[0-9]+)?$`,
     )
     for (const image of manifest.images) {
       if (!allowed.test(image.tag))
@@ -304,7 +304,7 @@ export async function cleanupExpiredBuilds(
     .slice(0, 20)
   const filters = encodeURIComponent(
     JSON.stringify({
-      label: [`dedi-dash.owner=${owner}`, 'dedi-dash.internal=true'],
+      label: [`kloud.owner=${owner}`, 'kloud.internal=true'],
     }),
   )
   const old = (time: number) =>
@@ -317,7 +317,7 @@ export async function cleanupExpiredBuilds(
   for (const container of containers) {
     if (
       !['source-checkout', 'build-helper', 'buildkit'].includes(
-        container.Labels?.['dedi-dash.role'],
+        container.Labels?.['kloud.role'],
       ) ||
       !old(container.Created * 1000)
     )
@@ -336,7 +336,7 @@ export async function cleanupExpiredBuilds(
   )
   for (const volume of volumes.Volumes ?? []) {
     if (
-      !volume.Name.startsWith('dedi-build-') ||
+      !volume.Name.startsWith('kloud-build-') ||
       !old(Date.parse(volume.CreatedAt))
     )
       continue
@@ -357,7 +357,7 @@ export async function cleanupExpiredBuilds(
   )
   for (const network of networks) {
     if (
-      !network.Name.startsWith('dedi-build-') ||
+      !network.Name.startsWith('kloud-build-') ||
       !old(Date.parse(network.Created))
     )
       continue

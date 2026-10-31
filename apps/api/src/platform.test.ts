@@ -4,7 +4,7 @@ import {
   platformConfigSchema,
   runtimeSchema,
   domainSchema,
-} from '@dedi-dash/protocol/platform'
+} from '@kloud/protocol/platform'
 import { seal, unseal, redact } from './platform-secrets.js'
 
 test('service secrets use randomized authenticated encryption and fail closed', () => {

@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url)
 const cli = require.resolve('pm2/bin/pm2')
 async function setup(home: string) {
   assert.ok(
-    home.startsWith('/tmp/dedi-pm2-live'),
+    home.startsWith('/tmp/kloud-pm2-live'),
     'Use only a disposable PM2 home',
   )
   await mkdir(home, { recursive: true })
@@ -55,8 +55,8 @@ test(
   { skip: process.env.LIVE_PM2_TESTS !== 'true' },
   async () => {
     const external = process.env.PM2_LIVE_HOME
-    const home = external ?? (await mkdtemp('/tmp/dedi-pm2-live-'))
-    assert.ok(home.startsWith('/tmp/dedi-pm2-live'))
+    const home = external ?? (await mkdtemp('/tmp/kloud-pm2-live-'))
+    assert.ok(home.startsWith('/tmp/kloud-pm2-live'))
     let run: Awaited<ReturnType<typeof setup>> | undefined
     const operations = pm2Operations(socketTransport(home))
     const request = (name: string, action: string) =>

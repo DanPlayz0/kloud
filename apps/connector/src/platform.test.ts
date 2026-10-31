@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { applyRuntime } from './platform.js'
-import { runtimeSchema, domainSchema } from '@dedi-dash/protocol/platform'
+import { runtimeSchema, domainSchema } from '@kloud/protocol/platform'
 import { renderNginx } from './proxy.js'
 test('runtime settings retain image defaults and anonymous storage while applying declared limits and named volumes', () => {
   const spec = applyRuntime(

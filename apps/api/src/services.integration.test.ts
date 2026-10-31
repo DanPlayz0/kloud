@@ -146,7 +146,7 @@ test(
       await grants([{ capability: 'deploy', service: 'web' }])
       const config = {
         connector_id: connector,
-        container_name: 'dedi-demo-web',
+        container_name: 'kloud-demo-web',
         managed: true,
         repository: 'owner/repo',
         branch: 'main',

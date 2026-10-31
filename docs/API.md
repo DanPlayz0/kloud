@@ -185,7 +185,7 @@ replacement transaction. Server receipt time defines freshness. Container IDs ar
 `restarting`, `removing`, `exited`, or `dead`. Slugs and metrics can be null. Snapshots
 contain at most 5,000 unique containers and reject unknown fields. Environments,
 arbitrary Docker labels, credentials, and internal containers are never transmitted.
-The shared `@dedi-dash/protocol` package defines validation for both endpoints.
+The shared `@kloud/protocol` package defines validation for both endpoints.
 
 ## Services
 
@@ -233,7 +233,7 @@ inherit these permissions), and normal same-origin protection:
 
 Deployment configuration accepts optional `managed: true` for new service runtime
 creation. Managed targets require a registered service and reserved
-`container_name: dedi-<project>-<service>`; build kind must match the service type.
+`container_name: kloud-<project>-<service>`; build kind must match the service type.
 Omitting `managed` preserves existing-container deployment behavior.
 
 Machine endpoints bypass browser origin/session checks and authenticate separately:

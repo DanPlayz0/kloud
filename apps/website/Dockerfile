@@ -10,7 +10,7 @@ COPY apps/protocol ./apps/protocol
 RUN pnpm install --frozen-lockfile
 COPY tsconfig.base.json ./
 COPY apps/website ./apps/website
-RUN pnpm --filter @dedi-dash/website run build
+RUN pnpm --filter @kloud/website run build
 
 FROM nginxinc/nginx-unprivileged:stable-alpine AS runtime
 ENV API_UPSTREAM=api:3000

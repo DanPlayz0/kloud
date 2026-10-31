@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import pg from 'pg'
-import { dnsTypes, type DnsRule } from '@dedi-dash/protocol/dns'
+import { dnsTypes, type DnsRule } from '@kloud/protocol/dns'
 
 test(
   'DNS delegation, private ownership, revocation, concurrency and Discord sharing',

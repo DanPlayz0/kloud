@@ -6,7 +6,7 @@ import {
   platformConfigSchema,
   runtimeRequestSchema,
   domainSchema,
-} from '@dedi-dash/protocol/platform'
+} from '@kloud/protocol/platform'
 import { pool, transaction } from './db.js'
 import { requireUser, currentUser, type Env, type User } from './auth.js'
 import { streamSSE } from 'hono/streaming'
@@ -178,7 +178,7 @@ platform.put(`${base}/configuration`, async (c) => {
         ...body.config.source.config,
         managed: true,
         connector_id: body.config.connector_id,
-        container_name: `dedi-${c.req.param('project')}-${c.req.param('service')}`,
+        container_name: `kloud-${c.req.param('project')}-${c.req.param('service')}`,
       }
       await db.query(
         'INSERT INTO deployments(id,project,application,connector_id,config,webhook_secret,service_revision) VALUES($1,$2,$3,$4,$5,$6,NULL) ON CONFLICT(project,application) DO NOTHING',
@@ -264,7 +264,7 @@ platform.post(`${base}/deploy`, async (c) => {
         ...config.source.config,
         managed: true,
         connector_id: config.connector_id,
-        container_name: `dedi-${c.req.param('project')}-${c.req.param('service')}`,
+        container_name: `kloud-${c.req.param('project')}-${c.req.param('service')}`,
       }
       await db.query(
         'UPDATE deployments SET connector_id=$1,config=$2,service_revision=$3 WHERE project=$4 AND application=$5',

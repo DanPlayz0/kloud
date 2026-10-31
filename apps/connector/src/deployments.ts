@@ -1,13 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { deploymentJobSchema, type DeploymentJob } from '@dedi-dash/protocol'
+import { deploymentJobSchema, type DeploymentJob } from '@kloud/protocol'
 import type { ConnectorConfig } from './config.js'
 import { engine, runCommand, dockerHost } from './deployment-process.js'
 export { repositoryPath, runCommand } from './deployment-process.js'
 import { sandboxBuild, cleanupExpiredBuilds } from './build-sandbox.js'
 import { applyRuntime } from './platform.js'
-import type { RuntimeConfig } from '@dedi-dash/protocol/platform'
+import type { RuntimeConfig } from '@kloud/protocol/platform'
 
 export function replacementSpec(
   original: any,
@@ -84,8 +84,8 @@ export function replacementSpec(
     Labels: {
       ...newDefaults.Labels,
       ...original.Config.Labels,
-      'dedi-dash.project': job.project,
-      'dedi-dash.application': job.application,
+      'kloud.project': job.project,
+      'kloud.application': job.application,
     },
     HostConfig: host,
     NetworkingConfig: { EndpointsConfig: endpoints },
@@ -101,9 +101,9 @@ async function managedContainer(job: DeploymentJob, socket: string) {
     )
     const labels = container.Config.Labels ?? {}
     if (
-      labels['dedi-dash.project'] !== job.project ||
-      labels['dedi-dash.application'] !== job.application ||
-      labels['dedi-dash.internal'] === 'true'
+      labels['kloud.project'] !== job.project ||
+      labels['kloud.application'] !== job.application ||
+      labels['kloud.internal'] === 'true'
     )
       throw new Error('Managed deployment target belongs to another service')
     return container
@@ -121,8 +121,8 @@ export function initialContainerSpec(job: DeploymentJob, image: string) {
   return {
     Image: image,
     Labels: {
-      'dedi-dash.project': job.project,
-      'dedi-dash.application': job.application,
+      'kloud.project': job.project,
+      'kloud.application': job.application,
     },
     HostConfig: { RestartPolicy: { Name: 'unless-stopped' } },
   }
@@ -144,11 +144,11 @@ export async function replaceContainer(
         'GET',
         `/containers/${encodeURIComponent(name)}/json`,
       )
-  if (original?.Config.Labels?.['dedi-dash.internal'] === 'true')
+  if (original?.Config.Labels?.['kloud.internal'] === 'true')
     throw new Error('Internal containers cannot be deployment targets')
   if (original?.Config.Labels?.['com.docker.compose.project'])
     throw new Error('Use Compose mode for Compose-managed containers')
-  const image = imageOverride ?? `dedi-dash/${job.deployment_id}:${job.commit}`
+  const image = imageOverride ?? `kloud/${job.deployment_id}:${job.commit}`
   if (!original) {
     signal.throwIfAborted()
     const created = await engine(
@@ -279,18 +279,18 @@ export async function executeDeployment(
     const image = await engine(
       config.dockerSocket,
       'GET',
-      `/images/${encodeURIComponent(`dedi-dash/${job.deployment_id}:${job.commit}`)}/json`,
+      `/images/${encodeURIComponent(`kloud/${job.deployment_id}:${job.commit}`)}/json`,
     )
     await engine(
       config.dockerSocket,
       'POST',
-      `/images/${encodeURIComponent(image.Id)}/tag?repo=dedi-dash%2Fretained&tag=${job.id}`,
+      `/images/${encodeURIComponent(image.Id)}/tag?repo=kloud%2Fretained&tag=${job.id}`,
     )
     return {
       directory: result.directory,
       project,
       commit: job.commit,
-      image: `dedi-dash/retained:${job.id}`,
+      image: `kloud/retained:${job.id}`,
     }
   }
   const manifestPath = join(result.directory, 'output', 'compose.json')
@@ -306,9 +306,9 @@ export async function executeDeployment(
     await engine(
       config.dockerSocket,
       'POST',
-      `/images/${encodeURIComponent(image.Id)}/tag?repo=dedi-dash%2Fretained&tag=${tag}`,
+      `/images/${encodeURIComponent(image.Id)}/tag?repo=kloud%2Fretained&tag=${tag}`,
     )
-    service.image = `dedi-dash/retained:${tag}`
+    service.image = `kloud/retained:${tag}`
   }
   await writeFile(manifestPath, JSON.stringify(manifest))
   return { directory: result.directory, project, commit: job.commit }
@@ -329,7 +329,7 @@ export async function deployCheckout(
 
 async function composeProject(job: DeploymentJob, config: ConnectorConfig) {
   if (job.config.kind !== 'compose' || job.config.managed)
-    return `dedi-${job.deployment_id}`
+    return `kloud-${job.deployment_id}`
   const target = await engine(
     config.dockerSocket,
     'GET',
@@ -337,7 +337,7 @@ async function composeProject(job: DeploymentJob, config: ConnectorConfig) {
   )
   const labels = target.Config.Labels ?? {}
   if (
-    labels['dedi-dash.internal'] === 'true' ||
+    labels['kloud.internal'] === 'true' ||
     labels['com.docker.compose.service'] !== job.config.service ||
     !labels['com.docker.compose.project']
   )

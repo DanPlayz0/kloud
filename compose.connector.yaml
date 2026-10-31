@@ -1,0 +1,17 @@
+# Standalone Linux host: configure .env, then docker compose -f compose.connector.yaml up -d
+services:
+  connector:
+    image: ${CONNECTOR_IMAGE:?Set CONNECTOR_IMAGE to your GHCR connector image}
+    restart: unless-stopped
+    init: true
+    environment:
+      API_URL: ${API_URL:?Set API_URL to your dashboard API URL}
+      CONNECTOR_TOKEN: ${CONNECTOR_TOKEN:?Set CONNECTOR_TOKEN from Administration > Connectors}
+      CONNECTOR_HOST: ${CONNECTOR_HOST:-docker-host}
+      DOCKER_SOCKET: /var/run/docker.sock
+    group_add:
+      - ${DOCKER_GID:?Set DOCKER_GID to the Docker socket group ID}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      kloud.internal: 'true'

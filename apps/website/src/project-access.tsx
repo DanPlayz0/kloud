@@ -1,9 +1,9 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { ServiceGrantsEditor } from './service-grants'
 import { Pm2GrantsEditor } from './pm2-grants'
-import type { Pm2Grant } from '@dedi-dash/protocol/pm2'
+import type { Pm2Grant } from '@kloud/protocol/pm2'
 import { DnsMemberGrants } from './dns'
-import type { DnsGrant } from '@dedi-dash/protocol/dns'
+import type { DnsGrant } from '@kloud/protocol/dns'
 import type { Service, ServiceList, ServiceGrant } from './api'
 import { Search, UserPen, UserPlus, UserX } from 'lucide-react'
 import {

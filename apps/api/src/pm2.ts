@@ -8,7 +8,7 @@ import {
   pm2OperationSchema,
   pm2ResultSchema,
   type Pm2Grant,
-} from '@dedi-dash/protocol/pm2'
+} from '@kloud/protocol/pm2'
 import { requireUser, currentUser, type Env, type User } from './auth.js'
 import { pool } from './db.js'
 import {

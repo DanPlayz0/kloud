@@ -8,16 +8,16 @@ import { join, resolve } from 'node:path'
 import { deployCheckout } from './deployments.js'
 import { readConfig } from './config.js'
 import { sandboxBuild } from './build-sandbox.js'
-import type { DeploymentJob } from '@dedi-dash/protocol'
+import type { DeploymentJob } from '@kloud/protocol'
 
 test(
   'isolated Compose builds deploy a new stack and update an existing service without exposing connector environment',
   { skip: process.env.RUN_DEPLOYMENT_DOCKER !== '1', timeout: 150000 },
   async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'dedi-compose-sandbox-'))
-    const artifacts = await mkdtemp(join(tmpdir(), 'dedi-compose-output-'))
+    const directory = await mkdtemp(join(tmpdir(), 'kloud-compose-sandbox-'))
+    const artifacts = await mkdtemp(join(tmpdir(), 'kloud-compose-output-'))
     const id = randomUUID(),
-      name = `dedi-compose-${id.slice(0, 8)}`
+      name = `kloud-compose-${id.slice(0, 8)}`
     const config = readConfig({ ...process.env, DEPLOYMENTS_DIR: artifacts })
     const job: DeploymentJob = {
       id: randomUUID(),
@@ -93,7 +93,7 @@ test(
       assert.notEqual(next.Id, first.Id)
       assert.equal(
         next.Config.Labels['com.docker.compose.project'],
-        `dedi-${id}`,
+        `kloud-${id}`,
       )
       assert.ok(next.Config.Env.includes('LITERAL=value$name'))
       assert.ok(next.Config.Env.includes('API_LEAK=empty'))
@@ -107,10 +107,10 @@ test(
         docker('rm', '--force', name)
       } catch {}
       try {
-        docker('network', 'rm', `dedi-${id}_default`)
+        docker('network', 'rm', `kloud-${id}_default`)
       } catch {}
       try {
-        docker('image', 'rm', `dedi-dash/${id}:${job.commit}-0`)
+        docker('image', 'rm', `kloud/${id}:${job.commit}-0`)
       } catch {}
       for (const path of [directory, artifacts]) {
         const root = resolve(tmpdir())
@@ -129,7 +129,7 @@ test(
   'public GitHub checkout runs in its own disposable helper before building the exact commit',
   { skip: process.env.RUN_DEPLOYMENT_GITHUB !== '1', timeout: 90000 },
   async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'dedi-source-test-'))
+    const directory = await mkdtemp(join(tmpdir(), 'kloud-source-test-'))
     const deployment = randomUUID(),
       id = randomUUID()
     const commit = '522bcd2faf422c60b9d20e64d7cd6d56600aec97'
@@ -157,7 +157,7 @@ test(
         enabled: true,
       },
     }
-    const image = `dedi-dash/${deployment}:${commit}`
+    const image = `kloud/${deployment}:${commit}`
     const docker = (...args: string[]) =>
       execFileSync('docker', args, {
         encoding: 'utf8',
@@ -169,7 +169,7 @@ test(
       await sandboxBuild(
         job,
         config,
-        `dedi-${deployment}`,
+        `kloud-${deployment}`,
         AbortSignal.timeout(80000),
         (s) => logs.push(s),
       )
@@ -180,7 +180,7 @@ test(
           'ps',
           '--all',
           '--filter',
-          `label=dedi-dash.build=${id}`,
+          `label=kloud.build=${id}`,
           '--quiet',
         ),
         '',
@@ -207,11 +207,11 @@ test(
   'managed services deploy initially, reject container takeover, and label every Compose service',
   { skip: process.env.RUN_DEPLOYMENT_DOCKER !== '1', timeout: 180000 },
   async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'dedi-managed-test-'))
-    const artifacts = await mkdtemp(join(tmpdir(), 'dedi-build-output-'))
+    const directory = await mkdtemp(join(tmpdir(), 'kloud-managed-test-'))
+    const artifacts = await mkdtemp(join(tmpdir(), 'kloud-build-output-'))
     const suffix = randomUUID().slice(0, 8),
       deploymentId = randomUUID()
-    const name = `dedi-managed-${suffix}`
+    const name = `kloud-managed-${suffix}`
     const config = readConfig({ ...process.env, DEPLOYMENTS_DIR: artifacts })
     const docker = (...args: string[]) =>
       execFileSync('docker', args, {
@@ -254,7 +254,7 @@ test(
       )
       const before = inspect(name)
       assert.equal(before.State.Running, true)
-      assert.equal(before.Config.Labels['dedi-dash.application'], suffix)
+      assert.equal(before.Config.Labels['kloud.application'], suffix)
       // A source build failure must never reach the runtime replacement step.
       await writeFile(
         join(directory, 'Dockerfile'),
@@ -277,7 +277,7 @@ test(
           'ps',
           '--all',
           '--filter',
-          `label=dedi-dash.build=${failed.id}`,
+          `label=kloud.build=${failed.id}`,
           '--quiet',
         ),
         '',
@@ -287,7 +287,7 @@ test(
           'volume',
           'ls',
           '--filter',
-          `label=dedi-dash.build=${failed.id}`,
+          `label=kloud.build=${failed.id}`,
           '--quiet',
         ),
         '',
@@ -297,7 +297,7 @@ test(
           'network',
           'ls',
           '--filter',
-          `label=dedi-dash.build=${failed.id}`,
+          `label=kloud.build=${failed.id}`,
           '--quiet',
         ),
         '',
@@ -328,7 +328,7 @@ test(
             'ls',
             ...(kind === 'container' ? ['--all'] : []),
             '--filter',
-            `label=dedi-dash.build=${cancelled.id}`,
+            `label=kloud.build=${cancelled.id}`,
             '--quiet',
           ),
           '',
@@ -391,13 +391,13 @@ test(
         const container = inspect(target)
         assert.equal(container.State.Running, true)
         assert.equal(
-          container.Config.Labels['dedi-dash.project'],
+          container.Config.Labels['kloud.project'],
           'managed-test',
         )
-        assert.equal(container.Config.Labels['dedi-dash.application'], suffix)
+        assert.equal(container.Config.Labels['kloud.application'], suffix)
         assert.equal(
           container.Config.Labels['com.docker.compose.project'],
-          `dedi-${deploymentId}`,
+          `kloud-${deploymentId}`,
         )
       }
     } catch (error) {
@@ -410,10 +410,10 @@ test(
         } catch {}
       }
       try {
-        docker('network', 'rm', `dedi-${deploymentId}_default`)
+        docker('network', 'rm', `kloud-${deploymentId}_default`)
       } catch {}
       try {
-        docker('image', 'rm', `dedi-dash/${deploymentId}:${job.commit}`)
+        docker('image', 'rm', `kloud/${deploymentId}:${job.commit}`)
       } catch {}
       const root = resolve(tmpdir())
       if (
@@ -436,12 +436,12 @@ test(
   'live Docker rebuild preserves mounts and settings, restores failed replacement, and rebuilds a Compose service',
   { skip: process.env.RUN_DEPLOYMENT_DOCKER !== '1', timeout: 180000 },
   async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'dedi-live-deploy-'))
-    const artifacts = await mkdtemp(join(tmpdir(), 'dedi-build-output-'))
+    const directory = await mkdtemp(join(tmpdir(), 'kloud-live-deploy-'))
+    const artifacts = await mkdtemp(join(tmpdir(), 'kloud-build-output-'))
     const suffix = randomUUID().slice(0, 8)
-    const name = `dedi-deploy-${suffix}`,
-      project = `dedi-compose-${suffix}`,
-      image = `dedi-deploy-test:${suffix}`
+    const name = `kloud-deploy-${suffix}`,
+      project = `kloud-compose-${suffix}`,
+      image = `kloud-deploy-test:${suffix}`
     const deploymentID = randomUUID()
     const config = readConfig({
       ...process.env,
@@ -515,7 +515,7 @@ test(
       assert.ok(after.Config.Env.includes('RUNTIME=keep'))
       assert.equal(after.HostConfig.RestartPolicy.Name, 'unless-stopped')
       assert.equal(after.Mounts[0].Name, volume)
-      assert.equal(after.Config.Labels['dedi-dash.application'], 'web')
+      assert.equal(after.Config.Labels['kloud.application'], 'web')
       await writeFile(
         file,
         'FROM node:22-alpine\nCMD ["node","-e","process.exit(1)"]\n',
@@ -592,7 +592,7 @@ test(
         currentCompose.Config.Labels['com.docker.compose.project'],
         project,
       )
-      assert.equal(currentCompose.Config.Labels['dedi-dash.project'], 'demo')
+      assert.equal(currentCompose.Config.Labels['kloud.project'], 'demo')
       assert.ok(currentCompose.Config.Env.includes('LITERAL=value$name'))
       assert.ok(currentCompose.Config.Env.includes('FROM_FILE=stable'))
       assert.ok(currentCompose.Config.Env.includes('API_LEAK=empty'))
@@ -619,9 +619,9 @@ test(
       }
       for (const tag of [
         image,
-        `dedi-dash/${deploymentID}:${'a'.repeat(40)}`,
-        `dedi-dash/${deploymentID}:${'b'.repeat(40)}`,
-        `dedi-dash/${deploymentID}:${'a'.repeat(40)}-0`,
+        `kloud/${deploymentID}:${'a'.repeat(40)}`,
+        `kloud/${deploymentID}:${'b'.repeat(40)}`,
+        `kloud/${deploymentID}:${'a'.repeat(40)}-0`,
       ]) {
         try {
           docker('image', 'rm', tag)

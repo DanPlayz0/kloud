@@ -57,7 +57,7 @@ export function readConfig(
     deploymentsEnabled: env.DEPLOYMENTS_ENABLED === 'true',
     deploymentsDir: env.DEPLOYMENTS_DIR ?? './deployments',
     buildHelperImage:
-      env.DEPLOYMENTS_HELPER_IMAGE ?? 'dedi-dash-build-helper:local',
+      env.DEPLOYMENTS_HELPER_IMAGE ?? 'kloud-build-helper:local',
     buildkitImage:
       env.DEPLOYMENTS_BUILDKIT_IMAGE ?? 'moby/buildkit:v0.28.0-rootless',
     buildMemoryMb: integer(

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { normalizePm2Grants, type Pm2Grant } from '@dedi-dash/protocol/pm2'
+import { normalizePm2Grants, type Pm2Grant } from '@kloud/protocol/pm2'
 import type { Pm2App } from './pm2'
 import { usePolling, ErrorMessage } from './components'
 import { Button, Label, NativeSelect } from './components/ui/controls'

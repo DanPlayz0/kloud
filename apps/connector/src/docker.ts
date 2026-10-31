@@ -4,7 +4,7 @@ import {
   snapshotSchema,
   type Snapshot,
   type Container,
-} from '@dedi-dash/protocol'
+} from '@kloud/protocol'
 
 interface CPUStats {
   cpu_usage?: { total_usage?: number; percpu_usage?: number[] }
@@ -90,7 +90,7 @@ export async function collect(
   const output: Container[] = []
   const samples = new Map<string, CPUStats>()
   const eligible = list.filter(
-    (item) => item.Labels?.['dedi-dash.internal'] !== 'true',
+    (item) => item.Labels?.['kloud.internal'] !== 'true',
   )
   let cursor = 0
   await Promise.all(
@@ -116,8 +116,8 @@ export async function collect(
             /* Container may disappear during collection. */
           }
         }
-        const project = slug.safeParse(item.Labels?.['dedi-dash.project']),
-          application = slug.safeParse(item.Labels?.['dedi-dash.application'])
+        const project = slug.safeParse(item.Labels?.['kloud.project']),
+          application = slug.safeParse(item.Labels?.['kloud.application'])
         output.push({
           id: item.Id,
           name: item.Names?.[0]?.replace(/^\//, '') ?? item.Id.slice(0, 12),

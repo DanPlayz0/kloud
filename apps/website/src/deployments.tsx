@@ -189,7 +189,7 @@ function DeploymentForm({
     deployment?.config ?? {
       connector_id: containers[0]?.connector_id ?? '',
       container_name: serviceType
-        ? `dedi-${project}-${application}`
+        ? `kloud-${project}-${application}`
         : (containers[0]?.data.name ?? ''),
       repository: '',
       branch: 'main',

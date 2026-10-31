@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { replacementSpec, repositoryPath } from './deployments.js'
 import { readConfig } from './config.js'
-import type { DeploymentJob } from '@dedi-dash/protocol'
+import type { DeploymentJob } from '@kloud/protocol'
 
 const job: DeploymentJob = {
   id: 'build',
@@ -82,7 +82,7 @@ test('replacement preserves runtime settings, mounts and network aliases while u
     Aliases: ['web'],
     IPAMConfig: undefined,
   })
-  assert.equal(spec.Labels['dedi-dash.project'], 'demo')
+  assert.equal(spec.Labels['kloud.project'], 'demo')
   assert.equal(spec.Labels.custom, 'yes')
   assert.deepEqual(original.HostConfig.Mounts, [])
   assert.throws(() =>
@@ -94,7 +94,7 @@ test('replacement preserves runtime settings, mounts and network aliases while u
   )
 })
 test('resolved build paths must remain inside checkout', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'dedi-deploy-test-'))
+  const directory = await mkdtemp(join(tmpdir(), 'kloud-deploy-test-'))
   try {
     const root = join(directory, 'repo')
     await mkdir(root)

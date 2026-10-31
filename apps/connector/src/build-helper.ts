@@ -3,11 +3,11 @@ import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
-import { deploymentJobSchema, type DeploymentJob } from '@dedi-dash/protocol'
+import { deploymentJobSchema, type DeploymentJob } from '@kloud/protocol'
 import { repositoryPath, runCommand } from './deployment-process.js'
 
 export function imageTag(job: DeploymentJob, index?: number) {
-  return `dedi-dash/${job.deployment_id}:${job.commit}${index === undefined ? '' : `-${index}`}`
+  return `kloud/${job.deployment_id}:${job.commit}${index === undefined ? '' : `-${index}`}`
 }
 
 export function runtimeCompose(
@@ -29,8 +29,8 @@ export function runtimeCompose(
     }
     service.labels = {
       ...service.labels,
-      'dedi-dash.project': job.project,
-      'dedi-dash.application': job.application,
+      'kloud.project': job.project,
+      'kloud.application': job.application,
     }
   }
   return result

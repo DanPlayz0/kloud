@@ -177,7 +177,7 @@ test(
           target,
           {
             id: target,
-            name: 'dedi-demo-web',
+            name: 'kloud-demo-web',
             project: 'demo',
             application: 'web',
             state: 'running',
@@ -249,7 +249,7 @@ test(
           type: 'github',
           config: {
             connector_id: host,
-            container_name: 'dedi-demo-web',
+            container_name: 'kloud-demo-web',
             repository: 'owner/repository',
             branch: 'main',
             kind: 'dockerfile',
@@ -312,7 +312,7 @@ test(
         connector_id: host,
         config: {
           hostname: 'app.example.com',
-          container: 'dedi-demo-web',
+          container: 'kloud-demo-web',
           network: 'app',
           port: 80,
         },

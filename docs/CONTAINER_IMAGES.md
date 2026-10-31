@@ -1,0 +1,84 @@
+# Published container images
+
+The **Publish container images** GitHub Actions workflow builds and pushes these
+images to GitHub Container Registry (GHCR), using the repository's owner in
+lowercase and the Kloud image names:
+
+| Image | Purpose |
+| --- | --- |
+| `ghcr.io/owner/kloud-connector` | Host connector |
+| `ghcr.io/owner/kloud-build-helper` | Isolated deployment helper |
+| `ghcr.io/owner/kloud-api` | API and database migration CLI |
+| `ghcr.io/owner/kloud-website` | Website and API proxy |
+
+For example, repository `Danny/kloud` publishes
+`ghcr.io/danny/kloud-connector:latest`.
+All images support `linux/amd64` and `linux/arm64`.
+
+## Publish automatically
+
+Push this repository, including `.github/workflows/publish-images.yml`, to GitHub.
+Enable Actions if disabled. No additional publishing secrets are needed: the
+workflow uses the built-in `GITHUB_TOKEN` with `packages: write` permission.
+Organization policies must allow Actions and package creation.
+
+- Pushes to the default branch publish `latest` and `sha-<full-commit-sha>` tags.
+- Version tags such as `v1.2.3` publish `1.2.3`, `1.2`, and the commit tag.
+  Prereleases such as `v1.2.3-rc.1` publish their full version without moving `1.2`.
+- **Actions > Publish container images > Run workflow** publishes the selected
+  ref's commit tag; it also updates `latest` when running on the default branch.
+
+`latest` tracks the default branch. Use a full version, commit tag, or image digest
+when you want to pin a server to a specific build. Published tags and digests appear
+in each build job's summary and on the repository's Packages page.
+
+Packages are initially private. For anonymous pulls, change each package's
+visibility to public in its package settings. For private pulls, give the server's
+GitHub user access to the package and authenticate using a classic personal access
+token with `read:packages` (authorize organization SSO if required):
+
+```sh
+docker login ghcr.io -u YOUR_GITHUB_USERNAME
+```
+
+Enter the token at the password prompt. See GitHub's
+[container registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+for package permissions and authentication.
+
+## Run the connector on a separate Linux server
+
+Only Docker with Compose, `compose.connector.yaml`, and a `.env` file are needed
+on the server. Copy the Compose file from this repository into a dedicated folder.
+Create a token in **Administration > Connectors**, then create `.env` next to the
+Compose file:
+
+```dotenv
+CONNECTOR_IMAGE=ghcr.io/owner/kloud-connector:latest
+API_URL=https://dashboard.example.com/api/
+CONNECTOR_TOKEN=replace-with-your-connector-token
+CONNECTOR_HOST=upstream-server
+DOCKER_GID=replace-with-socket-group-id
+```
+
+Replace `owner` with your lowercase GitHub repository owner. Set
+`DOCKER_GID` to the output of `stat -c '%g' /var/run/docker.sock` on the server.
+Restrict access to the token file with `chmod 600 .env`. For a private image,
+log in to GHCR first as described above.
+
+Start the connector:
+
+```sh
+docker compose -f compose.connector.yaml pull
+docker compose -f compose.connector.yaml up -d
+docker compose -f compose.connector.yaml logs -f connector
+```
+
+Run the first two commands again to install a newer image. Publishing an image
+does not automatically restart existing server containers. The connector needs
+outbound access to the dashboard and publishes no host ports.
+
+This Compose file enables Docker inventory and metrics. For application
+deployments, follow [deployment setup](DEPLOYMENTS.md) and set
+`DEPLOYMENTS_HELPER_IMAGE` to the published `kloud-build-helper` image with
+the same version or commit tag as the connector. Pull that helper image onto the
+host before deploying, especially when using a private package.

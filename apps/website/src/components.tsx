@@ -338,7 +338,7 @@ export function Shell({
               ))}
             </BreadcrumbList>
           </Breadcrumb>
-          <span className="topbar-brand">DEDI DASH</span>
+          <span className="topbar-brand">KLOUD</span>
         </header>
         {children}
       </main>

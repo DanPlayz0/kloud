@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import { HTTPException } from 'hono/http-exception'
-import type { DnsRecord, DnsLiveRecord } from '@dedi-dash/protocol/dns'
+import type { DnsRecord, DnsLiveRecord } from '@kloud/protocol/dns'
 
 function encryptionKey() {
   const value = process.env.DNS_ENCRYPTION_KEY ?? ''

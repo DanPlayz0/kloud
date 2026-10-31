@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg'
 import { HTTPException } from 'hono/http-exception'
-import { normalizePm2Grants, type Pm2Grant } from '@dedi-dash/protocol/pm2'
+import { normalizePm2Grants, type Pm2Grant } from '@kloud/protocol/pm2'
 
 export async function savePm2Grants(
   db: PoolClient,

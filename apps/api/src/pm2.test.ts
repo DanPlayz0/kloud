@@ -6,7 +6,7 @@ import {
   normalizePm2Grants,
   pm2RequestSchema,
   pm2LogQuerySchema,
-} from '@dedi-dash/protocol/pm2'
+} from '@kloud/protocol/pm2'
 import { memberBody } from './project-permissions.js'
 
 test('PM2 grant dependencies are explicit, deduplicated and independent from Docker', () => {

@@ -48,7 +48,7 @@ function Enroll() {
         <div className="auth-mark">
           <Icon name="key" />
         </div>
-        <p className="eyebrow">DEDI DASH</p>
+        <p className="eyebrow">KLOUD</p>
         <h1>{done ? 'You’re ready' : 'Set up your account'}</h1>
         {done ? (
           <>

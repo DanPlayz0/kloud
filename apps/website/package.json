@@ -1,5 +1,5 @@
 {
-  "name": "@dedi-dash/website",
+  "name": "@kloud/website",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
-    "@dedi-dash/protocol": "workspace:*",
+    "@kloud/protocol": "workspace:*",
     "@radix-ui/react-checkbox": "^1.4.1",
     "@radix-ui/react-collapsible": "^1.2.1",
     "@radix-ui/react-dialog": "^1.3.1",

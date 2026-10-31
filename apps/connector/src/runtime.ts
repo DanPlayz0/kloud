@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { runtimeRequestSchema } from '@dedi-dash/protocol/platform'
+import { runtimeRequestSchema } from '@kloud/protocol/platform'
 import {
   engine,
   dockerHost,
@@ -51,7 +51,7 @@ export function runtimeOperations(config: ConnectorConfig) {
         `/containers/${raw.container}/json`,
       )
       const labels = container.Config.Labels ?? {}
-      if (labels['dedi-dash.internal'] === 'true')
+      if (labels['kloud.internal'] === 'true')
         throw new Error('Internal containers cannot be operated')
       // The API authorizes effective manual assignments; exact container IDs prevent name races.
       if (request.action === 'inspect')

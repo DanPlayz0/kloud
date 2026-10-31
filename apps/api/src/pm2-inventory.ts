@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { pm2SnapshotSchema } from '@dedi-dash/protocol/pm2'
+import { pm2SnapshotSchema } from '@kloud/protocol/pm2'
 import { transaction } from './db.js'
 
 export async function acceptPm2Snapshot(
