@@ -126,10 +126,12 @@ export class CloudflareDns implements DnsProvider {
       })
     return result
   }
-  private async list<T>(path: string): Promise<T[]> {
+  private async list<T>(path: string, perPage = 100): Promise<T[]> {
     const records: T[] = []
     for (let page = 1; page <= 100; page++) {
-      const result = await this.call<T[]>(`${path}?per_page=100&page=${page}`)
+      const result = await this.call<T[]>(
+        `${path}?per_page=${perPage}&page=${page}`,
+      )
       if (!Array.isArray(result.result))
         throw new HTTPException(502, {
           message: 'Invalid DNS provider response',
@@ -146,7 +148,8 @@ export class CloudflareDns implements DnsProvider {
     await this.zones()
   }
   zones() {
-    return this.list<ProviderZone>('/zones')
+    // Cloudflare's zones endpoint caps pages at 50, unlike DNS records.
+    return this.list<ProviderZone>('/zones', 50)
   }
   records(zone: string) {
     return this.list<DnsLiveRecord>(`/zones/${identifier(zone)}/dns_records`)

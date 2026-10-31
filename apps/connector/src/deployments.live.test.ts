@@ -11,6 +11,121 @@ import { sandboxBuild } from './build-sandbox.js'
 import type { DeploymentJob } from '@dedi-dash/protocol'
 
 test(
+  'isolated Compose builds deploy a new stack and update an existing service without exposing connector environment',
+  { skip: process.env.RUN_DEPLOYMENT_DOCKER !== '1', timeout: 150000 },
+  async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'dedi-compose-sandbox-'))
+    const artifacts = await mkdtemp(join(tmpdir(), 'dedi-compose-output-'))
+    const id = randomUUID(),
+      name = `dedi-compose-${id.slice(0, 8)}`
+    const config = readConfig({ ...process.env, DEPLOYMENTS_DIR: artifacts })
+    const job: DeploymentJob = {
+      id: randomUUID(),
+      deployment_id: id,
+      commit: 'a'.repeat(40),
+      project: 'sandbox',
+      application: 'compose',
+      config: {
+        connector_id: randomUUID(),
+        container_name: name,
+        repository: 'owner/repo',
+        branch: 'main',
+        kind: 'compose',
+        build_file: 'compose.json',
+        context: '.',
+        service: 'web',
+        managed: true,
+        enabled: true,
+      },
+    }
+    const docker = (...args: string[]) =>
+      execFileSync('docker', args, {
+        encoding: 'utf8',
+        timeout: 30000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim()
+    const inspect = () => JSON.parse(docker('inspect', name))[0]
+    const logs: string[] = [],
+      priorToken = process.env.CONNECTOR_TOKEN
+    try {
+      process.env.CONNECTOR_TOKEN = 'must-not-be-interpolated'
+      await writeFile(
+        join(directory, 'Dockerfile'),
+        'FROM node:22-alpine\nCMD ["node","-e","setInterval(()=>{},1000)"]\n',
+      )
+      await writeFile(
+        join(directory, 'service.env'),
+        'FROM_FILE=stable\nAPI_LEAK=${CONNECTOR_TOKEN:-empty}\n',
+      )
+      await writeFile(
+        join(directory, 'compose.json'),
+        JSON.stringify({
+          services: {
+            web: {
+              build: '.',
+              container_name: name,
+              env_file: ['./service.env'],
+              environment: { LITERAL: 'value$$name' },
+            },
+          },
+        }),
+      )
+      await deployCheckout(
+        job,
+        config,
+        directory,
+        AbortSignal.timeout(65000),
+        (s) => logs.push(s),
+      )
+      const first = inspect()
+      assert.equal(first.State.Running, true)
+      assert.ok(first.Config.Env.includes('LITERAL=value$name'))
+      assert.ok(first.Config.Env.includes('FROM_FILE=stable'))
+      assert.ok(first.Config.Env.includes('API_LEAK=empty'))
+      await deployCheckout(
+        { ...job, id: randomUUID(), config: { ...job.config, managed: false } },
+        config,
+        directory,
+        AbortSignal.timeout(65000),
+        (s) => logs.push(s),
+      )
+      const next = inspect()
+      assert.notEqual(next.Id, first.Id)
+      assert.equal(
+        next.Config.Labels['com.docker.compose.project'],
+        `dedi-${id}`,
+      )
+      assert.ok(next.Config.Env.includes('LITERAL=value$name'))
+      assert.ok(next.Config.Env.includes('API_LEAK=empty'))
+    } catch (error) {
+      console.error(logs.join('').slice(-16000))
+      throw error
+    } finally {
+      if (priorToken === undefined) delete process.env.CONNECTOR_TOKEN
+      else process.env.CONNECTOR_TOKEN = priorToken
+      try {
+        docker('rm', '--force', name)
+      } catch {}
+      try {
+        docker('network', 'rm', `dedi-${id}_default`)
+      } catch {}
+      try {
+        docker('image', 'rm', `dedi-dash/${id}:${job.commit}-0`)
+      } catch {}
+      for (const path of [directory, artifacts]) {
+        const root = resolve(tmpdir())
+        if (
+          !resolve(path).startsWith(root + '\\') &&
+          !resolve(path).startsWith(root + '/')
+        )
+          throw new Error('Unexpected cleanup path')
+        await rm(path, { recursive: true, force: true })
+      }
+    }
+  },
+)
+
+test(
   'public GitHub checkout runs in its own disposable helper before building the exact commit',
   { skip: process.env.RUN_DEPLOYMENT_GITHUB !== '1', timeout: 90000 },
   async () => {

@@ -218,6 +218,7 @@ test('all Cloudflare record types validate and serialize; invalid forms are reje
 test('Cloudflare pagination and provider errors never expose raw provider text or tokens', async () => {
   let calls = 0
   const request: typeof fetch = async (_url, init) => {
+    assert.equal(new URL(String(_url)).searchParams.get('per_page'), '50')
     calls++
     assert.equal(
       new Headers(init?.headers).get('Authorization'),

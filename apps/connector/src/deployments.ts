@@ -298,20 +298,18 @@ async function deployArtifact(
   const manifest = JSON.parse(
     await readFile(join(directory, 'output', 'compose.json'), 'utf8'),
   )
-  // Rebase resolved source paths for retained runtime bind mounts. Escape concrete
-  // dollar signs so Compose does not interpolate the helper's resolved config twice.
+  // Rebase source paths for retained runtime bind mounts. Compose's canonical
+  // output already preserves escaped dollars and must not be escaped a second time.
   const rebase = (value: any): any => {
     if (typeof value === 'string')
-      return (
-        value === '/workspace/repository' ||
+      return value === '/workspace/repository' ||
         value.startsWith('/workspace/repository/')
-          ? resolve(
-              directory,
-              'repository',
-              value.slice('/workspace/repository'.length).replace(/^\//, ''),
-            )
-          : value
-      ).replaceAll('$', '$$$$')
+        ? resolve(
+            directory,
+            'repository',
+            value.slice('/workspace/repository'.length).replace(/^\//, ''),
+          )
+        : value
     if (Array.isArray(value)) return value.map(rebase)
     if (value && typeof value === 'object')
       return Object.fromEntries(

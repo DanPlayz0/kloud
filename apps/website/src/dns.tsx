@@ -786,7 +786,7 @@ function DnsRecords({
       </div>
       {!data && !error && <p>Loading records…</p>}
       <div className="overflow-x-auto rounded border border-border bg-card">
-        <table className="w-full text-left text-sm">
+        <table className="w-full min-w-160 text-left text-sm">
           <thead className="text-muted-foreground border-b border-border">
             <tr>
               {['Type', 'Name', 'Value', 'TTL', 'Proxy', 'Actions'].map((t) => (

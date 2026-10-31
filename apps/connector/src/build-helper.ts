@@ -36,16 +36,6 @@ export function runtimeCompose(
   return result
 }
 
-function escapeCompose(value: any): any {
-  if (typeof value === 'string') return value.replaceAll('$', '$$$$')
-  if (Array.isArray(value)) return value.map(escapeCompose)
-  if (value && typeof value === 'object')
-    return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, escapeCompose(v)]),
-    )
-  return value
-}
-
 export async function buildHelper() {
   const job = deploymentJobSchema.parse(
     JSON.parse(process.env.DEPLOYMENT_JOB ?? ''),
@@ -210,8 +200,9 @@ export async function buildHelper() {
           }),
       ),
     }
-    const buildFile = '/workspace/compose-build.json'
-    await writeFile(buildFile, JSON.stringify(escapeCompose(buildModel)))
+    // Bake recognizes YAML as Compose; .json would be parsed as Bake's own JSON format.
+    const buildFile = '/workspace/compose.yaml'
+    await writeFile(buildFile, JSON.stringify(buildModel))
     for (const [name, tag] of Object.entries(tags)) {
       if (!job.config.managed && name !== job.config.service) continue
       const artifact = `image-${images.length}.tar`
@@ -220,6 +211,10 @@ export async function buildHelper() {
         [
           'buildx',
           'bake',
+          '--allow',
+          'fs.read=/workspace/repository',
+          '--allow',
+          `fs.write=${output}`,
           '--builder',
           'isolated',
           '--progress',
