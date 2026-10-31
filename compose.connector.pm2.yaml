@@ -1,0 +1,16 @@
+# Use alongside compose.connector.yaml to monitor this host's existing PM2 daemon.
+services:
+  connector:
+    user: "${PM2_UID:?Set PM2_UID to the host PM2 user ID}:${PM2_GID:?Set PM2_GID to the host PM2 group ID}"
+    environment:
+      PM2_ENABLED: 'true'
+      PM2_HOME: ${PM2_HOME:?Set PM2_HOME to the host PM2 home directory}
+    volumes:
+      - type: bind
+        source: ${PM2_HOME:?Set PM2_HOME to the host PM2 home directory}
+        target: ${PM2_HOME:?Set PM2_HOME to the host PM2 home directory}
+        read_only: true
+        bind:
+          create_host_path: false
+      # Add identical-path read-only binds here for logs outside PM2_HOME:
+      # - /var/log/my-app:/var/log/my-app:ro

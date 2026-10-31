@@ -4,6 +4,10 @@ services:
     image: ${CONNECTOR_IMAGE:?Set CONNECTOR_IMAGE to your GHCR connector image}
     restart: unless-stopped
     init: true
+    # Compose's implicit .env only supplies interpolation values. env_file also
+    # passes additional connector settings through to the container.
+    env_file:
+      - .env
     environment:
       API_URL: ${API_URL:?Set API_URL to your dashboard API URL}
       CONNECTOR_TOKEN: ${CONNECTOR_TOKEN:?Set CONNECTOR_TOKEN from Administration > Connectors}

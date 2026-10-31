@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.connector.example
 *.log
 .DS_Store
 coverage/

@@ -49,8 +49,9 @@ for package permissions and authentication.
 
 Only Docker with Compose, `compose.connector.yaml`, and a `.env` file are needed
 on the server. Copy the Compose file from this repository into a dedicated folder.
-Create a token in **Administration > Connectors**, then create `.env` next to the
-Compose file:
+Create a token in **Administration > Connectors**, then copy
+`.env.connector.example` to `.env` next to the Compose file and edit it. The minimal
+settings are:
 
 ```dotenv
 CONNECTOR_IMAGE=ghcr.io/owner/kloud-connector:latest
@@ -64,6 +65,51 @@ Replace `owner` with your lowercase GitHub repository owner. Set
 `DOCKER_GID` to the output of `stat -c '%g' /var/run/docker.sock` on the server.
 Restrict access to the token file with `chmod 600 .env`. For a private image,
 log in to GHCR first as described above.
+
+The Compose service uses `env_file: .env` to pass additional settings such as
+`RUNTIME_ENABLED`, `PROXY_ENABLED`, and `POLL_INTERVAL_MS` into the container.
+Compose's automatic `.env` loading alone only substitutes `${...}` values in the
+Compose file; it does not inject every variable into the service. Explicit
+`environment` entries take precedence over `env_file`; `DOCKER_SOCKET` stays
+`/var/run/docker.sock` to match the declared socket mount. Keep this `.env`
+dedicated to the connector, since all its variables are passed to the container.
+
+After editing `.env`, apply changes by recreating the connector:
+
+```sh
+docker compose -f compose.connector.yaml up -d --force-recreate connector
+```
+
+`docker compose restart` does not apply environment changes. To verify a specific
+non-secret setting without printing tokens, for example:
+
+```sh
+docker compose -f compose.connector.yaml exec connector printenv RUNTIME_ENABLED
+```
+
+Feature flags do not add host mounts. For PM2, add `-f compose.connector.pm2.yaml`
+and configure `PM2_HOME`, `PM2_UID`, and `PM2_GID` as described in
+[PM2 setup](PM2.md). This override binds the host PM2 home read-only and uses the
+PM2 user's numeric IDs. To enable application builds, set
+`DEPLOYMENTS_ENABLED=true`, pull the configured helper image, and add this local
+`compose.connector.local.yaml` override:
+
+```yaml
+services:
+  connector:
+    volumes:
+      - ${DEPLOYMENTS_DIR:-/var/lib/kloud/deployments}:${DEPLOYMENTS_DIR:-/var/lib/kloud/deployments}
+```
+
+Prepare that directory for the connector's UID 1000 (adjust the path if changed):
+
+```sh
+sudo install -d -o 1000 -g 1000 /var/lib/kloud/deployments
+docker compose -f compose.connector.yaml -f compose.connector.local.yaml up -d --force-recreate connector
+```
+
+Use both Compose files on subsequent updates. See [deployment setup](DEPLOYMENTS.md)
+for host requirements and helper configuration.
 
 Start the connector:
 

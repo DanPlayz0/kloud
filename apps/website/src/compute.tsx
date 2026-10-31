@@ -1,3 +1,4 @@
+import { StatusBadge } from './components/ui/status-badge'
 import {
   usePolling,
   Shell,
@@ -38,7 +39,18 @@ export function Compute({
             <p className="eyebrow">COMPUTE</p>
             <h1>Containers</h1>
           </div>
-          <span className="live-indicator">
+          <span
+            className="live-indicator"
+            data-tone={
+              error
+                ? 'danger'
+                : stale
+                  ? 'warning'
+                  : data
+                    ? 'success'
+                    : 'neutral'
+            }
+          >
             <i className={stale || error ? 'warning' : ''} />
             {error
               ? 'Connection interrupted'
@@ -99,12 +111,11 @@ export function Compute({
                           </QuickTip>
                         </td>
                         <td>
-                          <span
+                          <StatusBadge
                             className={`status ${isStale(row) ? 'stale' : row.data.state}`}
                           >
-                            <i />
                             {isStale(row) ? 'Stale' : row.data.state}
-                          </span>
+                          </StatusBadge>
                         </td>
                         <td>
                           <Meter
@@ -159,8 +170,19 @@ export function Compute({
 function Meter({ value, label }: { value: number | null; label: string }) {
   return (
     <div className="metric">
-      <span className="meter">
-        <span style={{ width: `${Math.min(100, value ?? 0)}%` }} />
+      <span
+        className="meter"
+        data-tone={
+          value === null
+            ? 'neutral'
+            : value >= 90
+              ? 'danger'
+              : value >= 75
+                ? 'warning'
+                : 'success'
+        }
+      >
+        <span style={{ width: `${Math.max(0, Math.min(100, value ?? 0))}%` }} />
       </span>
       <small>{label}</small>
     </div>

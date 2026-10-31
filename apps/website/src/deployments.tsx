@@ -1,3 +1,4 @@
+import { StatusBadge } from './components/ui/status-badge'
 import { useState, useEffect, type FormEvent } from 'react'
 import { GitBranch, Hammer } from 'lucide-react'
 import { api, type ContainerRow } from './api'
@@ -152,7 +153,8 @@ export function DeploymentSettings({
             >
               <summary className="cursor-pointer">
                 <span className="font-mono">{build.commit.slice(0, 7)}</span> ·{' '}
-                {build.status} · {new Date(build.created).toLocaleString()}
+                <StatusBadge deployment>{build.status}</StatusBadge> ·{' '}
+                {new Date(build.created).toLocaleString()}
               </summary>
               <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs text-muted-foreground">
                 {build.log ||

@@ -1,3 +1,4 @@
+import { StatusBadge } from './components/ui/status-badge'
 import { ProjectFields, projectFormValues } from './components/project-fields'
 import {
   Button,
@@ -104,7 +105,9 @@ export function Admin({
           </div>
         )}
         <fieldset className="admin-controls" disabled={busy}>
-          {section === 'dns' ? <DnsProviders projects={projectList} /> : section === 'projects' ? (
+          {section === 'dns' ? (
+            <DnsProviders projects={projectList} />
+          ) : section === 'projects' ? (
             <Projects
               revision={revision}
               action={action}
@@ -264,11 +267,13 @@ function Connectors({
             <strong>{c.name}</strong>
             <small>
               {c.host ?? 'Not connected'} ·{' '}
-              {c.revoked
-                ? 'Revoked'
-                : c.stale
-                  ? 'Offline / stale'
-                  : 'Connected'}
+              <StatusBadge>
+                {c.revoked
+                  ? 'Revoked'
+                  : c.stale
+                    ? 'Offline / stale'
+                    : 'Connected'}
+              </StatusBadge>
             </small>
           </div>
           <div className="row-actions">
@@ -383,7 +388,7 @@ function Assignment({
         <strong>{row.data.name}</strong>
         <small>
           {row.host ?? row.connector_name} ·{' '}
-          {row.stale ? 'Stale' : row.data.state}
+          <StatusBadge>{row.stale ? 'Stale' : row.data.state}</StatusBadge>
         </small>
       </div>
       {row.assignment === 'label' ? (

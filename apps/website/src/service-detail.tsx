@@ -1,3 +1,4 @@
+import { StatusBadge } from './components/ui/status-badge'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Plus, Trash2, RotateCcw } from 'lucide-react'
 import type { PlatformConfig, Domain } from '@kloud/protocol/platform'
@@ -192,22 +193,24 @@ export function ServiceDetail({
             <Card className="space-y-2 p-5">
               <p className="text-sm text-muted-foreground">Runtime</p>
               <p className="font-semibold">
-                {inventoryError
-                  ? 'Unavailable'
-                  : !containers
-                    ? 'Loading'
-                    : stale
-                      ? 'Host disconnected'
-                      : !containers.length
-                        ? 'Not deployed'
-                        : containers.every(
-                              (c) =>
-                                c.data.state === 'running' &&
-                                c.data.health !== 'unhealthy' &&
-                                c.data.health !== 'starting',
-                            )
-                          ? 'Running'
-                          : 'Needs attention'}
+                <StatusBadge>
+                  {inventoryError
+                    ? 'Unavailable'
+                    : !containers
+                      ? 'Loading'
+                      : stale
+                        ? 'Host disconnected'
+                        : !containers.length
+                          ? 'Not deployed'
+                          : containers.every(
+                                (c) =>
+                                  c.data.state === 'running' &&
+                                  c.data.health !== 'unhealthy' &&
+                                  c.data.health !== 'starting',
+                              )
+                            ? 'Running'
+                            : 'Needs attention'}
+                </StatusBadge>
               </p>
               <p className="text-xs text-muted-foreground">
                 {containers?.length ?? 0} containers
@@ -216,7 +219,9 @@ export function ServiceDetail({
             <Card className="space-y-2 p-5">
               <p className="text-sm text-muted-foreground">Latest deployment</p>
               <p className="font-semibold">
-                {history?.runs?.[0]?.status ?? 'No new deployments'}
+                <StatusBadge deployment>
+                  {history?.runs?.[0]?.status ?? 'No new deployments'}
+                </StatusBadge>
               </p>
               <p className="text-xs text-muted-foreground">
                 Deployment success is separate from runtime health.
@@ -328,7 +333,8 @@ export function ServiceDetail({
             <Card key={run.id} className="space-y-3 p-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm">
-                  {run.status} · {new Date(run.created).toLocaleString()}
+                  <StatusBadge deployment>{run.status}</StatusBadge> ·{' '}
+                  {new Date(run.created).toLocaleString()}
                 </p>
                 {canDeploy && run.status === 'succeeded' && run.artifacts && (
                   <Button

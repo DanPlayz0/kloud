@@ -62,10 +62,33 @@ connector, for example:
 --mount type=bind,src=/var/log/my-app,dst=/var/log/my-app,readonly
 ```
 
-For Compose, create a local override for `connector` setting `user`, `PM2_HOME`,
-and the mounts above. Set `PM2_ENABLED=true` in the root `.env`. The existing
-Compose connector profile still mounts Docker's socket; use a separate PM2-only
-service with the settings above when Docker access is unnecessary.
+For the standalone GHCR connector, copy `compose.connector.pm2.yaml` alongside
+`compose.connector.yaml`. Set these values in their shared `.env`, replacing
+`app` and the example IDs with the user running your existing PM2 daemon:
+
+```dotenv
+PM2_ENABLED=true
+PM2_HOME=/home/app/.pm2
+PM2_UID=1000
+PM2_GID=1000
+```
+
+Find the numeric IDs with `id -u app` and `id -g app`. Start with both files:
+
+```sh
+docker compose -f compose.connector.yaml -f compose.connector.pm2.yaml up -d --force-recreate connector
+```
+
+The override enables PM2, runs as that host UID/GID, and binds the entire PM2 home
+read-only at the same absolute path. It fails if the host directory does not
+exist, rather than silently creating an empty directory. Add read-only binds for
+external log directories to the override. Use both files for subsequent updates.
+If also enabling deployments, make the deployment directory writable by this
+PM2 UID/GID instead of assuming UID 1000.
+
+The base Compose file retains Docker's socket and socket group. For PM2-only
+hosts without Docker socket access, use a separate service matching the
+`docker run` example above, without the Docker socket mount or group.
 
 ## Assignment and access
 

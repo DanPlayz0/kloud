@@ -1,3 +1,4 @@
+import { StatusBadge } from './components/ui/status-badge'
 import { useState, type FormEvent } from 'react'
 import { Boxes, Plus, Pencil, Trash2 } from 'lucide-react'
 import {
@@ -150,22 +151,24 @@ export function ServicesPage({
                 <div className="space-y-1 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">
                     Runtime:{' '}
-                    {runtimeError
-                      ? 'Unavailable'
-                      : !runtime
-                        ? 'Loading'
-                        : stale
-                          ? 'Host disconnected'
-                          : !runtime.length
-                            ? 'Not deployed'
-                            : runtime.every(
-                                  (c) =>
-                                    c.data.state === 'running' &&
-                                    c.data.health !== 'unhealthy' &&
-                                    c.data.health !== 'starting',
-                                )
-                              ? 'Running'
-                              : 'Needs attention'}
+                    <StatusBadge>
+                      {runtimeError
+                        ? 'Unavailable'
+                        : !runtime
+                          ? 'Loading'
+                          : stale
+                            ? 'Host disconnected'
+                            : !runtime.length
+                              ? 'Not deployed'
+                              : runtime.every(
+                                    (c) =>
+                                      c.data.state === 'running' &&
+                                      c.data.health !== 'unhealthy' &&
+                                      c.data.health !== 'starting',
+                                  )
+                                ? 'Running'
+                                : 'Needs attention'}
+                    </StatusBadge>
                   </p>
                   {!!runtime?.length && (
                     <>
@@ -192,9 +195,16 @@ export function ServicesPage({
                         : 'Source not configured')}
                   </p>
                   <p>
-                    {service.deployment_status
-                      ? `Latest deployment: ${service.deployment_status}`
-                      : 'No deployments yet'}
+                    {service.deployment_status ? (
+                      <>
+                        Latest deployment:{' '}
+                        <StatusBadge deployment>
+                          {service.deployment_status}
+                        </StatusBadge>
+                      </>
+                    ) : (
+                      'No deployments yet'
+                    )}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

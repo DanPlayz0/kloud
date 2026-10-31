@@ -1,3 +1,4 @@
+import { StatusBadge } from './components/ui/status-badge'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import {
   Activity,
@@ -185,7 +186,9 @@ function Pm2Row({
           <p className="mt-1 text-xs text-muted-foreground">{app.namespace}</p>
         </td>
         <td className="p-3">{app.host ?? app.connector_name}</td>
-        <td className="p-3">{status(app)}</td>
+        <td className="p-3">
+          <StatusBadge>{status(app)}</StatusBadge>
+        </td>
         <td className="p-3">{app.workers.length}</td>
         <td className="p-3">{current ? cpu : '—'}</td>
         <td className="p-3">{current ? memory : '—'}</td>
@@ -206,8 +209,15 @@ function Pm2Row({
               )}
               {app.workers.map((w) => (
                 <p key={w.id} className="text-sm">
-                  #{w.id} · PID {w.pid} · {w.mode} · {w.status} · CPU{' '}
-                  {current && w.cpu !== null ? `${w.cpu}%` : '—'} · RAM{' '}
+                  #{w.id} · PID {w.pid} · {w.mode} ·{' '}
+                  <StatusBadge>
+                    {!app.present
+                      ? 'Unavailable'
+                      : stale(app)
+                        ? 'Stale'
+                        : w.status}
+                  </StatusBadge>{' '}
+                  · CPU {current && w.cpu !== null ? `${w.cpu}%` : '—'} · RAM{' '}
                   {current ? bytes(w.memory) : '—'} · uptime{' '}
                   {current ? uptime([w]) : '—'} · {w.restarts} restarts
                 </p>
@@ -317,7 +327,8 @@ function Pm2Operations({
           {app.name}
         </DialogTitle>
         <DialogDescription>
-          {app.namespace} · {app.host ?? app.connector_name} · {status(app)}
+          {app.namespace} · {app.host ?? app.connector_name} ·{' '}
+          <StatusBadge>{status(app)}</StatusBadge>
         </DialogDescription>
         <ErrorMessage message={error} />
         {message && <p role="status">{message}</p>}
@@ -587,7 +598,8 @@ export function Pm2Inventory({ projects }: { projects: Project[] }) {
           <div className="min-w-40 flex-1">
             <strong className="break-all">{app.name}</strong>
             <p className="text-sm text-muted-foreground">
-              {app.namespace} · {app.host ?? app.connector_name} · {status(app)}
+              {app.namespace} · {app.host ?? app.connector_name} ·{' '}
+              <StatusBadge>{status(app)}</StatusBadge>
             </p>
           </div>
           <Label>
