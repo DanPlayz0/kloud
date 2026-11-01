@@ -76,6 +76,10 @@ test(
         "INSERT INTO users(id,username,admin) VALUES($1,'admin',true),($2,'owner',false),($3,'teammate',false)",
         [admin, owner, teammate],
       )
+      await pool.query(
+        "UPDATE users SET capabilities=ARRAY['git.create'] WHERE id=$1",
+        [owner],
+      )
       for (const [i, id] of [admin, owner, teammate].entries())
         await pool.query(
           "INSERT INTO sessions(token,user_id,expires) VALUES($1,$2,now()+interval '1 hour')",

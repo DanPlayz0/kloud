@@ -77,4 +77,20 @@ export async function migrateGit(db: PoolClient) {
       INSERT INTO migrations(version) VALUES(26);
     `)
   }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=29'))
+      .rowCount
+  ) {
+    await db.query(`
+      ALTER TABLE users DROP CONSTRAINT users_capabilities_check;
+      ALTER TABLE users ADD CONSTRAINT users_capabilities_check CHECK
+        (capabilities <@ ARRAY['dns.manage','users.manage','projects.create','projects.manage','connectors.manage','connectors.operate','inventory.manage','git.create','git.manage']::text[]);
+      ALTER TABLE github_app_setups ALTER COLUMN service DROP NOT NULL;
+      ALTER TABLE github_app_setups ADD CONSTRAINT github_app_setups_project FOREIGN KEY(project) REFERENCES projects(slug) ON DELETE CASCADE;
+      ALTER TABLE github_app_setups ADD COLUMN project_access boolean NOT NULL DEFAULT false;
+      ALTER TABLE git_connections ADD COLUMN project_access boolean NOT NULL DEFAULT false;
+      ALTER TABLE git_connections ADD CONSTRAINT shared_project_access CHECK(NOT project_access OR owner IS NULL);
+      INSERT INTO migrations(version) VALUES(29);
+    `)
+  }
 }

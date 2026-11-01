@@ -12,6 +12,8 @@ export const serverCapabilities = [
   'connectors.manage',
   'connectors.operate',
   'inventory.manage',
+  'git.create',
+  'git.manage',
 ] as const
 export type ServerCapability = (typeof serverCapabilities)[number]
 export const containerCapabilities = [

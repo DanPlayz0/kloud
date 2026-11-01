@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import type { ComponentProps } from 'react'
 
 export const Dialog = Primitive.Root
+export const DialogTrigger = Primitive.Trigger
 export const DialogTitle = Primitive.Title
 export const DialogDescription = Primitive.Description
 export function DialogContent({

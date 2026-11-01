@@ -3,7 +3,7 @@ import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useState, useRef } from 'react'
 import type { DeploymentConfig } from '@kloud/protocol'
-import { api } from './api'
+import { api, hasServer, type User } from './api'
 import { ErrorMessage } from './components'
 import { Button, Input, NativeSelect, Textarea } from './components/ui/controls'
 import { Card } from './components/ui/card'
@@ -44,6 +44,8 @@ export function RepositoryOnboarding({
 }) {
   const base = `/projects/${project}/git-connections`
   const [connections, setConnections] = useState<Connection[]>([])
+  const [user, setUser] = useState<User>()
+  const canCreate = !!user && hasServer(user, 'git.create')
   const [mode, setMode] = useState<'app' | 'pat' | 'selfhost' | 'legacy'>('app')
   const [connection, setConnection] = useState(value.connection_id ?? '')
   const [url, setUrl] = useState(
@@ -100,6 +102,9 @@ export function RepositoryOnboarding({
   }
   useEffect(() => {
     void refresh().catch((e) => setError(e.message))
+    void api<User>('/auth/me')
+      .then(setUser)
+      .catch((e) => setError(e.message))
   }, [project, service])
   useEffect(() => {
     if (value.connection_id && value.connection_id !== connection) {
@@ -271,29 +276,38 @@ export function RepositoryOnboarding({
             </Field>
             {!available.length && (
               <p className="text-xs text-muted-foreground">
-                No authorized connections are available. Add your own or ask its
-                owner to delegate a repository to this app.
+                No authorized connections are available. Ask an administrator to
+                prepare a shared connection or delegate a repository to this
+                service.
               </p>
             )}
-            <Button
-              type="button"
-              onClick={() => {
-                setAdding(!adding)
-                setProvider(
-                  mode === 'app'
-                    ? 'github_app'
-                    : mode === 'selfhost'
-                      ? 'forgejo'
-                      : 'github',
-                )
-              }}
-            >
-              {adding ? 'Cancel new connection' : 'Add connection'}
-            </Button>
-            {adding && mode === 'app' && (
+            {canCreate ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  setAdding(!adding)
+                  setProvider(
+                    mode === 'app'
+                      ? 'github_app'
+                      : mode === 'selfhost'
+                        ? 'forgejo'
+                        : 'github',
+                  )
+                }}
+              >
+                {adding ? 'Cancel new connection' : 'Add connection'}
+              </Button>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Select a prepared connection. Ask an administrator to grant
+                Create Git connections permission if you need to add one.
+              </p>
+            )}
+            {canCreate && adding && mode === 'app' && (
               <GithubAppConnect
                 project={project}
                 service={service}
+                allowShared={!!user && hasServer(user, 'git.manage')}
                 onConnected={async (id) => {
                   await refresh()
                   setConnection(id)
@@ -301,7 +315,7 @@ export function RepositoryOnboarding({
                 }}
               />
             )}
-            {adding && mode !== 'app' && (
+            {canCreate && adding && mode !== 'app' && (
               <FieldGroup className="flex flex-col gap-3 border border-border rounded-md p-3">
                 <Field>
                   <FieldLabel>Connection name</FieldLabel>
@@ -351,9 +365,9 @@ export function RepositoryOnboarding({
                   <FieldLabel>Ownership</FieldLabel>
                   <NativeSelect data-git-new="scope">
                     <option value="personal">Personal</option>
-                    <option value="shared">
-                      Shared (server administrators only)
-                    </option>
+                    {!!user && hasServer(user, 'git.manage') && (
+                      <option value="shared">Shared</option>
+                    )}
                   </NativeSelect>
                 </Field>
                 <Button

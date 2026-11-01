@@ -36,6 +36,7 @@ function AppLayout() {
   }
   const shell = match.staticData.shell ?? { title: 'Overview', active: '' }
   const adminTitles: Record<string, string> = {
+    'git-connections': 'Git connections',
     projects: 'Projects',
     users: 'Users',
     connectors: 'Connectors',

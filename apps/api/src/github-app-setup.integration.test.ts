@@ -90,6 +90,10 @@ test(
         "INSERT INTO users(id,username) VALUES($1,'owner'),($2,'other')",
         [actor, other],
       )
+      await pool.query(
+        "UPDATE users SET capabilities=ARRAY['git.create'] WHERE id=ANY($1::uuid[])",
+        [[actor, other]],
+      )
       for (const [i, id] of [actor, other].entries()) {
         await pool.query(
           "INSERT INTO sessions(token,user_id,expires) VALUES($1,$2,now()+interval '1 hour')",
@@ -231,6 +235,54 @@ test(
           )
         ).status,
         400,
+      )
+      // The same complete manifest/install flow also works before any service exists.
+      await pool.query(
+        "INSERT INTO projects(slug,name) VALUES('prepared','Prepared'); UPDATE users SET capabilities=ARRAY['git.create','git.manage'] WHERE username='owner'",
+      )
+      const prepare = (suffix: string, body: unknown) =>
+        app.request('/projects/prepared/git-connections/github-app' + suffix, {
+          method: 'POST',
+          headers: {
+            origin: publicOrigin,
+            cookie: `session=${sessions[0]}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        })
+      const beforeService = await prepare('/start', {
+        name: 'Prepared App',
+        scope: 'shared',
+        project_access: true,
+      })
+      assert.equal(beforeService.status, 200)
+      const preparation = await beforeService.json()
+      const conversion = await prepare('/finish', {
+        state: preparation.state,
+        code: 'manifest-code',
+      })
+      assert.equal(conversion.status, 200)
+      const installation = await conversion.json()
+      const prepared = await prepare('/finish', {
+        state: installation.state,
+        installation_id: 456,
+        setup_action: 'install',
+      })
+      assert.equal(prepared.status, 200)
+      const preparedRow = (
+        await pool.query(
+          "SELECT owner,project_access FROM git_connections WHERE project='prepared'",
+        )
+      ).rows[0]
+      assert.equal(preparedRow.owner, null)
+      assert.equal(preparedRow.project_access, true)
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT * FROM services WHERE project_slug='prepared'",
+          )
+        ).rowCount,
+        0,
       )
     } finally {
       globalThis.fetch = originalFetch

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { requireUser, type Env } from './auth.js'
 import { permissionTransaction } from './permissions.js'
-import { demandService } from './service-permissions.js'
+import { demandGitCreation, demandGitSharing } from './git-permissions.js'
 import {
   browserOrigin,
   digest,
@@ -56,7 +56,7 @@ githubAppSetup.get('/git/github/callback', (c) => {
     'Content-Security-Policy',
     `default-src 'none'; script-src 'nonce-${nonce}'; frame-ancestors 'none'; base-uri 'none'`,
   )
-  return c.html(`<!doctype html><html lang="en"><meta charset="utf-8"><title>GitHub App setup</title><body><p>Return to service setup to finish connecting GitHub. Keep this window open.</p><script nonce="${nonce}">
+  return c.html(`<!doctype html><html lang="en"><meta charset="utf-8"><title>GitHub App setup</title><body><p>Return to connection setup to finish connecting GitHub. Keep this window open.</p><script nonce="${nonce}">
     const params = new URLSearchParams(location.search);
     if (window.opener) window.opener.postMessage({type:'kloud-github-app',state:params.get('state'),code:params.get('code'),installation_id:params.get('installation_id'),setup_action:params.get('setup_action')}, ${JSON.stringify(origin)});
   </script></body></html>`)
@@ -65,9 +65,10 @@ githubAppSetup.get('/git/github/callback', (c) => {
 githubAppSetup.post(`${path}/start`, async (c) => {
   const body = z
     .object({
-      service: z.string().min(1),
+      service: z.string().min(1).optional(),
       name: z.string().trim().min(1).max(100),
       scope: z.enum(['personal', 'shared']).default('personal'),
+      project_access: z.boolean().default(false),
       organization: z
         .string()
         .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/)
@@ -77,26 +78,21 @@ githubAppSetup.post(`${path}/start`, async (c) => {
     .parse(await c.req.json())
   const state = token()
   await permissionTransaction(c.get('user'), async (db, actor) => {
-    await demandService(
-      actor,
-      c.req.param('project'),
-      'deploy',
-      body.service,
-      db,
-    )
-    if (body.scope === 'shared' && !actor.admin) throw new HTTPException(403)
+    await demandGitCreation(db, actor, c.req.param('project'), body.service)
+    demandGitSharing(actor, body.scope, body.project_access)
     // Fail before sending the user to GitHub if credentials cannot be stored.
     seal({})
     await db.query('DELETE FROM github_app_setups WHERE expires<=now()')
     await db.query(
-      "INSERT INTO github_app_setups(state,actor,project,service,name,scope,phase) VALUES($1,$2,$3,$4,$5,$6,'manifest')",
+      "INSERT INTO github_app_setups(state,actor,project,service,name,scope,phase,project_access) VALUES($1,$2,$3,$4,$5,$6,'manifest',$7)",
       [
         digest(state),
         actor.id,
         c.req.param('project'),
-        body.service,
+        body.service ?? null,
         body.name,
         body.scope,
+        body.project_access,
       ],
     )
   })
@@ -110,7 +106,7 @@ githubAppSetup.post(`${path}/start`, async (c) => {
 githubAppSetup.post(`${path}/finish`, async (c) => {
   const body = z
     .object({
-      service: z.string().min(1),
+      service: z.string().min(1).optional(),
       state: stateSchema,
       code: z
         .string()
@@ -124,24 +120,23 @@ githubAppSetup.post(`${path}/finish`, async (c) => {
   const result = await permissionTransaction(
     c.get('user'),
     async (db, actor) => {
-      await demandService(
-        actor,
-        c.req.param('project'),
-        'deploy',
-        body.service,
-        db,
-      )
+      await demandGitCreation(db, actor, c.req.param('project'), body.service)
       const setup = (
         await db.query(
-          'SELECT * FROM github_app_setups WHERE state=$1 AND actor=$2 AND project=$3 AND service=$4 AND expires>now() FOR UPDATE',
-          [digest(body.state), actor.id, c.req.param('project'), body.service],
+          'SELECT * FROM github_app_setups WHERE state=$1 AND actor=$2 AND project=$3 AND service IS NOT DISTINCT FROM $4::text AND expires>now() FOR UPDATE',
+          [
+            digest(body.state),
+            actor.id,
+            c.req.param('project'),
+            body.service ?? null,
+          ],
         )
       ).rows[0]
       if (!setup)
         throw new HTTPException(403, {
           message: 'GitHub setup expired or was already used. Start again.',
         })
-      if (setup.scope === 'shared' && !actor.admin) throw new HTTPException(403)
+      demandGitSharing(actor, setup.scope, setup.project_access)
       const nextState = token()
       if (setup.phase === 'manifest') {
         if (!body.code || body.installation_id) throw new HTTPException(400)
@@ -206,7 +201,7 @@ githubAppSetup.post(`${path}/finish`, async (c) => {
       }
       await accessToken(row, credentials)
       await db.query(
-        'INSERT INTO git_connections(id,project,name,provider,origin,owner,encrypted_credentials,identity) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+        'INSERT INTO git_connections(id,project,name,provider,origin,owner,encrypted_credentials,identity,project_access) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',
         [
           row.id,
           setup.project,
@@ -222,6 +217,7 @@ githubAppSetup.post(`${path}/finish`, async (c) => {
             app_id: credentials.app_id,
             slug: setup.slug,
           },
+          setup.project_access,
         ],
       )
       await db.query('DELETE FROM github_app_setups WHERE state=$1', [

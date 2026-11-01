@@ -7,9 +7,14 @@ export const Route = createFileRoute('/_app/admin/$section')({
   loader: async ({ params }) => {
     const user = await adminSession(params.section)
     if (
-      !['projects', 'users', 'connectors', 'containers', 'dns'].includes(
-        params.section,
-      )
+      ![
+        'projects',
+        'users',
+        'connectors',
+        'containers',
+        'dns',
+        'git-connections',
+      ].includes(params.section)
     )
       throw notFound()
     return { user, projects: await api<Project[]>('/projects') }

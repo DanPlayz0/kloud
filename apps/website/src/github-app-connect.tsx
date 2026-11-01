@@ -31,14 +31,20 @@ export function GithubAppConnect({
   project,
   service,
   onConnected,
+  administration = false,
+  allowShared = false,
+  projectAccess = false,
 }: {
   project: string
-  service: string
+  service?: string
+  administration?: boolean
+  allowShared?: boolean
+  projectAccess?: boolean
   onConnected: (id: string) => Promise<void>
 }) {
   const [name, setName] = useState('Kloud')
   const [organization, setOrganization] = useState('')
-  const [scope, setScope] = useState('personal')
+  const [scope, setScope] = useState(administration ? 'shared' : 'personal')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
@@ -119,7 +125,11 @@ export function GithubAppConnect({
           if (cancelled) return
           stop()
           setBusy(false)
-          setStatus('GitHub connected. Select a repository below.')
+          setStatus(
+            administration
+              ? 'GitHub connection saved. Select its repository when setting up a service.'
+              : 'GitHub connected. Select a repository below.',
+          )
         } else throw new Error('GitHub setup returned an incomplete response.')
       })().catch(fail)
     }
@@ -138,6 +148,7 @@ export function GithubAppConnect({
         service,
         name,
         scope,
+        ...(administration ? { project_access: projectAccess } : {}),
         ...(organization.trim() ? { organization: organization.trim() } : {}),
       })
       if (cancelled) return
@@ -172,17 +183,19 @@ export function GithubAppConnect({
           onChange={(e) => setOrganization(e.target.value)}
         />
       </Field>
-      <Field>
-        <FieldLabel>Ownership</FieldLabel>
-        <NativeSelect
-          value={scope}
-          disabled={busy}
-          onChange={(e) => setScope(e.target.value)}
-        >
-          <option value="personal">Personal</option>
-          <option value="shared">Shared (server administrators only)</option>
-        </NativeSelect>
-      </Field>
+      {!administration && (
+        <Field>
+          <FieldLabel>Ownership</FieldLabel>
+          <NativeSelect
+            value={scope}
+            disabled={busy}
+            onChange={(e) => setScope(e.target.value)}
+          >
+            <option value="personal">Personal</option>
+            {allowShared && <option value="shared">Shared</option>}
+          </NativeSelect>
+        </Field>
+      )}
       <ErrorMessage message={error} />
       {status && (
         <p role="status" className="text-sm text-muted-foreground">

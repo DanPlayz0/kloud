@@ -6,7 +6,12 @@ import type { PoolClient } from 'pg'
 import type { DeploymentConfig } from '@kloud/protocol'
 import { requireUser, type Env, type User } from './auth.js'
 import { pool } from './db.js'
-import { permissionTransaction, projectAccess } from './permissions.js'
+import {
+  permissionTransaction,
+  projectAccess,
+  hasServer,
+} from './permissions.js'
+import { demandGitCreation, demandGitSharing } from './git-permissions.js'
 import { demandService } from './service-permissions.js'
 import { publicOrigin } from './security.js'
 import { seal, unseal } from './platform-secrets.js'
@@ -68,7 +73,9 @@ async function usable(
 ) {
   await demandService(user, project, 'deploy', service, db)
   const row = await connection(db, project, id)
-  const broad = row.owner === user.id || (!row.owner && user.admin)
+  const broad =
+    row.owner === user.id ||
+    (!row.owner && (hasServer(user, 'git.manage') || row.project_access))
   const bindings = (
     await db.query<{ repository_id: string; repository: string }>(
       'SELECT repository_id,repository FROM git_repository_bindings WHERE connection=$1 AND project=$2 AND service=$3',
@@ -224,9 +231,14 @@ gitConnections.get(path, async (c) => {
   const rows = (
     await pool.query(
       `SELECT c.id,c.name,c.provider,c.origin,c.owner,c.identity,c.created FROM git_connections c
-    WHERE c.project=$1 AND NOT c.revoked AND (c.owner=$2 OR (c.owner IS NULL AND $3) OR EXISTS(SELECT 1 FROM git_repository_bindings b WHERE b.connection=c.id AND b.project=$1 AND b.service=$4))
+    WHERE c.project=$1 AND NOT c.revoked AND (c.owner=$2 OR (c.owner IS NULL AND ($3 OR c.project_access)) OR EXISTS(SELECT 1 FROM git_repository_bindings b WHERE b.connection=c.id AND b.project=$1 AND b.service=$4))
     AND (c.owner IS NULL OR EXISTS(SELECT 1 FROM users u WHERE u.id=c.owner AND NOT u.disabled AND (u.admin OR EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id AND m.project_slug=$1)))) ORDER BY c.name,c.id`,
-      [project, c.get('user').id, c.get('user').admin, service],
+      [
+        project,
+        c.get('user').id,
+        hasServer(c.get('user'), 'git.manage'),
+        service,
+      ],
     )
   ).rows
   return c.json(rows)
@@ -238,7 +250,8 @@ gitConnections.post(path, async (c) => {
       provider: providerSchema,
       origin: z.string().optional(),
       scope: z.enum(['personal', 'shared']).default('personal'),
-      service: z.string().min(1),
+      service: z.string().min(1).optional(),
+      project_access: z.boolean().default(false),
       token: z.string().min(1).max(4096).optional(),
       username: z
         .string()
@@ -252,17 +265,8 @@ gitConnections.post(path, async (c) => {
     .strict()
     .parse(await c.req.json())
   const id = await permissionTransaction(c.get('user'), async (db, actor) => {
-    await demandService(
-      actor,
-      c.req.param('project'),
-      'deploy',
-      body.service,
-      db,
-    )
-    if (body.scope === 'shared' && !actor.admin)
-      throw new HTTPException(403, {
-        message: 'Only server administrators manage shared Git connections.',
-      })
+    await demandGitCreation(db, actor, c.req.param('project'), body.service)
+    demandGitSharing(actor, body.scope, body.project_access)
     const origin = providerOrigin(body.provider, body.origin)
     const credentials: Credentials =
       body.provider === 'github_app'
@@ -311,7 +315,7 @@ gitConnections.post(path, async (c) => {
       await accessToken(row, credentials)
     }
     await db.query(
-      'INSERT INTO git_connections(id,project,name,provider,origin,owner,encrypted_credentials,identity) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+      'INSERT INTO git_connections(id,project,name,provider,origin,owner,encrypted_credentials,identity,project_access) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',
       [
         row.id,
         c.req.param('project'),
@@ -321,6 +325,7 @@ gitConnections.post(path, async (c) => {
         row.owner,
         row.encrypted_credentials,
         identity,
+        body.project_access,
       ],
     )
     return row.id
@@ -335,7 +340,7 @@ gitConnections.delete(`${path}/:id`, async (c) => {
       c.req.param('project'),
       uuid.parse(c.req.param('id')),
     )
-    if (row.owner ? row.owner !== actor.id : !actor.admin)
+    if (row.owner ? row.owner !== actor.id : !hasServer(actor, 'git.manage'))
       throw new HTTPException(403)
     await db.query('UPDATE git_connections SET revoked=true WHERE id=$1', [
       row.id,
@@ -491,7 +496,11 @@ gitConnections.put(`${path}/:id/delegations`, async (c) => {
       body.service,
       uuid.parse(c.req.param('id')),
     )
-    if (!access.broad)
+    if (
+      access.row.owner
+        ? access.row.owner !== actor.id
+        : !hasServer(actor, 'git.manage')
+    )
       throw new HTTPException(403, {
         message:
           'Only the connection owner or shared-connection administrator can change delegation.',

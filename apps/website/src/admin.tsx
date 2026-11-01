@@ -31,6 +31,7 @@ import { usePolling, ErrorMessage, Notice, Icon } from './components'
 import { Users } from './components/users'
 import { DnsProviders } from './dns'
 import { Pm2Inventory } from './pm2'
+import { GitConnectionsAdmin } from './git-connections-admin'
 export function Admin({
   user,
   projects,
@@ -96,6 +97,7 @@ export function Admin({
     }
   }
   const titles: Record<string, string> = {
+    'git-connections': 'Git connections',
     projects: 'Projects',
     users: 'Users',
     connectors: 'Connectors',
@@ -128,7 +130,9 @@ export function Admin({
           </Alert>
         )}
         <FieldSet className="admin-controls" disabled={busy}>
-          {section === 'dns' ? (
+          {section === 'git-connections' ? (
+            <GitConnectionsAdmin user={user} />
+          ) : section === 'dns' ? (
             <DnsProviders projects={projectList} />
           ) : section === 'projects' ? (
             <Projects

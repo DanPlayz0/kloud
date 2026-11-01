@@ -21,6 +21,7 @@ export interface Credentials {
   installation_id?: number
 }
 export interface GitConnection {
+  project_access?: boolean
   id: string
   provider: Provider
   origin: string

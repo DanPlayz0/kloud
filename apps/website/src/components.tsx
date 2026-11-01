@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Menu,
   Ellipsis,
+  GitBranch,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from './components/ui/controls'
@@ -369,6 +370,7 @@ export function Shell({
                   ['Connectors', 'connectors', Network],
                   ['Inventory', 'containers', Database],
                   ['DNS providers', 'dns', Globe],
+                  ['Git connections', 'git-connections', GitBranch],
                 ] as const
               )
                 .filter(([, path]) =>

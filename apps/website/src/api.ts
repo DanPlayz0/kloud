@@ -14,6 +14,8 @@ export const serverCapabilities = [
   'connectors.manage',
   'connectors.operate',
   'inventory.manage',
+  'git.create',
+  'git.manage',
 ] as const
 export type ServerCapability = (typeof serverCapabilities)[number]
 export const serverCapabilityLabels: Record<ServerCapability, string> = {
@@ -24,10 +26,13 @@ export const serverCapabilityLabels: Record<ServerCapability, string> = {
   'connectors.manage': 'Manage connectors',
   'connectors.operate': 'Operate connector resources',
   'inventory.manage': 'Manage inventory assignments',
+  'git.create': 'Create Git connections',
+  'git.manage': 'Manage all Git connections',
 }
 export const hasServer = (user: User, capability: ServerCapability) =>
   user.admin || !!user.capabilities?.includes(capability)
 export const adminCapabilities: Record<string, ServerCapability> = {
+  'git-connections': 'git.manage',
   dns: 'dns.manage',
   users: 'users.manage',
   projects: 'projects.manage',

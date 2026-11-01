@@ -3,6 +3,7 @@ import { forwarding, forwardingWorker } from './forwarding.js'
 import { recovery, recoveryWorker } from './recovery.js'
 import { gitConnections } from './git-connections.js'
 import { githubAppSetup } from './github-app-setup.js'
+import { gitAdmin } from './git-admin.js'
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { HTTPException } from 'hono/http-exception'
 import { bodyLimit } from 'hono/body-limit'
@@ -100,6 +101,7 @@ app.route('/', platform)
 app.route('/', forwarding)
 app.route('/', recovery)
 app.route('/', gitConnections)
+app.route('/', gitAdmin)
 app.route('/', registryConnections)
 app.route('/', pm2)
 app.route('/', connectorWorkspace)
