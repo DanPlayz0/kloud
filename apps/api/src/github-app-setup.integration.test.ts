@@ -30,7 +30,9 @@ test(
       .toString()
     const originalFetch = globalThis.fetch
     let calls = 0,
-      wrongApp = false
+      wrongApp = false,
+      optionalSecretsAbsent = false,
+      missingKey = false
     globalThis.fetch = async (input, options) => {
       calls++
       const target = String(input)
@@ -42,10 +44,11 @@ test(
         return Response.json({
           id: 123,
           slug: 'kloud-test',
-          pem,
-          client_id: 'client',
-          client_secret: 'secret-client',
-          webhook_secret: 'secret-hook',
+          ...(!missingKey ? { pem } : {}),
+          ...(!optionalSecretsAbsent
+            ? { client_id: 'client', client_secret: 'secret-client' }
+            : {}),
+          webhook_secret: optionalSecretsAbsent ? null : 'secret-hook',
         })
       }
       assert.match(
@@ -155,6 +158,9 @@ test(
         /^https:\/\/github.com\/organizations\/my-org\/settings\/apps\/new\?state=/,
       )
       assert.equal(started.manifest.request_oauth_on_install, false)
+      assert.deepEqual(started.manifest.callback_urls, [
+        started.manifest.redirect_url,
+      ])
       assert.equal(started.manifest.default_permissions.contents, 'read')
       assert.equal(
         started.manifest.default_permissions.repository_hooks,
@@ -237,6 +243,7 @@ test(
         400,
       )
       // The same complete manifest/install flow also works before any service exists.
+      optionalSecretsAbsent = true
       await pool.query(
         "INSERT INTO projects(slug,name) VALUES('prepared','Prepared'); UPDATE users SET capabilities=ARRAY['git.create','git.manage'] WHERE username='owner'",
       )
@@ -276,6 +283,15 @@ test(
       ).rows[0]
       assert.equal(preparedRow.owner, null)
       assert.equal(preparedRow.project_access, true)
+      const preparedCredentials = unseal(
+        (
+          await pool.query(
+            "SELECT encrypted_credentials FROM git_connections WHERE project='prepared'",
+          )
+        ).rows[0].encrypted_credentials,
+      )
+      assert.equal(preparedCredentials.private_key, pem)
+      assert.equal(preparedCredentials.webhook_secret, null)
       assert.equal(
         (
           await pool.query(
@@ -283,6 +299,30 @@ test(
           )
         ).rowCount,
         0,
+      )
+      missingKey = true
+      const invalidSetup = await (
+        await prepare('/start', { name: 'Invalid App', scope: 'shared' })
+      ).json()
+      const invalidConversion = await prepare('/finish', {
+        state: invalidSetup.state,
+        code: 'manifest-code',
+      })
+      assert.equal(invalidConversion.status, 502)
+      const invalidMessage = await invalidConversion.json()
+      assert.match(invalidMessage.error, /incomplete app configuration \(pem\)/)
+      assert.equal(
+        JSON.stringify(invalidMessage).includes('PRIVATE KEY'),
+        false,
+      )
+      const invalidRequest = await prepare('/finish', {
+        state: 'invalid',
+        code: 'manifest-code',
+      })
+      assert.equal(invalidRequest.status, 400)
+      assert.match(
+        (await invalidRequest.json()).error,
+        /Invalid GitHub setup request: state/,
       )
     } finally {
       globalThis.fetch = originalFetch

@@ -10,6 +10,16 @@ import {
 } from './components/ui/field'
 import { ErrorMessage } from './components'
 
+function defaultGithubAppName() {
+  const now = new Date()
+  const date = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
+  return `Kloud-${date}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 // GitHub requires a cross-origin form POST for manifests. This transport form is
 // internal to the reusable control; all visible controls use the shared UI.
 function submitManifest(popup: Window, action: string, manifest: unknown) {
@@ -42,15 +52,7 @@ export function GithubAppConnect({
   projectAccess?: boolean
   onConnected: (id: string) => Promise<void>
 }) {
-  const [name, setName] = useState(() => {
-    const now = new Date()
-    const date = [
-      now.getFullYear(),
-      String(now.getMonth() + 1).padStart(2, '0'),
-      String(now.getDate()).padStart(2, '0'),
-    ].join('-')
-    return `Kloud-${date}-${Math.random().toString(36).slice(2, 8)}`
-  })
+  const [name, setName] = useState(defaultGithubAppName)
   const [organization, setOrganization] = useState('')
   const [scope, setScope] = useState(administration ? 'shared' : 'personal')
   const [busy, setBusy] = useState(false)
@@ -89,6 +91,11 @@ export function GithubAppConnect({
       stop()
       setBusy(false)
       setStatus('')
+      setName((current) =>
+        /^Kloud-\d{4}-\d{2}-\d{2}-[a-z0-9]{6}$/.test(current)
+          ? defaultGithubAppName()
+          : current,
+      )
       setError(
         error instanceof Error ? error.message : 'Unable to connect GitHub.',
       )

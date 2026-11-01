@@ -25,6 +25,15 @@ const path = '/projects/:project/git-connections/github-app'
 const stateSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 const github = { provider: 'github_app' as const, origin: 'https://github.com' }
 export const githubAppSetup = new Hono<Env>()
+
+function setupRequest<T>(schema: z.ZodType<T>, value: unknown) {
+  const result = schema.safeParse(value)
+  if (!result.success)
+    throw new HTTPException(400, {
+      message: `Invalid GitHub setup request: ${result.error.issues.map((issue) => `${issue.path.join('.') || 'body'}: ${issue.message}`).join('; ')}`,
+    })
+  return result.data
+}
 githubAppSetup.use(`${path}/*`, requireUser)
 
 export function appManifest(name: string, origin: string) {
@@ -33,6 +42,7 @@ export function appManifest(name: string, origin: string) {
     name,
     url: publicOrigin,
     redirect_url: callback,
+    callback_urls: [callback],
     setup_url: callback,
     public: false,
     request_oauth_on_install: false,
@@ -63,19 +73,21 @@ githubAppSetup.get('/git/github/callback', (c) => {
 })
 
 githubAppSetup.post(`${path}/start`, async (c) => {
-  const body = z
-    .object({
-      service: z.string().min(1).optional(),
-      name: z.string().trim().min(1).max(100),
-      scope: z.enum(['personal', 'shared']).default('personal'),
-      project_access: z.boolean().default(false),
-      organization: z
-        .string()
-        .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/)
-        .optional(),
-    })
-    .strict()
-    .parse(await c.req.json())
+  const body = setupRequest(
+    z
+      .object({
+        service: z.string().min(1).optional(),
+        name: z.string().trim().min(1).max(100),
+        scope: z.enum(['personal', 'shared']).default('personal'),
+        project_access: z.boolean().default(false),
+        organization: z
+          .string()
+          .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/)
+          .optional(),
+      })
+      .strict(),
+    await c.req.json(),
+  )
   const state = token()
   await permissionTransaction(c.get('user'), async (db, actor) => {
     await demandGitCreation(db, actor, c.req.param('project'), body.service)
@@ -104,19 +116,21 @@ githubAppSetup.post(`${path}/start`, async (c) => {
 })
 
 githubAppSetup.post(`${path}/finish`, async (c) => {
-  const body = z
-    .object({
-      service: z.string().min(1).optional(),
-      state: stateSchema,
-      code: z
-        .string()
-        .regex(/^[A-Za-z0-9_-]{1,200}$/)
-        .optional(),
-      installation_id: z.coerce.number().int().positive().safe().optional(),
-      setup_action: z.literal('install').optional(),
-    })
-    .strict()
-    .parse(await c.req.json())
+  const body = setupRequest(
+    z
+      .object({
+        service: z.string().min(1).optional(),
+        state: stateSchema,
+        code: z
+          .string()
+          .regex(/^[A-Za-z0-9_-]{1,200}$/)
+          .optional(),
+        installation_id: z.coerce.number().int().positive().safe().optional(),
+        setup_action: z.literal('install').optional(),
+      })
+      .strict(),
+    await c.req.json(),
+  )
   const result = await permissionTransaction(
     c.get('user'),
     async (db, actor) => {
@@ -139,23 +153,35 @@ githubAppSetup.post(`${path}/finish`, async (c) => {
       demandGitSharing(actor, setup.scope, setup.project_access)
       const nextState = token()
       if (setup.phase === 'manifest') {
-        if (!body.code || body.installation_id) throw new HTTPException(400)
+        if (!body.code || body.installation_id)
+          throw new HTTPException(400, {
+            message:
+              'GitHub did not return an app creation code. Start GitHub setup again.',
+          })
         const data = await providerRequest(
           github,
           '',
           `/app-manifests/${body.code}/conversions`,
           { method: 'POST' },
         )
-        const app = z
+        const result = z
           .object({
             id: z.number().int().positive(),
             slug: z.string().regex(/^[A-Za-z0-9_-]+$/),
             pem: z.string().min(1),
-            client_id: z.string().min(1),
-            client_secret: z.string().min(1),
-            webhook_secret: z.string().min(1),
+            // JWT installation authentication requires the App ID and PEM.
+            // OAuth and app-level webhooks are not used by this flow; service
+            // webhooks have their own independently generated signing secrets.
+            client_id: z.string().nullish(),
+            client_secret: z.string().nullish(),
+            webhook_secret: z.string().nullish(),
           })
-          .parse(data)
+          .safeParse(data)
+        if (!result.success)
+          throw new HTTPException(502, {
+            message: `GitHub returned an incomplete app configuration (${[...new Set(result.error.issues.map((issue) => issue.path.join('.')))].join(', ')}). Start again with a new app name.`,
+          })
+        const app = result.data
         const credentials = {
           app_id: String(app.id),
           private_key: app.pem,
@@ -174,7 +200,10 @@ githubAppSetup.post(`${path}/finish`, async (c) => {
         }
       }
       if (!body.installation_id || body.setup_action !== 'install')
-        throw new HTTPException(400)
+        throw new HTTPException(400, {
+          message:
+            'GitHub did not return a completed installation. Install the app to finish connecting it.',
+        })
       const credentials: Credentials = {
         ...unseal(setup.encrypted_credentials),
         installation_id: body.installation_id,
