@@ -32,6 +32,16 @@ async function fixtures(page: Page) {
       '/api/auth/setup': { required: true },
       '/api/auth/me': owner,
       '/api/projects': [project],
+      '/api/connectors': [],
+      [`/api/projects/${project.slug}/databases`]: {
+        resources: [],
+        can_create: false,
+        can_restore: false,
+        can_destinations: false,
+        can_manage_access: false,
+      },
+      [`/api/projects/${project.slug}/databases/hosts/list`]: [],
+      [`/api/projects/${project.slug}/databases/destinations/list`]: [],
       '/api/admin/projects': [project],
       '/api/admin/pm2': [],
       '/api/admin/containers/projects': [project],
@@ -60,6 +70,45 @@ async function fixtures(page: Page) {
       ],
     }
     return route.fulfill({ json: data[path] ?? { ok: true } })
+  })
+}
+
+for (const width of [390, 1280]) {
+  test(`databases retain project navigation under Storage at ${width}px`, async ({
+    page,
+  }) => {
+    await fixtures(page)
+    await page.setViewportSize({ width, height: 840 })
+    await page.goto(`/projects/${project.slug}/compute/serverless`)
+    if (width < 720)
+      await page.getByRole('button', { name: 'Toggle navigation' }).click()
+    const storage = page.locator('.nav-group').filter({
+      has: page.getByText('STORAGE', { exact: true }),
+    })
+    await storage.getByRole('link', { name: 'Databases', exact: true }).click()
+    await expect(
+      page.getByRole('heading', { name: 'PostgreSQL', exact: true }),
+    ).toBeVisible()
+    await expect(page.locator('.topbar')).toHaveText('StorageDatabasesKLOUD')
+    if (width < 720)
+      await page.getByRole('button', { name: 'Toggle navigation' }).click()
+    await expect(
+      page.getByRole('navigation', { name: 'Main navigation' }),
+    ).toBeVisible()
+    await expect(
+      storage.getByRole('link', { name: 'Databases', exact: true }),
+    ).toHaveAttribute('aria-current', 'page')
+    const compute = page.locator('.nav-group').filter({
+      has: page.getByText('COMPUTE', { exact: true }),
+    })
+    await expect(
+      compute.getByRole('link', { name: 'Databases', exact: true }),
+    ).toHaveCount(0)
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Main navigation' })
+        .getByRole('link', { name: 'Databases', exact: true }),
+    ).toHaveCount(1)
   })
 }
 

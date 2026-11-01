@@ -176,7 +176,7 @@ test('shared picker searches hosts and switches between project and connector wo
       .getByRole('link', { name: 'Containers', exact: true }),
   ).toHaveAttribute('aria-current', 'page')
   await expect(
-    page.getByRole('columnheader', { name: 'PROJECT', exact: true }),
+    page.getByRole('columnheader', { name: 'Project', exact: true }),
   ).toBeVisible()
   await expect(page.getByText('Unassigned', { exact: true })).toBeVisible()
   await picker.click()
@@ -239,6 +239,31 @@ test('direct URLs reuse container and PM2 operation dialogs with connector APIs'
   expect(operations.some((o) => o.action === 'delete')).toBe(false)
 })
 
+test('container rows open shared dialogs with keyboard focus restored on close', async ({
+  page,
+}) => {
+  await fixtures(page)
+  await page.goto(base + '/compute/containers')
+  const trigger = page.getByRole('button', { name: 'Manage web', exact: true })
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  const dialog = page.getByRole('dialog', { name: 'web', exact: true })
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Close container details' }).click()
+  await expect(trigger).toBeFocused()
+  await page
+    .getByRole('row')
+    .filter({ has: trigger })
+    .getByText('2.0%', { exact: true })
+    .click()
+  await expect(dialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(trigger).toBeFocused()
+  await page.getByRole('link', { name: 'Alpha project', exact: true }).click()
+  await expect(page).toHaveURL('/projects/alpha/compute/containers')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
 test('inventory browsing does not grant actions or host controls', async ({
   page,
 }) => {
@@ -296,6 +321,16 @@ for (const width of [390, 1280]) {
       await expect(
         page.getByRole('heading', { name: 'Containers', exact: true }),
       ).toBeVisible()
+      expect(
+        await page
+          .getByRole('table')
+          .evaluate((table) => table.getBoundingClientRect().width),
+      ).toBeGreaterThanOrEqual(640)
+      expect(
+        await page
+          .getByRole('columnheader', { name: 'Container', exact: true })
+          .evaluate((cell) => cell.getBoundingClientRect().width),
+      ).toBeGreaterThanOrEqual(160)
       if (width < 720)
         await page.getByRole('button', { name: 'Toggle navigation' }).click()
       await page

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import {
   Terminal,
   Square,
@@ -6,6 +6,7 @@ import {
   RotateCw,
   ScrollText,
   Settings2,
+  X,
 } from 'lucide-react'
 import { api, resourceBase, type ResourceScope, type ContainerRow } from './api'
 import { usePolling, ErrorMessage } from './components'
@@ -21,15 +22,23 @@ import { ContainerTerminal } from './components/container-terminal'
 export function ContainerOperations({
   scope,
   container,
+  open: controlledOpen,
+  onOpenChange,
+  trigger,
 }: {
   scope: ResourceScope
   container: ContainerRow
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  trigger?: RefObject<HTMLButtonElement | null>
 }) {
-  const [open, setOpen] = useState(false),
+  const [internalOpen, setInternalOpen] = useState(false),
     [mode, setMode] = useState('logs'),
     [output, setOutput] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = onOpenChange ?? setInternalOpen
   const base =
     resourceBase(scope) +
     '/containers/' +
@@ -102,16 +111,38 @@ export function ContainerOperations({
   }
   return (
     <>
-      <Button
-        aria-label={`Manage ${container.data.name}`}
-        onClick={() => setOpen(true)}
-      >
-        <Settings2 size={14} />
-        Manage
-      </Button>
+      {controlledOpen === undefined && (
+        <Button
+          aria-label={`Manage ${container.data.name}`}
+          onClick={() => setOpen(true)}
+        >
+          <Settings2 size={14} />
+          Manage
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-          <DialogTitle>{container.data.name}</DialogTitle>
+        <DialogContent
+          className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"
+          onCloseAutoFocus={
+            trigger
+              ? (event) => {
+                  event.preventDefault()
+                  trigger.current?.focus()
+                }
+              : undefined
+          }
+        >
+          <div className="flex items-start justify-between gap-4">
+            <DialogTitle className="min-w-0 text-lg font-semibold break-all">
+              {container.data.name}
+            </DialogTitle>
+            <Button
+              aria-label="Close container details"
+              onClick={() => setOpen(false)}
+            >
+              <X size={16} aria-hidden="true" />
+            </Button>
+          </div>
           <DialogDescription>
             {container.connector_name} · {container.data.state}
           </DialogDescription>

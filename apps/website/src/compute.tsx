@@ -1,12 +1,8 @@
+import { Fragment, useRef, useState } from 'react'
+import { TableCard } from './components/ui/card'
+import { Button } from './components/ui/controls'
 import { StatusBadge } from './components/ui/status-badge'
-import {
-  usePolling,
-  Shell,
-  ErrorMessage,
-  Notice,
-  bytes,
-  Icon,
-} from './components'
+import { usePolling, Shell, ErrorMessage, Notice, bytes } from './components'
 import {
   resourceBase,
   type ResourceScope,
@@ -17,6 +13,7 @@ import {
 } from './api'
 import QuickTip from './components/quickTip'
 import { ContainerOperations } from './container-operations'
+
 export function Compute({
   user,
   projects,
@@ -46,25 +43,13 @@ export function Compute({
       title="Compute / Containers"
       active={connector ? 'compute/containers' : 'containers'}
     >
-      <div className="compute-content">
+      <section className="compute-content space-y-4">
         <div className="page-heading">
           <div>
             <p className="eyebrow">COMPUTE</p>
             <h1>Containers</h1>
           </div>
-          <span
-            className="live-indicator"
-            data-tone={
-              error
-                ? 'danger'
-                : stale
-                  ? 'warning'
-                  : data
-                    ? 'success'
-                    : 'neutral'
-            }
-          >
-            <i className={stale || error ? 'warning' : ''} />
+          <span className="text-sm text-muted-foreground" role="status">
             {error
               ? 'Connection interrupted'
               : stale
@@ -73,17 +58,10 @@ export function Compute({
           </span>
         </div>
         <ErrorMessage message={error} />
-        {data === undefined && !error ? (
-          <div className="table-skeleton" aria-label="Loading containers">
-            {Array.from({ length: 8 }, (_, i) => (
-              <div key={i}>
-                <span />
-                <span />
-                <span />
-              </div>
-            ))}
-          </div>
-        ) : data?.length === 0 ? (
+        {data === undefined && !error && (
+          <p role="status">Loading containers…</p>
+        )}
+        {data?.length === 0 && (
           <Notice
             title={
               connector ? 'No containers discovered' : 'No containers assigned'
@@ -93,123 +71,158 @@ export function Compute({
               ? 'This connector has no visible container inventory. Enable discovery to include unassigned containers.'
               : 'Add project and application labels to your containers, or ask an administrator to assign them.'}
           </Notice>
-        ) : (
-          data && (
-            <>
-              <div className="table-scroll">
-                <table className="container-table">
-                  <thead>
-                    <tr>
-                      <th>CONTAINER NAME</th>
-                      <th>{connector ? 'PROJECT' : 'HOST'}</th>
-                      <th>STATUS</th>
-                      <th>CPU USAGE</th>
-                      <th>RAM USAGE</th>
-                      <th>ACTIONS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.map((row) => (
-                      <tr
-                        key={`${row.connector_id}:${row.container_id}`}
-                        className={isStale(row) ? 'stale-row' : ''}
-                      >
-                        <td>
-                          {project && row.application ? (
-                            <a
-                              href={`/projects/${project}/applications/${row.application}`}
-                              className="container-link"
-                            >
-                              {row.data.name}
-                              <Icon name="external" className="row-arrow" />
-                            </a>
-                          ) : (
-                            <span className="font-medium">{row.data.name}</span>
-                          )}
-                        </td>
-                        <td>
-                          {connector ? (
-                            row.project &&
-                            projects.some((p) => p.slug === row.project) ? (
-                              <a
-                                className="hover:underline"
-                                href={
-                                  '/projects/' +
-                                  encodeURIComponent(row.project) +
-                                  '/compute/containers'
-                                }
-                              >
-                                {
-                                  projects.find((p) => p.slug === row.project)
-                                    ?.name
-                                }
-                              </a>
-                            ) : (
-                              (row.project ?? 'Unassigned')
-                            )
-                          ) : (
-                            <QuickTip portal content={row.connector_name}>
-                              {row.host ?? row.connector_name}
-                            </QuickTip>
-                          )}
-                        </td>
-                        <td>
-                          <StatusBadge
-                            className={`status ${isStale(row) ? 'stale' : row.data.state}`}
-                          >
-                            {isStale(row) ? 'Stale' : row.data.state}
-                          </StatusBadge>
-                        </td>
-                        <td>
-                          <Meter
-                            value={isStale(row) ? null : row.data.cpu}
-                            label={
-                              isStale(row) || row.data.cpu === null
-                                ? '—'
-                                : `${row.data.cpu.toFixed(1)}%`
-                            }
-                          />
-                        </td>
-                        <td>
-                          <Meter
-                            value={
-                              isStale(row) ||
-                              row.data.memory === null ||
-                              !row.data.memoryLimit
-                                ? null
-                                : (row.data.memory / row.data.memoryLimit) * 100
-                            }
-                            label={
-                              isStale(row)
-                                ? '—'
-                                : `${bytes(row.data.memory)}${row.data.memoryLimit ? ` / ${bytes(row.data.memoryLimit)}` : ''}`
-                            }
-                          />
-                        </td>
-                        <td>
-                          <ContainerOperations scope={scope} container={row} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="table-footer">
-                <span>
-                  {data.length} container{data.length === 1 ? '' : 's'}
-                </span>
-                <span>Live Docker inventory</span>
-              </div>
-            </>
-          )
         )}
-      </div>
+        {data && data.length > 0 && (
+          <>
+            <TableCard>
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead className="border-b border-border text-muted-foreground">
+                  <tr>
+                    {[
+                      'Container',
+                      connector ? 'Project' : 'Host',
+                      'Status',
+                      'CPU',
+                      'Memory',
+                    ].map((label) => (
+                      <th key={label} scope="col" className="p-3">
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((row) => (
+                    <ContainerInventoryRow
+                      key={`${row.connector_id}:${row.container_id}`}
+                      row={row}
+                      scope={scope}
+                      projects={projects}
+                      stale={isStale(row)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </TableCard>
+            <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
+              <span>
+                {data.length} container{data.length === 1 ? '' : 's'}
+              </span>
+              <span>Live Docker inventory</span>
+            </div>
+          </>
+        )}
+      </section>
     </Shell>
   )
 }
+
+function ContainerInventoryRow({
+  row,
+  scope,
+  projects,
+  stale,
+}: {
+  row: ContainerRow
+  scope: ResourceScope
+  projects: Project[]
+  stale: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const assignedProject = projects.find(
+    (project) => project.slug === row.project,
+  )
+  return (
+    <Fragment>
+      <tr
+        className="cursor-pointer border-b border-border hover:bg-muted focus-within:bg-muted"
+        onClick={() => setOpen(true)}
+      >
+        <td className="min-w-48 p-3">
+          <Button
+            ref={trigger}
+            className="!border-0 !bg-transparent !p-0 text-left font-medium break-all hover:underline"
+            aria-label={`Manage ${row.data.name}`}
+            aria-haspopup="dialog"
+            onClick={() => setOpen(true)}
+          >
+            {row.data.name}
+          </Button>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {row.container_id.slice(0, 12)}
+          </p>
+          {scope.kind === 'project' && row.application && (
+            <a
+              className="mt-1 block text-xs text-muted-foreground hover:underline"
+              href={`/projects/${encodeURIComponent(scope.project)}/applications/${encodeURIComponent(row.application)}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              View {row.application} application
+            </a>
+          )}
+        </td>
+        <td className="p-3 break-words">
+          {scope.kind === 'connector' ? (
+            assignedProject ? (
+              <a
+                className="hover:underline"
+                href={`/projects/${encodeURIComponent(assignedProject.slug)}/compute/containers`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                {assignedProject.name}
+              </a>
+            ) : (
+              (row.project ?? 'Unassigned')
+            )
+          ) : (
+            <QuickTip portal content={row.connector_name}>
+              {row.host ?? row.connector_name}
+            </QuickTip>
+          )}
+        </td>
+        <td className="p-3 whitespace-nowrap">
+          <StatusBadge>{stale ? 'Stale' : row.data.state}</StatusBadge>
+        </td>
+        <td className="p-3">
+          <Meter
+            value={stale ? null : row.data.cpu}
+            label={
+              stale || row.data.cpu === null
+                ? '—'
+                : `${row.data.cpu.toFixed(1)}%`
+            }
+          />
+        </td>
+        <td className="p-3">
+          <Meter
+            value={
+              stale || row.data.memory === null || !row.data.memoryLimit
+                ? null
+                : (row.data.memory / row.data.memoryLimit) * 100
+            }
+            label={
+              stale
+                ? '—'
+                : `${bytes(row.data.memory)}${row.data.memoryLimit ? ` / ${bytes(row.data.memoryLimit)}` : ''}`
+            }
+          />
+        </td>
+      </tr>
+      <ContainerOperations
+        scope={scope}
+        container={row}
+        open={open}
+        onOpenChange={setOpen}
+        trigger={trigger}
+      />
+    </Fragment>
+  )
+}
+
 function Meter({ value, label }: { value: number | null; label: string }) {
   return (
-    <div className="metric">
+    <div className="flex min-w-24 flex-col gap-1.5">
       <span
         className="meter"
         data-tone={
@@ -224,7 +237,9 @@ function Meter({ value, label }: { value: number | null; label: string }) {
       >
         <span style={{ width: `${Math.max(0, Math.min(100, value ?? 0))}%` }} />
       </span>
-      <small>{label}</small>
+      <span className="text-xs whitespace-nowrap text-muted-foreground">
+        {label}
+      </span>
     </div>
   )
 }

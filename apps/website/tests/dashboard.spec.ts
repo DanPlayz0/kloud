@@ -245,13 +245,13 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
       [connectorID],
     )
     await page.reload()
-    await expect(page.locator('.status.stale')).toHaveCount(2)
+    await expect(page.getByText('Stale', { exact: true })).toHaveCount(2)
     await expect(page.getByText('12.5%', { exact: true })).toHaveCount(0)
     ws.send(JSON.stringify(snapshot))
     interval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(snapshot))
     }, 5000)
-    await expect(page.locator('.status.running')).toHaveCount(1, {
+    await expect(page.getByText('running', { exact: true })).toHaveCount(1, {
       timeout: 10000,
     })
     await page.route('**/api/projects/*/containers', (route) => route.abort())

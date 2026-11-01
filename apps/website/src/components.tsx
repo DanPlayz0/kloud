@@ -86,7 +86,7 @@ const groups = [
   [
     'STORAGE',
     [
-      ['Database', 'database'],
+      ['Databases', 'database'],
       ['Cache', 'activity'],
       ['Block storage', 'box'],
       ['Messaging', 'box'],
@@ -213,16 +213,6 @@ export function Shell({
                 </a>
                 <a
                   className={
-                    active === 'databases' ? 'nav-item active' : 'nav-item'
-                  }
-                  href={`/projects/${project}/databases`}
-                  aria-current={active === 'databases' ? 'page' : undefined}
-                >
-                  <Icon name="box" />
-                  Databases
-                </a>
-                <a
-                  className={
                     active === 'containers' ? 'nav-item active' : 'nav-item'
                   }
                   href={
@@ -266,7 +256,27 @@ export function Shell({
                           ?.can_manage_access,
                     )
                     .map(([name, icon]) =>
-                      name === 'Cloud DNS' && project ? (
+                      name === 'Databases' || name === 'Cache' ? (
+                        <a
+                          key={name}
+                          className={
+                            active ===
+                            (name === 'Cache' ? 'cache' : 'databases')
+                              ? 'nav-item active'
+                              : 'nav-item'
+                          }
+                          href={`/projects/${project}/${name === 'Cache' ? 'cache' : 'databases'}`}
+                          aria-current={
+                            active ===
+                            (name === 'Cache' ? 'cache' : 'databases')
+                              ? 'page'
+                              : undefined
+                          }
+                        >
+                          <Icon name={icon} />
+                          {name}
+                        </a>
+                      ) : name === 'Cloud DNS' && project ? (
                         <a
                           key={name}
                           className={`nav-item ${active === 'dns' ? 'active' : ''}`}
