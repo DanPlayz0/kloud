@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from './ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
 import { useState, type FormEvent } from 'react'
@@ -126,9 +127,11 @@ export function FactorVerification({
       {method && method !== 'passkey' && (
         <Form onSubmit={(e) => void verify(e)} className="flex flex-col gap-3">
           {method === 'email' && sentAt > 0 && (
-            <p role="status">
-              Code sent. Check your email. You can resend after 60 seconds.
-            </p>
+            <Alert role="status">
+              <AlertDescription>
+                Code sent. Check your email. You can resend after 60 seconds.
+              </AlertDescription>
+            </Alert>
           )}
           <Field>
             <FieldLabel>
@@ -145,12 +148,16 @@ export function FactorVerification({
               required
             />
           </Field>
-          <Button disabled={busy || (method === 'email' && !sentAt)}>
+          <Button
+            variant="primary"
+            disabled={busy || (method === 'email' && !sentAt)}
+          >
             {busy ? 'Verifying…' : 'Verify code'}
           </Button>
           {method === 'email' && (
             <Button
               type="button"
+              variant="outline"
               disabled={busy}
               onClick={() => void choose('email')}
             >
@@ -168,7 +175,7 @@ export function FactorVerification({
           </p>
         )}
       <ErrorMessage message={error} />
-      <Button type="button" disabled={busy} onClick={onCancel}>
+      <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>
         Start again
       </Button>
     </section>

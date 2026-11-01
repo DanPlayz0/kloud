@@ -1,3 +1,4 @@
+import { CollapsibleSection } from './components/ui/collapsible'
 import { Separator } from '@/components/ui/separator'
 import { Field, FieldLabel, FieldGroup } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
@@ -144,22 +145,28 @@ export function DeploymentSettings({
             </p>
           )}
           {data.builds.map((build) => (
-            <details
+            <CollapsibleSection
               key={build.id}
-              className="rounded border border-border bg-background p-3"
+              title={`Build ${build.commit.slice(0, 7)}`}
+              summary={
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono">{build.commit.slice(0, 7)}</span>{' '}
+                  · <StatusBadge deployment>{build.status}</StatusBadge> ·{' '}
+                  {new Date(build.created).toLocaleString()}
+                </span>
+              }
             >
-              <summary className="cursor-pointer">
-                <span className="font-mono">{build.commit.slice(0, 7)}</span> ·{' '}
-                <StatusBadge deployment>{build.status}</StatusBadge> ·{' '}
-                {new Date(build.created).toLocaleString()}
-              </summary>
-              <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs text-muted-foreground">
+              <pre
+                tabIndex={0}
+                aria-label={`Build ${build.commit.slice(0, 7)} log`}
+                className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs text-muted-foreground"
+              >
                 {build.log ||
                   (build.status === 'running'
                     ? 'Building on connector. Logs will appear when the build finishes.'
                     : 'Waiting for an enabled deployment worker.')}
               </pre>
-            </details>
+            </CollapsibleSection>
           ))}
         </Card>
       )}

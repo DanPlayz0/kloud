@@ -1,3 +1,5 @@
+import { useConfirmation } from '../components/ui/confirmation-dialog'
+import { Alert, AlertDescription } from '../components/ui/alert'
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
@@ -31,6 +33,7 @@ export const Route = createFileRoute('/_app/account/security')({
 })
 type Enrollment = { method: 'email' | 'totp'; secret?: string; qr?: string }
 function AccountSecurity() {
+  const { confirm: confirmAction, confirmationDialog } = useConfirmation()
   const { user, projects, security: initial } = Route.useLoaderData()
   const [security, setSecurity] = useState(initial),
     [unlocked, setUnlocked] = useState(false)
@@ -140,6 +143,7 @@ function AccountSecurity() {
   const disabled = busy || !unlocked
   return (
     <>
+      {confirmationDialog}
       <div className="mx-auto w-full max-w-3xl flex flex-col gap-6 p-6">
         <div>
           <h1 className="text-2xl font-semibold">Account security</h1>
@@ -149,14 +153,14 @@ function AccountSecurity() {
           </p>
         </div>
         <ErrorMessage message={error} />
-        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+        <Card className="flex flex-col gap-4">
           <CardHeader>
             <CardTitle asChild>
               <h2 className="text-lg font-semibold">Shared account</h2>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="mb-4 text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Your account and security settings follow you across
               organizations. Use this email address for organization
               invitations.
@@ -211,9 +215,13 @@ function AccountSecurity() {
             </Form>
           </CardContent>
         </Card>
-        {notice && <p role="status">{notice}</p>}
+        {notice && (
+          <Alert role="status">
+            <AlertDescription>{notice}</AlertDescription>
+          </Alert>
+        )}
         {codes && (
-          <Card className="flex flex-col gap-3 border-border bg-card p-5">
+          <Card className="flex flex-col gap-4">
             <CardHeader>
               <CardTitle asChild>
                 <h2 className="text-lg font-semibold">
@@ -251,7 +259,7 @@ function AccountSecurity() {
             </CardContent>
           </Card>
         )}
-        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+        <Card className="flex flex-col gap-4">
           <CardHeader>
             <CardTitle asChild>
               <h2 className="text-lg font-semibold">Confirm your identity</h2>
@@ -292,7 +300,7 @@ function AccountSecurity() {
             )}
           </CardContent>
         </Card>
-        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+        <Card className="flex flex-col gap-4">
           <CardHeader>
             <CardTitle asChild>
               <h2 className="text-lg font-semibold">
@@ -350,7 +358,7 @@ function AccountSecurity() {
             )}
           </CardContent>
         </Card>
-        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+        <Card className="flex flex-col gap-4">
           <CardHeader>
             <CardTitle asChild>
               <h2 className="text-lg font-semibold">
@@ -396,7 +404,7 @@ function AccountSecurity() {
           </CardContent>
         </Card>
         {enrollment && (
-          <Card className="flex flex-col gap-3 border-border bg-card p-5">
+          <Card className="flex flex-col gap-4">
             <CardHeader>
               <CardTitle asChild>
                 <h2 className="text-lg font-semibold">
@@ -446,7 +454,7 @@ function AccountSecurity() {
             </CardContent>
           </Card>
         )}
-        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+        <Card className="flex flex-col gap-4">
           <CardHeader>
             <CardTitle asChild>
               <h2 className="text-lg font-semibold">
@@ -514,7 +522,7 @@ function AccountSecurity() {
             </Button>
           </CardContent>
         </Card>
-        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+        <Card className="flex flex-col gap-4">
           <CardHeader>
             <CardTitle asChild>
               <h2 className="text-lg font-semibold">
@@ -540,11 +548,15 @@ function AccountSecurity() {
             </p>
             <Button
               disabled={disabled || !security.methods.length}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
-                    'Disable all second factors and allow password-only login?',
-                  )
+                  await confirmAction({
+                    title: 'Disable second factors',
+                    description:
+                      'Disable all second factors and allow password-only login?',
+                    actionLabel: 'Disable second factors',
+                    variant: 'destructive',
+                  })
                 )
                   void run(async () =>
                     finish(

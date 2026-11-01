@@ -1,3 +1,4 @@
+import { useConfirmation } from './components/ui/confirmation-dialog'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useState } from 'react'
 import {
@@ -23,6 +24,7 @@ export function EnvironmentEditor({
   /** New, locally entered values do not require revealing saved secrets. */
   allowPlaintext?: boolean
 }) {
+  const { confirm, confirmationDialog } = useConfirmation()
   const [mode, setMode] = useState<'normal' | 'developer'>('normal')
   const [rows, setRows] = useState(() => Object.entries(value))
   const [text, setText] = useState('')
@@ -57,9 +59,12 @@ export function EnvironmentEditor({
     if (!allowPlaintext && !revealed) {
       if (!revealUrl) return
       if (
-        !window.confirm(
-          'Load the complete plaintext variables into this editor?',
-        )
+        !(await confirm({
+          title: 'Reveal service variables?',
+          description:
+            'Load the complete plaintext variables into this editor?',
+          actionLabel: 'Reveal variables',
+        }))
       )
         return
       setBusy(true)
@@ -91,7 +96,8 @@ export function EnvironmentEditor({
     }
   }
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-4">
+      {confirmationDialog}
       <ToggleGroup
         type="single"
         value={mode}
@@ -161,7 +167,10 @@ export function EnvironmentEditor({
       ) : (
         <>
           {rows.map(([key, v], index) => (
-            <FieldGroup key={index} className="flex items-end gap-2 flex-row">
+            <FieldGroup
+              key={index}
+              className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
+            >
               <Field className="min-w-0 flex-1">
                 <FieldLabel>Variable name</FieldLabel>
                 <Input

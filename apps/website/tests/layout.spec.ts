@@ -353,3 +353,41 @@ for (const width of [320, 390, 768, 1280]) {
     ).toBeGreaterThanOrEqual(16)
   })
 }
+
+test('mobile navigation traps keyboard focus and restores its trigger after dismissal', async ({
+  page,
+}) => {
+  await fixtures(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(`/projects/${project.slug}/compute/serverless`)
+  const trigger = page.getByRole('button', { name: 'Toggle navigation' })
+  const navigation = page.getByRole('dialog', {
+    name: 'Navigation',
+    exact: true,
+  })
+  await expect(navigation).toHaveCount(0)
+  await expect(
+    page.getByRole('navigation', { name: 'Main navigation' }),
+  ).toHaveCount(0)
+  await trigger.click()
+  await expect(navigation).toBeVisible()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  for (let step = 0; step < 12; step++) {
+    await page.keyboard.press('Tab')
+    await expect
+      .poll(() =>
+        navigation.evaluate((element) =>
+          element.contains(document.activeElement),
+        ),
+      )
+      .toBe(true)
+  }
+  await page.keyboard.press('Escape')
+  await expect(navigation).toHaveCount(0)
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await page.getByRole('button', { name: 'Close navigation' }).click()
+  await expect(navigation).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+})

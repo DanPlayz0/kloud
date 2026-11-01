@@ -121,8 +121,17 @@ test('administration reuses one connection across project teams, edits availabil
     page.getByRole('cell', { name: 'Delegated services only' }).first(),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Manage Production GitHub' }).click()
-  page.once('dialog', (dialog) => dialog.accept())
   await page
+    .getByRole('button', { name: 'Revoke connection', exact: true })
+    .click()
+  const confirmation = page.getByRole('alertdialog', {
+    name: 'Revoke Production GitHub?',
+  })
+  await expect(confirmation).toBeVisible()
+  await expect(
+    confirmation.getByRole('button', { name: 'Cancel', exact: true }),
+  ).toBeFocused()
+  await confirmation
     .getByRole('button', { name: 'Revoke connection', exact: true })
     .click()
   await expect(

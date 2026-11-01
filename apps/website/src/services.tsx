@@ -1,3 +1,4 @@
+import QuickTip from './components/quickTip'
 import { Link } from '@tanstack/react-router'
 import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty'
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
@@ -14,7 +15,7 @@ import {
 } from './api'
 import { ErrorMessage, usePolling, bytes } from './components'
 import type { ContainerRow } from './api'
-import { Button, Input } from './components/ui/controls'
+import { Button, Input, Textarea } from './components/ui/controls'
 import { Card } from './components/ui/card'
 import {
   CardHeader,
@@ -138,7 +139,11 @@ export function ServicesPage({
             return (
               <Card key={service.slug} className="flex flex-col gap-4">
                 <CardHeader className="flex-row items-start gap-3">
-                  <Boxes size={20} />
+                  <Boxes
+                    size={20}
+                    className="shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                   <div className="min-w-0">
                     <CardTitle asChild>
                       <Link
@@ -230,26 +235,34 @@ export function ServicesPage({
                     </Link>
                   </Button>
                   {service.can_update && (
-                    <Button
-                      aria-label={`Edit ${service.name}`}
-                      onClick={() => {
-                        setError('')
-                        setEditing(service)
-                      }}
-                    >
-                      <Pencil data-icon="inline-start" />
-                    </Button>
+                    <QuickTip content={`Edit ${service.name}`}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Edit ${service.name}`}
+                        onClick={() => {
+                          setError('')
+                          setEditing(service)
+                        }}
+                      >
+                        <Pencil aria-hidden="true" />
+                      </Button>
+                    </QuickTip>
                   )}
                   {service.can_delete && (
-                    <Button
-                      aria-label={`Remove ${service.name}`}
-                      onClick={() => {
-                        setError('')
-                        setRemoving(service)
-                      }}
-                    >
-                      <Trash2 data-icon="inline-start" />
-                    </Button>
+                    <QuickTip content={`Remove ${service.name}`}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove ${service.name}`}
+                        onClick={() => {
+                          setError('')
+                          setRemoving(service)
+                        }}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </QuickTip>
                   )}
                 </CardFooter>
               </Card>
@@ -297,14 +310,16 @@ export function ServicesPage({
                 </Field>
                 <Field>
                   <FieldLabel>Description</FieldLabel>
-                  <Input
+                  <Textarea
+                    rows={3}
+                    className="min-h-24 font-sans"
                     name="description"
                     maxLength={1000}
                     defaultValue={editing.description}
                   />
                 </Field>
                 <ErrorMessage message={error} />
-                <div className="flex justify-end gap-2">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <Button type="button" onClick={() => setEditing(null)}>
                     Cancel
                   </Button>
@@ -331,7 +346,7 @@ export function ServicesPage({
             Running containers and volumes remain on their host.
           </DialogDescription>
           <ErrorMessage message={error} />
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button disabled={busy} onClick={() => setRemoving(null)}>
               Cancel
             </Button>

@@ -1,6 +1,12 @@
+import {
+  Field,
+  FieldContent,
+  FieldLabel,
+  FieldDescription,
+} from './components/ui/field'
 import { useState } from 'react'
 import { api, hasServer, type Connector, type User } from './api'
-import { Button, Checkbox, Label } from './components/ui/controls'
+import { Button, Checkbox } from './components/ui/controls'
 import { ErrorMessage } from './components'
 
 export function ConnectorUpdateControls({
@@ -79,7 +85,7 @@ export function ConnectorUpdateControls({
       </dl>
       {updater?.configured ? (
         <>
-          <Label className="flex items-center gap-2">
+          <Field orientation="horizontal" data-disabled={!editable || busy}>
             <Checkbox
               checked={enabled}
               disabled={!editable || busy}
@@ -87,12 +93,14 @@ export function ConnectorUpdateControls({
                 void save('configure', value === true)
               }
             />
-            Automatic connector updates
-          </Label>
-          <p className="text-sm text-muted-foreground">
-            Uses the trusted updater configured on this server. Running version
-            and commit change after a successful restart.
-          </p>
+            <FieldContent>
+              <FieldLabel>Automatic connector updates</FieldLabel>
+              <FieldDescription>
+                Uses the trusted updater configured on this server. Running
+                version and commit change after a successful restart.
+              </FieldDescription>
+            </FieldContent>
+          </Field>
           {editable && (
             <div>
               <Button

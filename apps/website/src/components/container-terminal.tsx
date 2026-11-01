@@ -20,7 +20,14 @@ export function ContainerTerminal({
       session: string | undefined,
       timer: ReturnType<typeof setTimeout> | undefined,
       queue = Promise.resolve()
+    const colors = getComputedStyle(element.current)
     const term = new Terminal({
+        screenReaderMode: true,
+        theme: {
+          background: colors.backgroundColor,
+          foreground: colors.color,
+          cursor: colors.color,
+        },
         cursorBlink: true,
         convertEol: false,
         fontSize: 13,
@@ -96,6 +103,7 @@ export function ContainerTerminal({
   return (
     <div
       ref={element}
+      role="region"
       className="h-96 w-full min-w-0 overflow-hidden rounded-md border border-border bg-background p-2"
       aria-label={label}
     />

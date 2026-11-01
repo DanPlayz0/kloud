@@ -1,3 +1,5 @@
+import { useConfirmation } from './components/ui/confirmation-dialog'
+import { CollapsibleSection } from './components/ui/collapsible'
 import { Separator } from '@/components/ui/separator'
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
@@ -42,12 +44,21 @@ export function RepositoryOnboarding({
   value: DeploymentConfig
   onChange: (value: DeploymentConfig) => void
 }) {
+  const { confirm, confirmationDialog } = useConfirmation()
   const base = `/projects/${project}/git-connections`
   const [connections, setConnections] = useState<Connection[]>([])
   const [user, setUser] = useState<User>()
   const canCreate = !!user && hasServer(user, 'git.create')
   const [mode, setMode] = useState<'app' | 'pat' | 'selfhost' | 'legacy'>('app')
   const [connection, setConnection] = useState(value.connection_id ?? '')
+  const [delegations, setDelegations] = useState(value.repository)
+  useEffect(
+    () =>
+      setDelegations(
+        value.connection_id === connection ? value.repository : '',
+      ),
+    [connection],
+  )
   const [url, setUrl] = useState(
     value.repository
       ? `${value.provider_url ?? 'https://github.com'}/${value.repository}`
@@ -162,7 +173,8 @@ export function RepositoryOnboarding({
     setBranchPage(data.next_page)
   }
   return (
-    <Card size="compact" className="flex flex-col gap-4">
+    <Card size="compact" className="flex min-w-0 flex-col gap-4">
+      {confirmationDialog}
       <CardHeader>
         <CardTitle asChild>
           <h3 className="font-semibold">Connect repository</h3>
@@ -217,19 +229,23 @@ export function RepositoryOnboarding({
               />
             </Field>
             <p className="text-xs text-muted-foreground">
-              New or changed legacy repositories require a organization administrator.
-              Existing approved repository/host pairs remain usable by app
-              deployers. Selecting a scoped connection retires this app’s legacy
-              source grants.
+              New or changed legacy repositories require an organization
+              administrator. Existing approved repository/host pairs remain
+              usable by app deployers. Selecting a scoped connection retires
+              this app’s legacy source grants.
             </p>
             <Button
               type="button"
               disabled={busy}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  window.confirm(
-                    'Revoke this legacy repository/host authorization? Queued builds using it will be blocked. Organization administrator permission is required.',
-                  )
+                  await confirm({
+                    title: 'Revoke legacy authorization?',
+                    description:
+                      'Queued builds using this repository and host authorization will be blocked. Organization administrator permission is required.',
+                    actionLabel: 'Revoke authorization',
+                    variant: 'destructive',
+                  })
                 )
                   void run(async () => {
                     await api(`${base}/legacy/authorization`, 'DELETE', {
@@ -287,7 +303,7 @@ export function RepositoryOnboarding({
             {canCreate ? (
               <Button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   setAdding(!adding)
                   setProvider(
                     mode === 'app'
@@ -580,11 +596,7 @@ export function RepositoryOnboarding({
               </Button>
             )}
             {connection && (
-              <details className="pt-3">
-                <summary className="cursor-pointer text-sm">
-                  Connection access and revocation
-                </summary>
-                <Separator className="basis-full" />
+              <CollapsibleSection title="Connection access and revocation">
                 <FieldGroup className="mt-3 flex flex-col gap-3">
                   <p className="text-xs text-muted-foreground">
                     The owner or shared-connection administrator can delegate
@@ -599,26 +611,23 @@ export function RepositoryOnboarding({
                     <Textarea
                       data-git-delegations
                       rows={3}
-                      defaultValue={
-                        value.connection_id === connection
-                          ? value.repository
-                          : ''
-                      }
+                      value={delegations}
+                      onChange={(event) => setDelegations(event.target.value)}
                     />
                   </Field>
                   <Button
                     type="button"
                     disabled={busy}
-                    onClick={(event) => {
-                      const text = (
-                        event.currentTarget.parentElement!.querySelector(
-                          '[data-git-delegations]',
-                        ) as HTMLTextAreaElement
-                      ).value
+                    onClick={async () => {
+                      const text = delegations
                       if (
-                        !window.confirm(
-                          'Replace this app’s repository delegation list? Omitted bindings will be revoked for future deployments.',
-                        )
+                        !(await confirm({
+                          title: 'Replace repository delegations?',
+                          description:
+                            'Omitted bindings will be revoked for future deployments.',
+                          actionLabel: 'Replace delegations',
+                          variant: 'destructive',
+                        }))
                       )
                         return
                       void run(async () => {
@@ -637,11 +646,15 @@ export function RepositoryOnboarding({
                   <Button
                     type="button"
                     disabled={busy}
-                    onClick={() => {
+                    onClick={async () => {
                       if (
-                        window.confirm(
-                          'Revoke this connection? Future deployments will stop using it; serving apps stay running.',
-                        )
+                        await confirm({
+                          title: 'Revoke connection?',
+                          description:
+                            'Future deployments will stop using this connection. Serving apps stay running.',
+                          actionLabel: 'Revoke connection',
+                          variant: 'destructive',
+                        })
                       )
                         void run(async () => {
                           await api(`${base}/${connection}`, 'DELETE')
@@ -653,7 +666,7 @@ export function RepositoryOnboarding({
                     Revoke connection
                   </Button>
                 </FieldGroup>
-              </details>
+              </CollapsibleSection>
             )}
             {value.connection_id && (
               <div className="flex flex-col gap-3   pt-3">

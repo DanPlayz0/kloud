@@ -26,7 +26,7 @@ export function InventoryCard({
 }) {
   return (
     <Card size="flush" className="inventory-card">
-      <CardHeader className="inventory-card-header">
+      <CardHeader className="inventory-card-header flex-row flex-wrap items-center gap-3 p-5">
         <div className="inventory-card-icon bg-muted text-muted-foreground border-border">
           <Icon size={20} aria-hidden="true" />
         </div>
@@ -40,6 +40,7 @@ export function InventoryCard({
       </CardHeader>
       <CardContent>
         <Form
+          layout="inline"
           className="inventory-card-form border-border"
           aria-label={`Assignment for ${name}`}
           onSubmit={onSubmit}

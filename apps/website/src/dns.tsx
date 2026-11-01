@@ -1,3 +1,5 @@
+import { useConfirmation } from './components/ui/confirmation-dialog'
+import { Empty, EmptyHeader, EmptyDescription } from './components/ui/empty'
 import { Separator } from '@/components/ui/separator'
 import {
   Table,
@@ -152,7 +154,7 @@ export function DnsRuleEditor({
           </li>
         ))}
       </ul>
-      <FieldGroup className="flex flex-wrap items-end gap-3 flex-row">
+      <FieldGroup className="grid min-w-0 gap-4 sm:grid-cols-2 sm:items-end">
         <Field>
           <FieldLabel>Scope</FieldLabel>
           <NativeSelect
@@ -245,7 +247,7 @@ export function DnsRuleEditor({
           !actions.some((a) => availableActions.includes(a)) ||
           (kind !== 'zone' && !target)
         }
-        onClick={() => {
+        onClick={async () => {
           onChange([
             ...rules,
             {
@@ -275,6 +277,7 @@ export function DnsProviders({
   projects: Project[]
   project?: string
 }) {
+  const { confirm, confirmationDialog } = useConfirmation()
   const base = project
     ? `/projects/${project}/dns/providers`
     : '/admin/dns/providers'
@@ -305,6 +308,7 @@ export function DnsProviders({
   }
   return (
     <div className="flex flex-col gap-5">
+      {confirmationDialog}
       <ErrorMessage message={error || loadError || projectChoices.error} />
       {notice && <p role="status">{notice}</p>}
       <div className="flex flex-col gap-3">
@@ -358,7 +362,11 @@ export function DnsProviders({
       </Form>
       {!data && !loadError && <p>Loading providers…</p>}
       {data?.length === 0 && (
-        <p className="text-muted-foreground">No DNS providers connected.</p>
+        <Empty className="border border-border">
+          <EmptyHeader>
+            <EmptyDescription>No DNS providers connected.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
       {data?.map((p) => (
         <Card size="compact" className="flex flex-col gap-3" key={p.id}>
@@ -394,9 +402,14 @@ export function DnsProviders({
             <Button
               variant="destructive"
               disabled={busy}
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  confirm(`Disconnect ${p.name}? Live DNS records will remain.`)
+                  await confirm({
+                    title: `Disconnect ${p.name}?`,
+                    description: 'Live DNS records will remain.',
+                    actionLabel: 'Disconnect provider',
+                    variant: 'destructive',
+                  })
                 )
                   void action(`${base}/${p.id}`, 'DELETE')
               }}
@@ -467,6 +480,7 @@ function ProviderZones({
   action: (path: string, method: string, body?: unknown) => Promise<boolean>
   disabled: boolean
 }) {
+  const { confirm, confirmationDialog } = useConfirmation()
   const { data, error } = usePolling<ManagedZone[]>(`${base}/zones`, revision)
   const [zone, setZone] = useState(''),
     [target, setTarget] = useState(''),
@@ -493,7 +507,8 @@ function ProviderZones({
         ),
     ) ?? []
   return (
-    <FieldGroup className="flex flex-col gap-4   pt-4">
+    <FieldGroup className="flex min-w-0 flex-col gap-4 pt-4">
+      {confirmationDialog}
       <Separator className="basis-full" />
       <ErrorMessage message={error} />
       <Field>
@@ -538,7 +553,7 @@ function ProviderZones({
               </ul>
               <Button
                 disabled={disabled}
-                onClick={() => {
+                onClick={async () => {
                   setTarget(d.project)
                   setEditing(true)
                 }}
@@ -548,11 +563,14 @@ function ProviderZones({
               <Button
                 disabled={disabled}
                 variant="destructive"
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    confirm(
-                      'Revoke this project’s zone access? Live DNS records will remain.',
-                    )
+                    await confirm({
+                      title: 'Revoke project zone access?',
+                      description: 'Live DNS records will remain.',
+                      actionLabel: 'Revoke access',
+                      variant: 'destructive',
+                    })
                   )
                     void action(
                       `${base}/zones/${zone}/projects/${d.project}`,
@@ -703,7 +721,7 @@ export function DnsPage({
             access, and members need DNS permissions.
           </p>
         )}
-        <FieldGroup className="flex flex-wrap gap-3 items-end flex-row">
+        <FieldGroup className="grid min-w-0 gap-4 sm:grid-cols-2 sm:items-end">
           <Field>
             <FieldLabel>Domain</FieldLabel>
             <NativeSelect
@@ -771,9 +789,19 @@ function DnsRecords({
   setError: (v: string) => void
   refresh: () => void
 }) {
+  const { confirm, confirmationDialog } = useConfirmation()
   const { data, error } = usePolling<ZoneRecords>(base, revision)
   async function remove(record: DnsLiveRecord) {
-    if (!confirm(`Delete ${record.type} ${record.name}?`)) return
+    if (
+      !(await confirm({
+        title: `Delete ${record.type} ${record.name}?`,
+        description:
+          'This DNS record will be removed from the provider. Services relying on it may become unreachable.',
+        actionLabel: 'Delete record',
+        variant: 'destructive',
+      }))
+    )
+      return
     setBusy(true)
     setError('')
     try {
@@ -794,8 +822,9 @@ function DnsRecords({
   )
   return (
     <div className="flex flex-col gap-4">
+      {confirmationDialog}
       <ErrorMessage message={error} />
-      <FieldGroup className="flex flex-wrap gap-3 items-end flex-row">
+      <FieldGroup className="grid min-w-0 gap-4 sm:grid-cols-2 sm:items-end">
         <Field>
           <FieldLabel>Search records</FieldLabel>
           <Input value={query} onChange={(e) => setQuery(e.target.value)} />

@@ -1,3 +1,10 @@
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from './components/ui/dialog'
+import { Badge } from './components/ui/badge'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   DropdownMenu,
@@ -43,7 +50,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from './components/ui/breadcrumb'
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, useRef, type ReactNode } from 'react'
 import {
   api,
   hasServer,
@@ -136,320 +143,363 @@ export function Shell({
   const [open, setOpen] = useState(false),
     [account, setAccount] = useState(false),
     [error, setError] = useState('')
+  const [mobile, setMobile] = useState(
+    () => window.matchMedia('(width < 720px)').matches,
+  )
+  const navigationTrigger = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    const query = window.matchMedia('(width < 720px)')
+    const update = () => {
+      setMobile(query.matches)
+      if (!query.matches) setOpen(false)
+    }
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
   const pathname = useLocation({ select: (location) => location.pathname })
   useEffect(() => {
     setOpen(false)
     setAccount(false)
   }, [pathname])
-  return (
-    <div className="app-shell bg-background text-foreground">
-      <Button
-        className="mobile-toggle"
-        onClick={() => setOpen(!open)}
-        aria-label="Toggle navigation"
-        aria-expanded={open}
-      >
-        <Icon data-icon="inline-start" icon={Menu} />
-      </Button>
-      {open && (
-        <Button
-          className="sidebar-overlay"
-          aria-label="Close navigation"
-          onClick={() => setOpen(false)}
-        />
+  const navigation = (
+    <aside
+      id="sidebar-navigation"
+      className={cn(
+        'sidebar bg-sidebar border-sidebar-border',
+        open ? 'open' : '',
+        mobile ? 'relative h-full w-full translate-x-0 border-r-0' : '',
       )}
-      <aside
-        className={cn(
-          'sidebar bg-sidebar border-sidebar-border',
-          open ? 'open' : '',
+    >
+      <OrganizationSwitcher admin={user.admin} />
+      <ProjectPicker
+        user={user}
+        projects={projects}
+        project={project}
+        connector={currentConnector}
+        connectors={Array.isArray(connectors) ? connectors : []}
+        connectorError={connectorError}
+        showConnectors={canBrowseConnectors(user)}
+      />
+      <nav aria-label="Main navigation">
+        {currentConnector && (
+          <div className="nav-group">
+            <p>CONNECTOR</p>
+            {[
+              ['Overview', 'overview', Network] as const,
+              ...(canBrowseConnectorResources(user)
+                ? [
+                    ['Containers', 'compute/containers', Server] as const,
+                    ['PM2', 'compute/pm2', History] as const,
+                  ]
+                : []),
+            ].map(([label, path, icon]) => (
+              <Link
+                key={path}
+                className={cn(active === path ? 'nav-item active' : 'nav-item')}
+                aria-current={active === path ? 'page' : undefined}
+                to={
+                  path === 'overview'
+                    ? '/connectors/$connectorId/overview'
+                    : path === 'compute/pm2'
+                      ? '/connectors/$connectorId/compute/pm2'
+                      : '/connectors/$connectorId/compute/containers'
+                }
+                params={{ connectorId: currentConnector.id }}
+              >
+                <Icon icon={icon as LucideIcon} />
+                {label}
+              </Link>
+            ))}
+          </div>
         )}
-      >
-        <OrganizationSwitcher admin={user.admin} />
-        <ProjectPicker
-          user={user}
-          projects={projects}
-          project={project}
-          connector={currentConnector}
-          connectors={Array.isArray(connectors) ? connectors : []}
-          connectorError={connectorError}
-          showConnectors={canBrowseConnectors(user)}
-        />
-        <nav aria-label="Main navigation">
-          {currentConnector && (
+        {project && (
+          <>
             <div className="nav-group">
-              <p>CONNECTOR</p>
-              {[
-                ['Overview', 'overview', Network] as const,
-                ...(canBrowseConnectorResources(user)
-                  ? [
-                      ['Containers', 'compute/containers', Server] as const,
-                      ['PM2', 'compute/pm2', History] as const,
-                    ]
-                  : []),
-              ].map(([label, path, icon]) => (
-                <Link
-                  key={path}
-                  className={cn(
-                    active === path ? 'nav-item active' : 'nav-item',
+              <p>COMPUTE</p>
+              <Link
+                className={cn(
+                  active === 'services' ? 'nav-item active' : 'nav-item',
+                )}
+                to="/projects/$projectSlug/services"
+                params={{ projectSlug: project }}
+                aria-current={active === 'services' ? 'page' : undefined}
+              >
+                <Icon icon={Server} />
+                Services
+              </Link>
+              <Link
+                className={cn(
+                  active === 'containers' ? 'nav-item active' : 'nav-item',
+                )}
+                to="/projects/$projectSlug/compute/containers"
+                params={{ projectSlug: project }}
+                aria-current={active === 'containers' ? 'page' : undefined}
+              >
+                <Icon />
+                Containers
+              </Link>
+              <Link
+                className={cn(
+                  active === 'serverless' ? 'nav-item active' : 'nav-item',
+                )}
+                to="/projects/$projectSlug/compute/serverless"
+                params={{ projectSlug: project }}
+                aria-current={active === 'serverless' ? 'page' : undefined}
+              >
+                <Icon icon={Network} />
+                Serverless
+                <Badge variant="outline" className="ml-auto text-sidebar-muted">
+                  Soon
+                </Badge>
+              </Link>
+              <Link
+                className={cn(
+                  active === 'pm2' ? 'nav-item active' : 'nav-item',
+                )}
+                to="/projects/$projectSlug/compute/pm2"
+                params={{ projectSlug: project }}
+                aria-current={active === 'pm2' ? 'page' : undefined}
+              >
+                <Icon icon={History} />
+                PM2
+              </Link>
+            </div>
+            {groups.map(([label, items]) => (
+              <div className="nav-group" key={label}>
+                <p>{label}</p>
+                {items
+                  .filter(
+                    ([name]) =>
+                      name !== 'Access' ||
+                      !project ||
+                      projects.find((p) => p.slug === project)
+                        ?.can_manage_access,
+                  )
+                  .map(([name, icon]) =>
+                    name === 'Databases' || name === 'Cache' ? (
+                      <Link
+                        key={name}
+                        className={cn(
+                          active === (name === 'Cache' ? 'cache' : 'databases')
+                            ? 'nav-item active'
+                            : 'nav-item',
+                        )}
+                        to={
+                          name === 'Cache'
+                            ? '/projects/$projectSlug/cache'
+                            : '/projects/$projectSlug/databases'
+                        }
+                        params={{ projectSlug: project }}
+                        aria-current={
+                          active === (name === 'Cache' ? 'cache' : 'databases')
+                            ? 'page'
+                            : undefined
+                        }
+                      >
+                        <Icon icon={icon as LucideIcon} />
+                        {name}
+                      </Link>
+                    ) : name === 'Cloud DNS' && project ? (
+                      <Link
+                        key={name}
+                        className={cn(
+                          'nav-item',
+                          active === 'dns' ? 'active' : '',
+                        )}
+                        to="/projects/$projectSlug/dns"
+                        params={{ projectSlug: project }}
+                        aria-current={active === 'dns' ? 'page' : undefined}
+                      >
+                        <Icon icon={icon as LucideIcon} />
+                        Cloud DNS
+                      </Link>
+                    ) : name === 'Access' &&
+                      project &&
+                      projects.find((p) => p.slug === project)
+                        ?.can_manage_access ? (
+                      <Link
+                        key={name}
+                        className={cn(
+                          'nav-item',
+                          active === 'access' ? 'active' : '',
+                        )}
+                        to="/projects/$projectSlug/access"
+                        params={{ projectSlug: project }}
+                        aria-current={active === 'access' ? 'page' : undefined}
+                      >
+                        <Icon icon={icon as LucideIcon} />
+                        Access
+                      </Link>
+                    ) : (
+                      <QuickTip
+                        key={name}
+                        portal
+                        content={
+                          name === 'Access'
+                            ? 'Select a project to manage access'
+                            : 'Coming in a later update'
+                        }
+                      >
+                        <span
+                          tabIndex={0}
+                          className="block w-full cursor-not-allowed"
+                        >
+                          <Button
+                            variant="ghost"
+                            className="nav-item deferred pointer-events-none justify-start"
+                            disabled
+                          >
+                            <Icon
+                              data-icon="inline-start"
+                              icon={icon as LucideIcon}
+                            />
+                            {name}
+                            <Badge
+                              variant="outline"
+                              className="ml-auto text-sidebar-muted"
+                            >
+                              Soon
+                            </Badge>
+                          </Button>
+                        </span>
+                      </QuickTip>
+                    ),
                   )}
-                  aria-current={active === path ? 'page' : undefined}
-                  to={
-                    path === 'overview'
-                      ? '/connectors/$connectorId/overview'
-                      : path === 'compute/pm2'
-                        ? '/connectors/$connectorId/compute/pm2'
-                        : '/connectors/$connectorId/compute/containers'
-                  }
-                  params={{ connectorId: currentConnector.id }}
+              </div>
+            ))}
+          </>
+        )}
+        {Object.values(adminCapabilities).some((capability) =>
+          hasServer(user, capability),
+        ) && (
+          <div className="nav-group">
+            <p>ADMINISTRATION</p>
+            {(
+              [
+                ['Projects', 'projects', Server],
+                ['Users', 'users', Users],
+                ['Connectors', 'connectors', Network],
+                ['Inventory', 'containers', Database],
+                ['DNS providers', 'dns', Globe],
+                ['Git connections', 'git-connections', GitBranch],
+              ] as const
+            )
+              .filter(([, path]) => hasServer(user, adminCapabilities[path!]!))
+              .map(([label, path, icon]) => (
+                <Link
+                  className={cn(
+                    'nav-item',
+                    active === `admin-${path}` ? 'active' : '',
+                  )}
+                  key={path}
+                  to="/admin/$section"
+                  params={{ section: path }}
+                  aria-current={active === `admin-${path}` ? 'page' : undefined}
                 >
                   <Icon icon={icon as LucideIcon} />
                   {label}
                 </Link>
               ))}
-            </div>
-          )}
-          {project && (
-            <>
-              <div className="nav-group">
-                <p>COMPUTE</p>
-                <Link
-                  className={cn(
-                    active === 'services' ? 'nav-item active' : 'nav-item',
-                  )}
-                  to="/projects/$projectSlug/services"
-                  params={{ projectSlug: project }}
-                  aria-current={active === 'services' ? 'page' : undefined}
-                >
-                  <Icon icon={Server} />
-                  Services
-                </Link>
-                <Link
-                  className={cn(
-                    active === 'containers' ? 'nav-item active' : 'nav-item',
-                  )}
-                  to="/projects/$projectSlug/compute/containers"
-                  params={{ projectSlug: project }}
-                  aria-current={active === 'containers' ? 'page' : undefined}
-                >
-                  <Icon />
-                  Containers
-                </Link>
-                <Link
-                  className={cn(
-                    active === 'serverless' ? 'nav-item active' : 'nav-item',
-                  )}
-                  to="/projects/$projectSlug/compute/serverless"
-                  params={{ projectSlug: project }}
-                  aria-current={active === 'serverless' ? 'page' : undefined}
-                >
-                  <Icon icon={Network} />
-                  Serverless<span className="soon">Soon</span>
-                </Link>
-                <Link
-                  className={cn(
-                    active === 'pm2' ? 'nav-item active' : 'nav-item',
-                  )}
-                  to="/projects/$projectSlug/compute/pm2"
-                  params={{ projectSlug: project }}
-                  aria-current={active === 'pm2' ? 'page' : undefined}
-                >
-                  <Icon icon={History} />
-                  PM2
-                </Link>
-              </div>
-              {groups.map(([label, items]) => (
-                <div className="nav-group" key={label}>
-                  <p>{label}</p>
-                  {items
-                    .filter(
-                      ([name]) =>
-                        name !== 'Access' ||
-                        !project ||
-                        projects.find((p) => p.slug === project)
-                          ?.can_manage_access,
-                    )
-                    .map(([name, icon]) =>
-                      name === 'Databases' || name === 'Cache' ? (
-                        <Link
-                          key={name}
-                          className={cn(
-                            active ===
-                              (name === 'Cache' ? 'cache' : 'databases')
-                              ? 'nav-item active'
-                              : 'nav-item',
-                          )}
-                          to={
-                            name === 'Cache'
-                              ? '/projects/$projectSlug/cache'
-                              : '/projects/$projectSlug/databases'
-                          }
-                          params={{ projectSlug: project }}
-                          aria-current={
-                            active ===
-                            (name === 'Cache' ? 'cache' : 'databases')
-                              ? 'page'
-                              : undefined
-                          }
-                        >
-                          <Icon icon={icon as LucideIcon} />
-                          {name}
-                        </Link>
-                      ) : name === 'Cloud DNS' && project ? (
-                        <Link
-                          key={name}
-                          className={cn(
-                            'nav-item',
-                            active === 'dns' ? 'active' : '',
-                          )}
-                          to="/projects/$projectSlug/dns"
-                          params={{ projectSlug: project }}
-                          aria-current={active === 'dns' ? 'page' : undefined}
-                        >
-                          <Icon icon={icon as LucideIcon} />
-                          Cloud DNS
-                        </Link>
-                      ) : name === 'Access' &&
-                        project &&
-                        projects.find((p) => p.slug === project)
-                          ?.can_manage_access ? (
-                        <Link
-                          key={name}
-                          className={cn(
-                            'nav-item',
-                            active === 'access' ? 'active' : '',
-                          )}
-                          to="/projects/$projectSlug/access"
-                          params={{ projectSlug: project }}
-                          aria-current={
-                            active === 'access' ? 'page' : undefined
-                          }
-                        >
-                          <Icon icon={icon as LucideIcon} />
-                          Access
-                        </Link>
-                      ) : (
-                        <QuickTip
-                          key={name}
-                          portal
-                          content={
-                            name === 'Access'
-                              ? 'Select a project to manage access'
-                              : 'Coming in a later update'
-                          }
-                        >
-                          <span
-                            tabIndex={0}
-                            className="block w-full cursor-not-allowed"
-                          >
-                            <Button
-                              className="nav-item deferred pointer-events-none"
-                              disabled
-                            >
-                              <Icon
-                                data-icon="inline-start"
-                                icon={icon as LucideIcon}
-                              />
-                              {name}
-                              <span className="soon">Soon</span>
-                            </Button>
-                          </span>
-                        </QuickTip>
-                      ),
-                    )}
-                </div>
-              ))}
-            </>
-          )}
-          {Object.values(adminCapabilities).some((capability) =>
-            hasServer(user, capability),
-          ) && (
-            <div className="nav-group">
-              <p>ADMINISTRATION</p>
-              {(
-                [
-                  ['Projects', 'projects', Server],
-                  ['Users', 'users', Users],
-                  ['Connectors', 'connectors', Network],
-                  ['Inventory', 'containers', Database],
-                  ['DNS providers', 'dns', Globe],
-                  ['Git connections', 'git-connections', GitBranch],
-                ] as const
-              )
-                .filter(([, path]) =>
-                  hasServer(user, adminCapabilities[path!]!),
-                )
-                .map(([label, path, icon]) => (
-                  <Link
-                    className={cn(
-                      'nav-item',
-                      active === `admin-${path}` ? 'active' : '',
-                    )}
-                    key={path}
-                    to="/admin/$section"
-                    params={{ section: path }}
-                    aria-current={
-                      active === `admin-${path}` ? 'page' : undefined
-                    }
-                  >
-                    <Icon icon={icon as LucideIcon} />
-                    {label}
-                  </Link>
-                ))}
-            </div>
-          )}
-        </nav>
-        <div className="account border-border">
-          <DropdownMenu open={account} onOpenChange={setAccount}>
-            <DropdownMenuTrigger asChild>
-              <Button className="account-button">
-                <span className="avatar">
-                  <Icon data-icon="inline-start" icon={ShieldCheck} />
-                </span>
-                <span>
-                  <strong>{user.username}</strong>
-                  <small>
-                    {user.admin
-                      ? 'Organization Administrator'
-                      : user.capabilities?.length
-                        ? 'Organization permissions'
-                        : projects.find((p) => p.slug === project)?.role ===
-                            'admin'
-                          ? 'Project Administrator'
-                          : 'Project Member'}
-                  </small>
-                </span>
-                <Icon
-                  data-icon="inline-start"
-                  icon={Ellipsis}
-                  className="account-dots"
-                />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              className="w-[var(--radix-dropdown-menu-trigger-width)]"
-            >
-              <DropdownMenuGroup>
-                <DropdownMenuItem asChild>
-                  <Link to="/account/security">Account security</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    void api('/auth/logout', 'POST')
-                      .then(() => location.assign('/login'))
-                      .catch((e) => setError(e.message))
-                  }}
-                >
-                  Sign out
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <ErrorMessage message={error} />
-        </div>
-      </aside>
-      <main className="workspace bg-background">
+          </div>
+        )}
+      </nav>
+      <div className="account border-border">
+        <DropdownMenu open={account} onOpenChange={setAccount}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="account-button">
+              <span className="avatar">
+                <Icon data-icon="inline-start" icon={ShieldCheck} />
+              </span>
+              <span>
+                <strong>{user.username}</strong>
+                <small>
+                  {user.admin
+                    ? 'Organization Administrator'
+                    : user.capabilities?.length
+                      ? 'Organization permissions'
+                      : projects.find((p) => p.slug === project)?.role ===
+                          'admin'
+                        ? 'Project Administrator'
+                        : 'Project Member'}
+                </small>
+              </span>
+              <Icon
+                data-icon="inline-start"
+                icon={Ellipsis}
+                className="account-dots"
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="top"
+            align="start"
+            className="w-[var(--radix-dropdown-menu-trigger-width)]"
+          >
+            <DropdownMenuGroup>
+              <DropdownMenuItem asChild>
+                <Link to="/account/security">Account security</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void api('/auth/logout', 'POST')
+                    .then(() => location.assign('/login'))
+                    .catch((e) => setError(e.message))
+                }}
+              >
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <ErrorMessage message={error} />
+      </div>
+    </aside>
+  )
+  return (
+    <div className="app-shell bg-background text-foreground">
+      <Button
+        asChild
+        variant="outline"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100]"
+      >
+        <a href="#workspace-content">Skip to content</a>
+      </Button>
+      <Button
+        ref={navigationTrigger}
+        className="mobile-toggle hidden max-[720px]:inline-flex"
+        variant="outline"
+        onClick={() => setOpen(!open)}
+        aria-label="Toggle navigation"
+        aria-controls="sidebar-navigation"
+        aria-expanded={open}
+      >
+        <Icon data-icon="inline-start" icon={Menu} />
+      </Button>
+      {mobile ? (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent
+            closeLabel="Close navigation"
+            className="top-0 left-0 h-dvh max-h-none w-72 max-w-[calc(100vw-2rem)] translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              navigationTrigger.current?.focus()
+            }}
+          >
+            <DialogTitle className="sr-only">Navigation</DialogTitle>
+            <DialogDescription className="sr-only">
+              Choose an organization, project, connector, or account page.
+            </DialogDescription>
+            {navigation}
+          </DialogContent>
+        </Dialog>
+      ) : (
+        navigation
+      )}
+      <main
+        id="workspace-content"
+        tabIndex={-1}
+        className="workspace bg-background outline-none"
+      >
         <header className="topbar border-border text-muted-foreground">
           <Breadcrumb className="min-w-0">
             <BreadcrumbList className="text-xs">

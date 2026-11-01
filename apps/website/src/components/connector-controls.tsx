@@ -1,3 +1,10 @@
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from './ui/alert-dialog'
+import QuickTip from './quickTip'
 import { Link } from '@tanstack/react-router'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -55,21 +62,27 @@ export function ConnectorControls({
             </Link>
           </Button>
         )}
-        <Button
-          disabled={!available}
-          title={
+        <QuickTip
+          content={
             available
               ? 'Open host SSH terminal'
               : 'Host must be connected with SSH terminal enabled'
           }
-          onClick={() => {
-            setError('')
-            setTerminal(true)
-          }}
+          portal
         >
-          <Terminal data-icon="inline-start" aria-hidden="true" />
-          Host terminal
-        </Button>
+          <span tabIndex={available ? -1 : 0} className="inline-flex">
+            <Button
+              disabled={!available}
+              onClick={() => {
+                setError('')
+                setTerminal(true)
+              }}
+            >
+              <Terminal data-icon="inline-start" aria-hidden="true" />
+              Host terminal
+            </Button>
+          </span>
+        </QuickTip>
         <Field
           data-disabled={c.revoked || busy}
           orientation="horizontal"
@@ -117,13 +130,13 @@ export function ConnectorControls({
           Delete connector
         </Button>
       </div>
-      <Dialog
+      <AlertDialog
         open={!!confirmation}
         onOpenChange={(open) => {
           if (!open && !busy) setConfirmation(undefined)
         }}
       >
-        <DialogContent
+        <AlertDialogContent
           onOpenAutoFocus={(event) => {
             event.preventDefault()
             cancel.current?.focus()
@@ -133,16 +146,16 @@ export function ConnectorControls({
             credentialTrigger.current?.focus()
           }}
         >
-          <DialogTitle>
+          <AlertDialogTitle>
             {confirmation === 'delete'
               ? `Delete connector ${c.name}?`
               : `Rotate token for ${c.name}?`}
-          </DialogTitle>
-          <DialogDescription className="mt-2">
+          </AlertDialogTitle>
+          <AlertDialogDescription className="mt-2">
             {confirmation === 'delete'
               ? 'This removes the connector from the dashboard, disconnects the host, and permanently invalidates its token. This cannot be undone. Workloads on the host continue running.'
               : 'This invalidates the current token and disconnects this host. Save the new token, update CONNECTOR_TOKEN on the host, and recreate the connector to reconnect.'}
-          </DialogDescription>
+          </AlertDialogDescription>
           {mutationError && (
             <Alert variant="destructive" className="mt-4">
               <AlertDescription>{mutationError}</AlertDescription>
@@ -196,8 +209,8 @@ export function ConnectorControls({
                   : 'Rotate token'}
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog open={terminal} onOpenChange={setTerminal}>
         <DialogContent className="max-w-5xl">
           <DialogTitle>Host terminal — {c.name}</DialogTitle>

@@ -527,3 +527,36 @@ for (const width of [320, 390, 1440])
       fullPage: true,
     })
   })
+
+test('build secrets use inline validation and keyboard entry without browser prompts', async ({
+  page,
+}) => {
+  const calls = await setup(page)
+  await page
+    .getByRole('button', { name: 'GitHub application', exact: true })
+    .click()
+  const entry = page.getByLabel('New build secret ID', { exact: true })
+  await entry.fill('invalid id')
+  await page
+    .getByRole('button', { name: 'Add build secret', exact: true })
+    .click()
+  await expect(entry).toHaveAttribute('aria-invalid', 'true')
+  await entry.fill('npmrc')
+  await entry.press('Enter')
+  await expect(page.getByLabel('Build secret ID', { exact: true })).toHaveValue(
+    'npmrc',
+  )
+  await expect(entry).toHaveValue('')
+  expect(calls.created).toHaveLength(0)
+  await entry.fill('npmrc')
+  await page
+    .getByRole('button', { name: 'Add build secret', exact: true })
+    .click()
+  await expect(entry).toHaveAttribute('aria-invalid', 'true')
+  await page
+    .getByRole('button', { name: 'Remove build secret npmrc', exact: true })
+    .click()
+  await expect(page.getByLabel('Build secret ID', { exact: true })).toHaveCount(
+    0,
+  )
+})

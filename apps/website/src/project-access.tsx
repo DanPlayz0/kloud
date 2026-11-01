@@ -1,4 +1,5 @@
-import { Separator } from '@/components/ui/separator'
+import { useConfirmation } from './components/ui/confirmation-dialog'
+import { Badge } from './components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Table,
@@ -7,6 +8,7 @@ import {
   TableHead,
   TableBody,
   TableCell,
+  TableCaption,
 } from '@/components/ui/table'
 import { FieldGroup, FieldSet, Field, FieldLabel } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
@@ -22,6 +24,8 @@ import { Search, UserPen, UserPlus, UserX } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogFooter,
   DialogTitle,
   DialogDescription,
 } from './components/ui/dialog'
@@ -70,6 +74,7 @@ export function ProjectAccessPage({
   projects: Project[]
   project: string
 }) {
+  const { confirm: confirmAction, confirmationDialog } = useConfirmation()
   const [revision, setRevision] = useState(0),
     [error, setError] = useState(''),
     [message, setMessage] = useState(''),
@@ -113,6 +118,7 @@ export function ProjectAccessPage({
   }
   return (
     <>
+      {confirmationDialog}
       <section className="admin-content flex flex-col gap-6">
         <div className="page-heading">
           <h1>Project access</h1>
@@ -121,9 +127,9 @@ export function ProjectAccessPage({
           message={error || loadError || inventory.error || serviceList.error}
         />
         {message && (
-          <p className="success break-all" role="status">
-            {message}
-          </p>
+          <Alert role="status">
+            <AlertDescription className="break-all">{message}</AlertDescription>
+          </Alert>
         )}
         {data && (
           <FieldSet disabled={busy} className="flex flex-col gap-6 min-w-0">
@@ -183,8 +189,11 @@ export function ProjectAccessPage({
               operations and include View for the same target.
             </p>
             <TableCard>
-              <Table className="w-full text-left text-sm">
-                <TableHeader className="border-b border-border bg-background text-muted-foreground">
+              <Table>
+                <TableCaption className="sr-only">
+                  Project members and their access permissions
+                </TableCaption>
+                <TableHeader>
                   <TableRow>
                     <TableHead scope="col" className="p-4 font-medium">
                       Member
@@ -220,7 +229,11 @@ export function ProjectAccessPage({
                           : `${member.grants.length} container grants · ${member.service_grants?.length ?? 0} service grants · ${member.pm2_grants?.length ?? 0} PM2 grants`}
                       </TableCell>
                       <TableCell className="p-4 text-muted-foreground">
-                        {member.disabled ? 'Disabled' : 'Active'}
+                        <Badge
+                          variant={member.disabled ? 'outline' : 'secondary'}
+                        >
+                          {member.disabled ? 'Disabled' : 'Active'}
+                        </Badge>
                       </TableCell>
                       <TableCell className="p-4">
                         <div className="flex justify-end gap-2">
@@ -241,12 +254,16 @@ export function ProjectAccessPage({
                           <Button
                             type="button"
                             variant="destructive"
+                            size="icon"
                             aria-label={`Remove ${member.username}`}
-                            onClick={() => {
+                            onClick={async () => {
                               if (
-                                confirm(
-                                  `Remove ${member.username} from this project?`,
-                                )
+                                await confirmAction({
+                                  title: 'Remove project member',
+                                  description: `Remove ${member.username} from this project?`,
+                                  actionLabel: 'Remove member',
+                                  variant: 'destructive',
+                                })
                               )
                                 void action(
                                   `${base}/members/${member.id}`,
@@ -310,7 +327,8 @@ function MemberDialog(props: MemberEditorProps) {
       <Button
         ref={trigger}
         type="button"
-        variant={props.member ? 'default' : 'primary'}
+        variant={props.member ? 'outline' : 'primary'}
+        size={props.member ? 'icon' : 'default'}
         aria-label={props.member ? `Edit ${props.member.username}` : undefined}
         onClick={() => setOpen(true)}
       >
@@ -334,16 +352,18 @@ function MemberDialog(props: MemberEditorProps) {
           trigger.current?.focus()
         }}
       >
-        <DialogTitle className="break-all text-lg font-semibold">
-          {props.member
-            ? `Edit ${props.member.username}`
-            : 'Invite or add a member'}
-        </DialogTitle>
-        <DialogDescription className="mt-2 text-sm text-muted-foreground">
-          {props.member
-            ? "Make changes to this member's role and container permissions."
-            : 'Invite an email address to this project. Existing accounts keep their password and can belong to multiple organizations.'}
-        </DialogDescription>
+        <DialogHeader className="pr-6">
+          <DialogTitle className="break-all">
+            {props.member
+              ? `Edit ${props.member.username}`
+              : 'Invite or add a member'}
+          </DialogTitle>
+          <DialogDescription>
+            {props.member
+              ? "Make changes to this member's role and container permissions."
+              : 'Invite an email address to this project. Existing accounts keep their password and can belong to multiple organizations.'}
+          </DialogDescription>
+        </DialogHeader>
         <MemberEditor
           {...props}
           saving={saving}
@@ -616,9 +636,13 @@ function MemberEditor({
           <AlertDescription>{saveError}</AlertDescription>
         </Alert>
       )}
-      <div className="flex flex-wrap justify-end gap-3   pt-4">
-        <Separator className="basis-full" />
-        <Button type="button" disabled={saving} onClick={onCancel}>
+      <DialogFooter className="flex-wrap border-t pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={saving}
+          onClick={onCancel}
+        >
           Cancel
         </Button>
         <Button
@@ -643,7 +667,7 @@ function MemberEditor({
               ? 'Save member access'
               : 'Invite or add member'}
         </Button>
-      </div>
+      </DialogFooter>
     </Form>
   )
 }

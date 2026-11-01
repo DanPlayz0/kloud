@@ -1,5 +1,11 @@
+import { useState } from 'react'
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
+import {
+  FieldGroup,
+  Field,
+  FieldLabel,
+  FieldDescription,
+} from '@/components/ui/field'
 import { RegistryConnectionsFields } from './registry-connections-fields'
 import type { BuildInputs } from '@kloud/protocol/platform'
 import { Button, Input } from './components/ui/controls'
@@ -16,7 +22,23 @@ export function BuildInputsFields({
   project?: string
   service?: string
 }) {
+  const [secretId, setSecretId] = useState('')
+  const [secretError, setSecretError] = useState('')
   const inputs = value ?? { secrets: {}, registries: [] }
+  function addSecret() {
+    const key = secretId.trim()
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      setSecretError('Enter a valid build secret ID.')
+      return
+    }
+    if (Object.hasOwn(inputs.secrets, key)) {
+      setSecretError('A build secret with this ID already exists.')
+      return
+    }
+    onChange({ ...inputs, secrets: { ...inputs.secrets, [key]: '' } })
+    setSecretId('')
+    setSecretError('')
+  }
   return (
     <Card size="compact" className="flex flex-col gap-4">
       <CardHeader>
@@ -35,12 +57,15 @@ export function BuildInputsFields({
           pulls in an isolated Docker configuration.
         </p>
         {Object.entries(inputs.secrets).map(([key, secret]) => (
-          <FieldGroup key={key} className="flex items-end gap-2 flex-row">
-            <Field className="flex-1">
+          <FieldGroup
+            key={key}
+            className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
+          >
+            <Field className="min-w-0">
               <FieldLabel>Build secret ID</FieldLabel>
               <Input readOnly value={key} />
             </Field>
-            <Field className="flex-1">
+            <Field className="min-w-0">
               <FieldLabel>Secret value</FieldLabel>
               <Input
                 type="password"
@@ -56,6 +81,7 @@ export function BuildInputsFields({
             </Field>
             <Button
               type="button"
+              aria-label={`Remove build secret ${key}`}
               onClick={() => {
                 const next = { ...inputs.secrets }
                 delete next[key]
@@ -66,24 +92,39 @@ export function BuildInputsFields({
             </Button>
           </FieldGroup>
         ))}
-        <Button
-          type="button"
-          onClick={() => {
-            const key = window.prompt(
-              'BuildKit secret ID (letters, digits, underscores; for npm use npmrc):',
-            )
-            if (
-              key &&
-              /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) &&
-              !Object.hasOwn(inputs.secrets, key)
-            )
-              onChange({ ...inputs, secrets: { ...inputs.secrets, [key]: '' } })
-          }}
-        >
-          Add build secret
-        </Button>
+        <FieldGroup className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+          <Field>
+            <FieldLabel>New build secret ID</FieldLabel>
+            <Input
+              value={secretId}
+              placeholder="npmrc"
+              autoComplete="off"
+              validationMessage={secretError}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  addSecret()
+                }
+              }}
+              onChange={(event) => {
+                setSecretId(event.target.value)
+                setSecretError('')
+              }}
+            />
+            <FieldDescription>
+              Use letters, digits, and underscores; start with a letter or
+              underscore.
+            </FieldDescription>
+          </Field>
+          <Button type="button" className="sm:mt-6" onClick={addSecret}>
+            Add build secret
+          </Button>
+        </FieldGroup>
         {inputs.registries.map((registry, index) => (
-          <FieldGroup key={index} className="grid gap-3 md:grid-cols-4">
+          <FieldGroup
+            key={index}
+            className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end"
+          >
             <Field>
               <FieldLabel>Registry server</FieldLabel>
               <Input

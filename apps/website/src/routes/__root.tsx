@@ -12,14 +12,19 @@ import { createRootRoute, Outlet } from '@tanstack/react-router'
 export const Route = createRootRoute({
   component: Outlet,
   errorComponent: ({ error, reset }) => (
-    <Alert>
+    <Alert variant="destructive" className="mx-auto my-8 max-w-xl">
       <AlertTitle>
         <h1>Unable to open this page</h1>
       </AlertTitle>
       <AlertDescription>
         {error instanceof Error ? error.message : 'Unable to load this page'}
       </AlertDescription>
-      <Button onClick={reset}>Try again</Button> <Link to="/">Go home</Link>
+      <div className="col-start-2 mt-3 flex flex-wrap gap-2">
+        <Button onClick={reset}>Try again</Button>
+        <Button variant="outline" asChild>
+          <Link to="/">Go home</Link>
+        </Button>
+      </div>
     </Alert>
   ),
   notFoundComponent: () => (

@@ -1,6 +1,13 @@
 import { FieldContext, DisabledFieldContext } from './field-control'
 
-import { useMemo, useId, useState, useContext } from 'react'
+import {
+  useMemo,
+  useId,
+  useState,
+  useContext,
+  useCallback,
+  useEffect,
+} from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
@@ -88,9 +95,23 @@ function Field({
 }: React.ComponentProps<'div'> & VariantProps<typeof fieldVariants>) {
   const id = useId()
   const [error, setError] = useState('')
+  const [descriptions, setDescriptions] = useState<string[]>([])
+  const registerDescription = useCallback((descriptionId: string) => {
+    setDescriptions((previous) =>
+      previous.includes(descriptionId)
+        ? previous
+        : [...previous, descriptionId],
+    )
+    return () =>
+      setDescriptions((previous) =>
+        previous.filter((value) => value !== descriptionId),
+      )
+  }, [])
   const disabled = useContext(DisabledFieldContext)
   return (
-    <FieldContext.Provider value={{ id, error, setError }}>
+    <FieldContext.Provider
+      value={{ id, error, setError, descriptions, registerDescription }}
+    >
       <div
         role="group"
         data-invalid={error ? true : undefined}
@@ -154,8 +175,16 @@ function FieldTitle({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 function FieldDescription({ className, ...props }: React.ComponentProps<'p'>) {
+  const field = useContext(FieldContext)
+  const generatedId = useId()
+  const id = props.id ?? generatedId
+  useEffect(
+    () => field?.registerDescription(id),
+    [field?.registerDescription, id],
+  )
   return (
     <p
+      id={id}
       data-slot="field-description"
       className={cn(
         'text-sm leading-normal font-normal text-muted-foreground group-has-[[data-orientation=horizontal]]/field:text-balance',

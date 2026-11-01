@@ -157,7 +157,7 @@ function ContainerInventoryRow({
         <TableCell className="min-w-48 p-3">
           <Button
             ref={trigger}
-            className="text-left  break-all"
+            className="h-auto justify-start whitespace-normal break-all p-0 text-left"
             variant="link"
             aria-label={`Manage ${row.data.name}`}
             aria-haspopup="dialog"
@@ -214,6 +214,7 @@ function ContainerInventoryRow({
         </TableCell>
         <TableCell className="p-3">
           <Meter
+            name="CPU utilization"
             value={stale ? null : row.data.cpu}
             label={
               stale || row.data.cpu === null
@@ -224,6 +225,7 @@ function ContainerInventoryRow({
         </TableCell>
         <TableCell className="p-3">
           <Meter
+            name="Memory utilization"
             value={
               stale || row.data.memory === null || !row.data.memoryLimit
                 ? null
@@ -248,11 +250,28 @@ function ContainerInventoryRow({
   )
 }
 
-function Meter({ value, label }: { value: number | null; label: string }) {
+function Meter({
+  name,
+  value,
+  label,
+}: {
+  name: string
+  value: number | null
+  label: string
+}) {
   return (
     <div className="flex min-w-24 flex-col gap-1.5">
       <span
         className="meter"
+        role={value === null ? undefined : 'meter'}
+        aria-label={value === null ? undefined : name}
+        aria-hidden={value === null ? true : undefined}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={
+          value === null ? undefined : Math.max(0, Math.min(100, value))
+        }
+        aria-valuetext={label}
         data-tone={
           value === null
             ? 'neutral'

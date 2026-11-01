@@ -11,6 +11,8 @@ export const FieldContext = createContext<{
   id: string
   error: string
   setError: (message: string) => void
+  descriptions: string[]
+  registerDescription: (id: string) => () => void
 } | null>(null)
 export const DisabledFieldContext = createContext(false)
 
@@ -51,6 +53,7 @@ export function useFieldControl<
     'aria-describedby':
       [
         props['aria-describedby'],
+        ...(field?.descriptions ?? []),
         field?.error ? `${field.id}-error` : undefined,
       ]
         .filter(Boolean)

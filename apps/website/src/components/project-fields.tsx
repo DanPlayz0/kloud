@@ -1,4 +1,4 @@
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldLabel, FieldDescription } from '@/components/ui/field'
 import { useState } from 'react'
 import { Input } from './ui/controls'
 
@@ -39,6 +39,10 @@ export function ProjectFields() {
           value={customSlug ?? generatedSlug}
           onChange={(event) => setCustomSlug(event.target.value || undefined)}
         />
+        <FieldDescription>
+          Generated from the project name. Use lowercase letters, numbers, and
+          hyphens.
+        </FieldDescription>
       </Field>
     </>
   )

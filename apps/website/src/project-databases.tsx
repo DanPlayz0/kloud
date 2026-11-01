@@ -1,3 +1,5 @@
+import { CollapsibleSection } from './components/ui/collapsible'
+import { useConfirmation } from './components/ui/confirmation-dialog'
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { FieldGroup, FieldSet, Field, FieldLabel } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
@@ -77,6 +79,7 @@ interface Host {
   seen: string | null
 }
 export function ProjectDatabases({ project }: { project: string }) {
+  const { confirm: confirmAction, confirmationDialog } = useConfirmation()
   const base = `/projects/${project}/databases`
   const [refresh, setRefresh] = useState(0),
     [selected, setSelected] = useState(''),
@@ -167,6 +170,7 @@ export function ProjectDatabases({ project }: { project: string }) {
   }
   return (
     <section className="admin-content flex flex-col gap-6">
+      {confirmationDialog}
       <div className="page-heading">
         <div>
           <p className="eyebrow">PROJECT DATABASES</p>
@@ -386,12 +390,22 @@ export function ProjectDatabases({ project }: { project: string }) {
                     <Button
                       key={a}
                       disabled={busy}
-                      onClick={() => {
+                      onClick={async () => {
                         if (a === 'stop' || a === 'restart') {
                           if (
-                            !window.confirm(
-                              `${a} this database? Active applications may be interrupted.`,
-                            )
+                            !(await confirmAction({
+                              title:
+                                a === 'stop'
+                                  ? 'Stop database?'
+                                  : 'Restart database?',
+                              description:
+                                'Active applications may be interrupted.',
+                              actionLabel:
+                                a === 'stop'
+                                  ? 'Stop database'
+                                  : 'Restart database',
+                              variant: 'destructive',
+                            }))
                           )
                             return
                         }
@@ -444,7 +458,7 @@ export function ProjectDatabases({ project }: { project: string }) {
                   {resource.permissions.backup && (
                     <Button
                       disabled={busy}
-                      onClick={() => {
+                      onClick={async () => {
                         setBusy(true)
                         setError('')
                         void api(
@@ -533,15 +547,15 @@ export function ProjectDatabases({ project }: { project: string }) {
             </CardHeader>
             <CardContent>
               {detail.jobs.map((j) => (
-                <details
+                <CollapsibleSection
                   key={j.id}
-                  className="rounded border border-border p-3"
+                  title={`${j.kind} · ${j.state} · ${new Date(j.created).toLocaleString()}`}
                 >
-                  <summary>
-                    {j.kind} · {j.state} ·{' '}
-                    {new Date(j.created).toLocaleString()}
-                  </summary>
-                  <pre className="mt-2 whitespace-pre-wrap break-all text-xs">
+                  <pre
+                    tabIndex={0}
+                    aria-label={`${j.kind} operation output`}
+                    className="max-h-80 overflow-auto rounded-md border border-border bg-muted p-3 text-xs whitespace-pre-wrap break-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     {j.log || JSON.stringify(j.result ?? {}, null, 2)}
                   </pre>
                   {j.kind === 'import' &&
@@ -550,11 +564,15 @@ export function ProjectDatabases({ project }: { project: string }) {
                     resource.permissions.restore && (
                       <Button
                         disabled={busy}
-                        onClick={() => {
+                        onClick={async () => {
                           if (
-                            !window.confirm(
-                              'Discard the retained uploaded source archive? The database volume is unchanged. Keep your original .dmp export separately.',
-                            )
+                            !(await confirmAction({
+                              title: 'Discard retained upload?',
+                              description:
+                                'The database volume is unchanged. Keep your original .dmp export separately.',
+                              actionLabel: 'Discard upload',
+                              variant: 'destructive',
+                            }))
                           )
                             return
                           setBusy(true)
@@ -581,11 +599,14 @@ export function ProjectDatabases({ project }: { project: string }) {
                       {resource.permissions.manage && (
                         <Button
                           disabled={busy}
-                          onClick={() => {
+                          onClick={async () => {
                             if (
-                              !window.confirm(
-                                'Inspect the host to release this pause? Any incomplete new import/restore target will be stopped and retained. The original job stays failed; it is never repeated or marked successful.',
-                              )
+                              !(await confirmAction({
+                                title: 'Inspect and reconcile host?',
+                                description:
+                                  'Any incomplete new import/restore target will be stopped and retained. The original job stays failed; it is never repeated or marked successful.',
+                                actionLabel: 'Inspect and reconcile',
+                              }))
                             )
                               return
                             void action(`/${selected}/reconcile`, {
@@ -600,7 +621,7 @@ export function ProjectDatabases({ project }: { project: string }) {
                       )}
                     </>
                   )}
-                </details>
+                </CollapsibleSection>
               ))}
             </CardContent>
           </Card>
@@ -631,17 +652,26 @@ function DatabaseHost({
   )
 }
 function CredentialReveal({ path }: { path: string }) {
+  const { confirm: confirmAction, confirmationDialog } = useConfirmation()
   const [value, setValue] = useState(''),
     [error, setError] = useState('')
   return (
     <div className="flex flex-col gap-2">
+      {confirmationDialog}
       <Button
-        onClick={() => {
+        onClick={async () => {
           if (value) {
             setValue('')
             return
           }
-          if (!window.confirm('Reveal database credentials in this browser?'))
+          if (
+            !(await confirmAction({
+              title: 'Reveal connection details?',
+              description:
+                'Database credentials will be visible in this browser. Hide them when you are finished.',
+              actionLabel: 'Reveal credentials',
+            }))
+          )
             return
           void api<Record<string, unknown>>(path)
             .then((v) => setValue(JSON.stringify(v, null, 2)))
@@ -938,13 +968,17 @@ function BackupPolicy({
         </Form>
         {preview && (
           <div className="flex flex-col gap-2">
-            <pre className="whitespace-pre-wrap break-all text-xs">
+            <pre
+              tabIndex={0}
+              aria-label="Backup policy review"
+              className="max-h-80 overflow-auto rounded-md border border-border bg-muted p-3 text-xs whitespace-pre-wrap break-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               {JSON.stringify({ ...preview, enabled }, null, 2)}
             </pre>
             <Button
               disabled={busy}
               variant="primary"
-              onClick={() => {
+              onClick={async () => {
                 setBusy(true)
                 void api(`${base}/${resource.id}/policies`, 'POST', body)
                   .then(() => {
@@ -979,18 +1013,22 @@ function RestoreForm({
   defaultHost: string
   onSaved: (id: string) => void
 }) {
+  const { confirm: confirmAction, confirmationDialog } = useConfirmation()
   const [open, setOpen] = useState(false),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
   async function restore(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    const f = new FormData(e.currentTarget)
     if (
-      !window.confirm(
-        'Restore this backup into a new database? The source and existing databases are unchanged. Application connection strings must be changed separately.',
-      )
+      !(await confirmAction({
+        title: 'Restore into a new database?',
+        description:
+          'The source and existing databases are unchanged. Application connection strings must be changed separately.',
+        actionLabel: 'Queue restore',
+      }))
     )
       return
-    const f = new FormData(e.currentTarget)
     setBusy(true)
     try {
       const result = await api<{ resource: string }>(
@@ -1014,6 +1052,7 @@ function RestoreForm({
   }
   return (
     <div>
+      {confirmationDialog}
       <Button onClick={() => setOpen(!open)}>
         <RotateCcw data-icon="inline-start" />
         Restore into new database

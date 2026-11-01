@@ -94,7 +94,7 @@ function Login() {
             <Icon />
           </div>
           <p className="eyebrow">KLOUD</p>
-          <CardTitle asChild>
+          <CardTitle asChild className="text-2xl leading-tight">
             <h1>
               {setup && !created
                 ? 'Create your Organization Administrator account'

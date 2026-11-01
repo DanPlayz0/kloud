@@ -1,3 +1,5 @@
+import { useConfirmation } from './components/ui/confirmation-dialog'
+import { Empty, EmptyHeader, EmptyDescription } from './components/ui/empty'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -31,6 +33,7 @@ export function DeploymentQueue({
   service: string
   canDeploy: boolean
 }) {
+  const { confirm, confirmationDialog } = useConfirmation()
   const path = `/projects/${project}/services/${service}`
   const [refresh, setRefresh] = useState(0),
     [busy, setBusy] = useState(false),
@@ -42,6 +45,7 @@ export function DeploymentQueue({
     ) ?? []
   return (
     <Card className="flex flex-col gap-3">
+      {confirmationDialog}
       <CardHeader>
         <CardTitle asChild>
           <h2 className="font-semibold">Deployment queue</h2>
@@ -69,14 +73,18 @@ export function DeploymentQueue({
           deployments.
         </p>
         {!pending.length && (
-          <p className="text-sm text-muted-foreground">
-            No queued or active deployments.
-          </p>
+          <Empty className="border border-border p-6 md:p-6">
+            <EmptyHeader>
+              <EmptyDescription>
+                No queued or active deployments.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
         {[...pending].reverse().map((run) => (
           <div
             key={run.id}
-            className="flex flex-wrap items-center justify-between gap-3   pt-3"
+            className="flex min-w-0 flex-wrap items-center justify-between gap-3 pt-3"
           >
             <Separator className="basis-full" />
             <div className="text-xs">
@@ -95,9 +103,13 @@ export function DeploymentQueue({
                 disabled={busy}
                 onClick={async () => {
                   if (
-                    !window.confirm(
-                      'Cancel this queued deployment? Active deployments are not interrupted.',
-                    )
+                    !(await confirm({
+                      title: 'Cancel queued deployment?',
+                      description:
+                        'Active deployments are not interrupted. This queued deployment will not be dispatched.',
+                      actionLabel: 'Cancel queued run',
+                      variant: 'destructive',
+                    }))
                   )
                     return
                   setError('')

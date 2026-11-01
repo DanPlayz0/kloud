@@ -1,3 +1,4 @@
+import { useConfirmation } from './components/ui/confirmation-dialog'
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { FieldGroup, FieldSet, Field, FieldLabel } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
@@ -54,6 +55,7 @@ export function ServiceDetail({
   type?: 'application' | 'compose'
   canDeploy: boolean
 }) {
+  const { confirm, confirmationDialog } = useConfirmation()
   const [tab, setTab] = useState(() =>
       new URLSearchParams(window.location.search).has('setup')
         ? 'Source'
@@ -154,9 +156,11 @@ export function ServiceDetail({
         (changes.added.length ||
           changes.changed.length ||
           changes.removed.length) &&
-        !window.confirm(
-          `Review variable changes (values hidden):\nAdded: ${changes.added.join(', ') || 'none'}\nChanged: ${changes.changed.join(', ') || 'none'}\nRemoved: ${changes.removed.join(', ') || 'none'}\n\nSave this draft without deploying?`,
-        )
+        !(await confirm({
+          title: 'Review variable changes',
+          description: `Values remain hidden.\nAdded: ${changes.added.join(', ') || 'none'}\nChanged: ${changes.changed.join(', ') || 'none'}\nRemoved: ${changes.removed.join(', ') || 'none'}\n\nSave this draft without deploying?`,
+          actionLabel: 'Save draft',
+        }))
       )
         return
       await api<{ id: string }>(`${base}/configuration`, 'PUT', {
@@ -177,9 +181,13 @@ export function ServiceDetail({
   async function deploy(revision: string, rollback?: string) {
     if (
       rollback &&
-      !window.confirm(
-        'Roll back code and configuration? Database contents and volume data will not be restored.',
-      )
+      !(await confirm({
+        title: 'Roll back this service?',
+        description:
+          'Code and configuration will be restored. Database contents and volume data will not be restored.',
+        actionLabel: 'Roll back service',
+        variant: 'destructive',
+      }))
     )
       return
     setBusy(true)
@@ -205,6 +213,7 @@ export function ServiceDetail({
   )
   return (
     <section className="admin-content min-w-0 flex flex-col gap-6">
+      {confirmationDialog}
       <div className="page-heading">
         <div>
           <p className="eyebrow">SERVICE</p>

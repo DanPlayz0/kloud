@@ -9,10 +9,12 @@ import { Badge } from './badge'
 /** shadcn/Radix composition with persistent form fields and validation reveal. */
 export function CollapsibleSection({
   title,
+  summary,
   count,
   children,
 }: {
   title: string
+  summary?: ReactNode
   count?: number
   children: ReactNode
 }) {
@@ -44,7 +46,7 @@ export function CollapsibleSection({
             aria-label={title}
           >
             <span className="flex min-w-0 items-center gap-2">
-              <span className="font-medium">{title}</span>
+              <span className="font-medium">{summary ?? title}</span>
               {count !== undefined && <Badge variant="outline">{count}</Badge>}
             </span>
             <ChevronDown

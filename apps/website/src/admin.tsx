@@ -1,3 +1,14 @@
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+  DialogTrigger,
+} from './components/ui/dialog'
+import { Form } from './components/ui/form'
+import { useConfirmation } from './components/ui/confirmation-dialog'
 import { Link, useRouter } from '@tanstack/react-router'
 import { X, ArrowRight } from 'lucide-react'
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
@@ -179,6 +190,7 @@ function Projects({
   action: Action
   canCreate: boolean
 }) {
+  const { confirm: confirmAction, confirmationDialog } = useConfirmation()
   const { data, error } = usePolling<Project[]>(
     `/admin/projects?revision=${revision}`,
   )
@@ -188,6 +200,7 @@ function Projects({
   }
   return (
     <>
+      {confirmationDialog}
       {canCreate && (
         <FormCard onSubmit={submit}>
           <ProjectFields />
@@ -196,7 +209,7 @@ function Projects({
       )}
       <ErrorMessage message={error} />
       {data?.map((p) => (
-        <Card className="admin-row" key={p.slug}>
+        <Card className="admin-row flex-row" key={p.slug}>
           <div>
             <strong>{p.name}</strong>
             <small>{p.slug}</small>
@@ -210,26 +223,18 @@ function Projects({
                 Manage access
               </Link>
             </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                const name = prompt('Project name', p.name)
-                if (name?.trim())
-                  void action(`/admin/projects/${p.slug}`, 'PUT', {
-                    name: name.trim(),
-                  })
-              }}
-            >
-              Rename
-            </Button>
+            <ProjectRenameDialog project={p} action={action} />
             <Button
               type="button"
               variant="destructive"
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  confirm(
-                    `Delete project ${p.name}? Memberships and grants will be removed. Docker containers will keep running.`,
-                  )
+                  await confirmAction({
+                    title: 'Delete project',
+                    description: `Delete project ${p.name}? Memberships and grants will be removed. Docker containers will keep running.`,
+                    actionLabel: 'Delete project',
+                    variant: 'destructive',
+                  })
                 )
                   void action(`/admin/projects/${p.slug}`, 'DELETE', undefined)
               }}
@@ -311,7 +316,7 @@ function Connectors({
         />
       </Field>
       {filtered?.map((c) => (
-        <Card className="admin-row" key={c.id}>
+        <Card className="admin-row flex-row" key={c.id}>
           <CardHeader>
             <CardTitle asChild>
               <strong>{c.name}</strong>
@@ -483,5 +488,98 @@ function Assignment({
         </>
       )}
     </InventoryCard>
+  )
+}
+
+function ProjectRenameDialog({
+  project,
+  action,
+}: {
+  project: Project
+  action: Action
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(project.name)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (busy || !name.trim()) return
+    setBusy(true)
+    setError('')
+    try {
+      if (
+        await action(`/admin/projects/${project.slug}`, 'PUT', {
+          name: name.trim(),
+        })
+      )
+        setOpen(false)
+      else setError('Unable to rename this project. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!busy) {
+          setOpen(next)
+          if (next) {
+            setName(project.name)
+            setError('')
+          }
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline">
+          Rename
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader className="pr-6">
+          <DialogTitle>Rename project</DialogTitle>
+          <DialogDescription>
+            Update the display name for {project.name}. Its slug and connector
+            assignments stay unchanged.
+          </DialogDescription>
+        </DialogHeader>
+        <Form
+          onSubmit={(event) => void submit(event)}
+          className="flex flex-col gap-4"
+          aria-busy={busy}
+        >
+          <Field>
+            <FieldLabel>Project name</FieldLabel>
+            <Input
+              required
+              maxLength={100}
+              value={name}
+              disabled={busy}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </Field>
+          <ErrorMessage message={error} />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={busy || !name.trim() || name.trim() === project.name}
+            >
+              {busy ? 'Saving…' : 'Save name'}
+            </Button>
+          </DialogFooter>
+        </Form>
+      </DialogContent>
+    </Dialog>
   )
 }

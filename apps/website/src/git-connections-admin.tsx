@@ -1,3 +1,4 @@
+import { useConfirmation } from './components/ui/confirmation-dialog'
 import { useState, type FormEvent } from 'react'
 import { GitBranch, Pencil, Trash2 } from 'lucide-react'
 import { api, hasServer, type Project, type User } from './api'
@@ -374,6 +375,7 @@ function ConnectionEditor({
   projects: Project[]
   onSaved: () => Promise<void>
 }) {
+  const { confirm, confirmationDialog } = useConfirmation()
   const [open, setOpen] = useState(false),
     [name, setName] = useState(connection.name),
     [availability, setAvailability] = useState<ConnectionAvailability>({
@@ -416,6 +418,7 @@ function ConnectionEditor({
         setError('')
       }}
     >
+      {confirmationDialog}
       <DialogTrigger asChild>
         <Button type="button" aria-label={`Manage ${connection.name}`}>
           <Pencil data-icon="inline-start" />
@@ -458,11 +461,15 @@ function ConnectionEditor({
               <Button
                 type="button"
                 variant="destructive"
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
-                      `Revoke ${connection.name}? Future builds using this connection will be blocked.`,
-                    )
+                    await confirm({
+                      title: `Revoke ${connection.name}?`,
+                      description:
+                        'Future builds using this connection will be blocked.',
+                      actionLabel: 'Revoke connection',
+                      variant: 'destructive',
+                    })
                   )
                     void save(true)
                 }}

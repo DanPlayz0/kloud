@@ -284,7 +284,10 @@ test('empty picker and mobile dialog reset on cancellation', async ({
   await page
     .getByRole('button', { name: 'Create project', exact: true })
     .click()
-  const dialog = page.getByRole('dialog')
+  const dialog = page.getByRole('dialog', {
+    name: 'Create project',
+    exact: true,
+  })
   await page.screenshot({
     path: testInfo.outputPath('create-project-mobile.png'),
   })

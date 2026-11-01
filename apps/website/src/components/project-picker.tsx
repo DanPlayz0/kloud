@@ -20,6 +20,8 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogFooter,
   DialogDescription,
   DialogTitle,
 } from './ui/dialog'
@@ -276,7 +278,8 @@ export function ProjectPicker({
               <Separator className="basis-full" />
               <Button
                 type="button"
-                className="project-picker-create w-full text-left text-sm text-muted-foreground"
+                variant="ghost"
+                className="project-picker-create w-full justify-start text-left text-sm"
                 onClick={() => {
                   setError('')
                   setCreating(true)
@@ -315,15 +318,17 @@ export function ProjectPicker({
             if (submitting.current) event.preventDefault()
           }}
         >
-          <DialogTitle className="text-lg font-semibold">
-            Create project
-          </DialogTitle>
-          <DialogDescription className="mt-2 text-sm text-muted-foreground">
-            Create a project on this infrastructure.
-          </DialogDescription>
+          <DialogHeader className="pr-6">
+            <DialogTitle className="text-lg font-semibold">
+              Create project
+            </DialogTitle>
+            <DialogDescription>
+              Create a project on this infrastructure.
+            </DialogDescription>
+          </DialogHeader>
           <Form
             onSubmit={submit}
-            className="mt-5 flex flex-col gap-4"
+            className="flex flex-col gap-4"
             aria-busy={busy}
           >
             <FieldSet disabled={busy} className="min-w-0 flex flex-col gap-4">
@@ -334,9 +339,10 @@ export function ProjectPicker({
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <div className="flex flex-wrap justify-end gap-2">
+            <DialogFooter>
               <Button
                 type="button"
+                variant="outline"
                 disabled={busy}
                 onClick={() => setCreating(false)}
               >
@@ -345,7 +351,7 @@ export function ProjectPicker({
               <Button type="submit" variant="primary" disabled={busy}>
                 {busy ? 'Creating…' : 'Create project'}
               </Button>
-            </div>
+            </DialogFooter>
           </Form>
         </DialogContent>
       </Dialog>

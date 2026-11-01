@@ -1,10 +1,11 @@
+import { CardFieldset } from './components/ui/card'
 import { useEffect, useRef, useState } from 'react'
 import { GitBranch } from 'lucide-react'
 import { api } from './api'
 import { Button, Input, NativeSelect } from './components/ui/controls'
 import {
   Field,
-  FieldGroup,
+  FieldLegend,
   FieldLabel,
   FieldDescription,
 } from './components/ui/field'
@@ -239,7 +240,8 @@ export function GithubAppConnect({
   }
 
   return (
-    <FieldGroup className="rounded-md border border-border p-3">
+    <CardFieldset>
+      <FieldLegend variant="label">GitHub App setup</FieldLegend>
       <Field>
         <FieldLabel>GitHub App name</FieldLabel>
         <Input
@@ -309,6 +311,6 @@ export function GithubAppConnect({
           Cancel GitHub setup
         </Button>
       )}
-    </FieldGroup>
+    </CardFieldset>
   )
 }

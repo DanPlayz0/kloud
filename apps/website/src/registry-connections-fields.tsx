@@ -1,5 +1,12 @@
+import { useConfirmation } from './components/ui/confirmation-dialog'
+import { CardFieldset } from './components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
+import {
+  FieldGroup,
+  Field,
+  FieldLabel,
+  FieldLegend,
+} from '@/components/ui/field'
 import { useEffect, useState } from 'react'
 import { api } from './api'
 import { ErrorMessage } from './components'
@@ -22,6 +29,7 @@ export function RegistryConnectionsFields({
   value: string[]
   onChange: (ids: string[]) => void
 }) {
+  const { confirm, confirmationDialog } = useConfirmation()
   const base = `/projects/${project}/registry-connections`
   const [registries, setRegistries] = useState<Registry[]>([]),
     [adding, setAdding] = useState(false),
@@ -47,12 +55,17 @@ export function RegistryConnectionsFields({
     }
   }
   return (
-    <div className="flex flex-col gap-3   pt-3">
+    <div className="flex min-w-0 flex-col gap-4 pt-4">
+      {confirmationDialog}
       <Separator className="basis-full" />
       <h4 className="text-sm font-medium">Reusable registry connections</h4>
       <ErrorMessage message={error} />
       {registries.map((registry) => (
-        <div key={registry.id} className="flex flex-wrap items-center gap-2">
+        <Field
+          key={registry.id}
+          orientation="horizontal"
+          className="flex min-w-0 flex-wrap items-center gap-3"
+        >
           <Checkbox
             aria-label={`Use registry ${registry.name}`}
             checked={value.includes(registry.id)}
@@ -64,20 +77,24 @@ export function RegistryConnectionsFields({
               )
             }
           />
-          <span className="text-sm">
+          <FieldLabel className="min-w-0 flex-1 break-words">
             {registry.name} · {registry.server} ·{' '}
             {registry.owner
               ? 'personal, reusable'
               : 'shared across authorized teams'}
-          </span>
+          </FieldLabel>
           <Button
             type="button"
             disabled={busy}
-            onClick={() => {
+            onClick={async () => {
               if (
-                window.confirm(
-                  'Revoke this registry connection for all future deployments? Serving apps keep running.',
-                )
+                await confirm({
+                  title: 'Revoke registry connection?',
+                  description:
+                    'Future deployments will stop using this connection. Serving apps keep running.',
+                  actionLabel: 'Revoke connection',
+                  variant: 'destructive',
+                })
               )
                 void run(async () => {
                   await api(`${base}/${registry.id}`, 'DELETE')
@@ -88,7 +105,7 @@ export function RegistryConnectionsFields({
           >
             Revoke
           </Button>
-        </div>
+        </Field>
       ))}
       {value
         .filter((id) => !registries.some((registry) => registry.id === id))
@@ -108,7 +125,8 @@ export function RegistryConnectionsFields({
         {adding ? 'Cancel' : 'Add reusable registry'}
       </Button>
       {adding && (
-        <FieldGroup className="grid gap-3 rounded border border-border p-3 md:grid-cols-2">
+        <CardFieldset className="grid gap-4 md:grid-cols-2">
+          <FieldLegend>New registry connection</FieldLegend>
           <Field>
             <FieldLabel>Name</FieldLabel>
             <Input data-registry-name />
@@ -133,7 +151,9 @@ export function RegistryConnectionsFields({
             <FieldLabel>Ownership</FieldLabel>
             <NativeSelect data-registry-scope>
               <option value="personal">Personal</option>
-              <option value="shared">Shared (organization administrators)</option>
+              <option value="shared">
+                Shared (organization administrators)
+              </option>
             </NativeSelect>
           </Field>
           <Button
@@ -168,7 +188,7 @@ export function RegistryConnectionsFields({
           >
             Save encrypted registry
           </Button>
-        </FieldGroup>
+        </CardFieldset>
       )}
       <p className="text-xs text-muted-foreground">
         Saved credentials can be reused across project teams through authorized

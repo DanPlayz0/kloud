@@ -33,10 +33,10 @@ test('connector overview displays the replacement token after rotation', async (
   await page.goto('/connectors/overview-host/overview')
   await page.getByRole('button', { name: 'Rotate token', exact: true }).click()
   await page
-    .getByRole('dialog')
+    .getByRole('alertdialog')
     .getByRole('button', { name: 'Rotate token', exact: true })
     .click()
-  await expect(page.getByRole('dialog')).not.toBeVisible()
+  await expect(page.getByRole('alertdialog')).not.toBeVisible()
   await expect(page.getByLabel('Connector token', { exact: true })).toHaveValue(
     'overview-secret',
   )
@@ -148,7 +148,7 @@ for (const width of [390, 1600]) {
     await card
       .getByRole('button', { name: 'Delete connector', exact: true })
       .click()
-    const dialog = page.getByRole('dialog')
+    const dialog = page.getByRole('alertdialog')
     await expect(dialog).toContainText('permanently invalidates its token')
     expect(revokeRequests).toBe(0)
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()

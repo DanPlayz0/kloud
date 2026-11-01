@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { Form } from './ui/form'
+import { useId, useState } from 'react'
 import { api, type ContainerRow, type Project } from '../api'
 import { ErrorMessage, usePolling } from '../components'
 import { Button, Input, NativeSelect } from './ui/controls'
@@ -19,6 +20,7 @@ export function ContainerAssignment({
   container: ContainerRow
   onSaved: () => void
 }) {
+  const id = useId()
   const [open, setOpen] = useState(false)
   const [project, setProject] = useState(container.project ?? '')
   const [application, setApplication] = useState(container.application ?? '')
@@ -62,7 +64,7 @@ export function ContainerAssignment({
           Choose the project and application that can access this container.
           Docker label assignments take precedence.
         </DialogDescription>
-        <form
+        <Form
           className="mt-4 flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault()
@@ -71,11 +73,9 @@ export function ContainerAssignment({
         >
           <ErrorMessage message={error || projects.error} />
           <Field>
-            <FieldLabel htmlFor="container-assignment-project">
-              Project
-            </FieldLabel>
+            <FieldLabel htmlFor={id + '-project'}>Project</FieldLabel>
             <NativeSelect
-              id="container-assignment-project"
+              id={id + '-project'}
               value={project}
               required
               disabled={busy || !projects.data}
@@ -90,11 +90,11 @@ export function ContainerAssignment({
             </NativeSelect>
           </Field>
           <Field>
-            <FieldLabel htmlFor="container-assignment-application">
+            <FieldLabel htmlFor={id + '-application'}>
               Application slug
             </FieldLabel>
             <Input
-              id="container-assignment-application"
+              id={id + '-application'}
               value={application}
               required
               pattern="[a-z0-9]+(-[a-z0-9]+)*"
@@ -127,7 +127,7 @@ export function ContainerAssignment({
               Cancel
             </Button>
           </div>
-        </form>
+        </Form>
       </DialogContent>
     </Dialog>
   )

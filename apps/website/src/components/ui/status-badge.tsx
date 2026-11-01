@@ -55,7 +55,10 @@ export function StatusBadge({
   return (
     <Badge
       variant="outline"
-      className={cn('status-badge', className)}
+      className={cn(
+        'status-badge data-[tone=success]:text-status-success data-[tone=warning]:text-status-warning data-[tone=danger]:text-status-danger data-[tone=info]:text-status-info data-[tone=neutral]:text-status-neutral',
+        className,
+      )}
       data-tone={statusTone(children, deployment)}
     >
       <span className="status-dot" aria-hidden="true" />

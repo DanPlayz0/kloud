@@ -1,3 +1,4 @@
+import { useConfirmation } from './components/ui/confirmation-dialog'
 import { useEffect, useState, type RefObject } from 'react'
 import {
   Terminal,
@@ -41,6 +42,7 @@ export function ContainerOperations({
   onOpenChange?: (open: boolean) => void
   trigger?: RefObject<HTMLButtonElement | null>
 }) {
+  const { confirm: confirmAction, confirmationDialog } = useConfirmation()
   const [internalOpen, setInternalOpen] = useState(false),
     [mode, setMode] = useState('logs'),
     [output, setOutput] = useState(''),
@@ -100,9 +102,12 @@ export function ContainerOperations({
   async function lifecycle(action: string) {
     if (
       action === 'stop' &&
-      !window.confirm(
-        `Stop ${container.data.name}? This interrupts its workload.`,
-      )
+      !(await confirmAction({
+        title: `Stop ${container.data.name}?`,
+        description: 'This interrupts its workload.',
+        actionLabel: 'Stop container',
+        variant: 'destructive',
+      }))
     )
       return
     setBusy(true)
@@ -120,6 +125,7 @@ export function ContainerOperations({
   }
   return (
     <>
+      {confirmationDialog}
       {controlledOpen === undefined && (
         <Button
           aria-label={`Manage ${container.data.name}`}
@@ -218,7 +224,11 @@ export function ContainerOperations({
           ) : (
             <pre
               aria-live="off"
-              className="max-h-96 min-h-32 overflow-auto rounded-md border border-border bg-muted p-4 text-xs whitespace-pre-wrap break-all"
+              aria-label={
+                mode === 'logs' ? 'Container logs' : 'Container details'
+              }
+              tabIndex={0}
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-h-96 min-h-32 overflow-auto rounded-md border border-border bg-muted p-4 text-xs whitespace-pre-wrap break-all"
             >
               {output || 'Select an operation you have access to.'}
             </pre>

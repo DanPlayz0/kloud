@@ -1,3 +1,4 @@
+import { Alert, AlertTitle, AlertDescription } from './components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
@@ -50,7 +51,7 @@ export function DomainDns({
     )
   })
   return (
-    <div className="flex flex-col gap-3   pt-3">
+    <div className="flex min-w-0 flex-col gap-4 pt-4">
       <Separator className="basis-full" />
       <h3 className="font-medium">DNS records</h3>
       <p className="text-xs text-muted-foreground">
@@ -68,11 +69,14 @@ export function DomainDns({
         (status?.AAAA?.address &&
           addresses.ipv6 &&
           status.AAAA.address !== addresses.ipv6)) && (
-        <p role="status" className="text-sm">
-          The server address differs from this domain's configured record.
-          Review it explicitly in Cloud DNS; existing records have not been
-          changed.
-        </p>
+        <Alert role="status">
+          <AlertTitle>DNS target has changed</AlertTitle>
+          <AlertDescription>
+            The server address differs from this domain's configured record.
+            Review it explicitly in Cloud DNS; existing records have not been
+            changed.
+          </AlertDescription>
+        </Alert>
       )}
       {Object.entries(status ?? {}).map(([type, value]) => (
         <p key={type} className="text-xs">
@@ -172,22 +176,25 @@ export function DomainDns({
                 ))}
               </NativeSelect>
             </Field>
-            <div className="rounded border border-border bg-muted p-3 text-sm">
-              {ipv4 && (
-                <p>
-                  A · {hostname} → {ipv4} · DNS only · automatic TTL
+            <Alert role="note">
+              <AlertTitle>Records to create</AlertTitle>
+              <AlertDescription className="break-all">
+                {ipv4 && (
+                  <p>
+                    A · {hostname} → {ipv4} · DNS only · automatic TTL
+                  </p>
+                )}
+                {useV6 && ipv6 && (
+                  <p>
+                    AAAA · {hostname} → {ipv6} · DNS only · automatic TTL
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Identical records are preserved. Conflicts require an explicit
+                  update in Cloud DNS.
                 </p>
-              )}
-              {useV6 && ipv6 && (
-                <p>
-                  AAAA · {hostname} → {ipv6} · DNS only · automatic TTL
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Identical records are preserved. Conflicts require an explicit
-                update in Cloud DNS.
-              </p>
-            </div>
+              </AlertDescription>
+            </Alert>
             <Field orientation="horizontal" className="flex items-center gap-2">
               <Checkbox
                 checked={reviewed}

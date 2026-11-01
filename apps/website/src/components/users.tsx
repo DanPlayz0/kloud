@@ -1,4 +1,5 @@
-import { Separator } from '@/components/ui/separator'
+import { useConfirmation } from './ui/confirmation-dialog'
+import { Badge } from './ui/badge'
 import {
   Table,
   TableHeader,
@@ -6,6 +7,7 @@ import {
   TableHead,
   TableBody,
   TableCell,
+  TableCaption,
 } from '@/components/ui/table'
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
@@ -23,6 +25,8 @@ import { Button, Checkbox, Input } from './ui/controls'
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
+  DialogFooter,
   DialogDescription,
   DialogTitle,
 } from './ui/dialog'
@@ -50,6 +54,7 @@ export function Users({
   current,
   projects,
 }: Omit<EditorProps, 'user'> & { revision: number }) {
+  const { confirm: confirmAction, confirmationDialog } = useConfirmation()
   const { data, error } = usePolling<AdminUser[]>('/admin/users', revision)
   const [search, setSearch] = useState('')
   const query = search.trim().toLowerCase()
@@ -66,6 +71,7 @@ export function Users({
     ) ?? []
   return (
     <div className="min-w-0 flex flex-col gap-4">
+      {confirmationDialog}
       <p className="text-sm text-muted-foreground">
         Manage who can access this organization and its projects.
       </p>
@@ -87,8 +93,11 @@ export function Users({
       </div>
       <ErrorMessage message={error} />
       <TableCard>
-        <Table className="w-full text-left text-sm">
-          <TableHeader className="border-b border-border bg-background text-muted-foreground">
+        <Table>
+          <TableCaption className="sr-only">
+            Organization users, access, and invitation status
+          </TableCaption>
+          <TableHeader>
             <TableRow>
               {['User', 'Permissions', 'Projects', 'Status'].map((title) => (
                 <TableHead key={title} scope="col" className="p-4 font-medium">
@@ -140,13 +149,13 @@ export function Users({
                     : `${user.projects.length} project${user.projects.length === 1 ? '' : 's'}`}
                 </TableCell>
                 <TableCell className="p-4">
-                  <span className="whitespace-nowrap rounded-sm bg-secondary px-2 py-1 text-xs text-muted-foreground">
+                  <Badge variant={user.disabled ? 'outline' : 'secondary'}>
                     {user.disabled
                       ? 'Disabled'
                       : user.enrolled
                         ? 'Active'
                         : 'Invited'}
-                  </span>
+                  </Badge>
                 </TableCell>
                 <TableCell className="p-4">
                   {isProtected(user, current) ? (
@@ -165,12 +174,16 @@ export function Users({
                         <QuickTip content="Regenerate invitation">
                           <Button
                             type="button"
+                            variant="outline"
+                            size="icon"
                             aria-label={`Regenerate invitation for ${user.username}`}
-                            onClick={() => {
+                            onClick={async () => {
                               if (
-                                confirm(
-                                  `Replace ${user.username}'s pending invitation? The previous link will stop working.`,
-                                )
+                                await confirmAction({
+                                  title: 'Replace invitation',
+                                  description: `Replace ${user.username}'s pending invitation? The previous link will stop working.`,
+                                  actionLabel: 'Replace invitation',
+                                })
                               )
                                 void action(
                                   `/admin/users/${user.id}/enrollment`,
@@ -231,7 +244,8 @@ function UserDialog(props: EditorProps) {
         <Button
           ref={trigger}
           type="button"
-          variant={props.user ? 'default' : 'primary'}
+          variant={props.user ? 'outline' : 'primary'}
+          size={props.user ? 'icon' : 'default'}
           aria-label={props.user ? `Edit ${props.user.username}` : undefined}
           onClick={() => setOpen(true)}
         >
@@ -256,14 +270,16 @@ function UserDialog(props: EditorProps) {
           trigger.current?.focus()
         }}
       >
-        <DialogTitle className="break-all text-lg font-semibold">
-          {props.user ? `Edit ${props.user.username}` : 'Invite user'}
-        </DialogTitle>
-        <DialogDescription className="mt-2 text-sm text-muted-foreground">
-          {props.user
-            ? "Manage this user's permissions, project access, and account status."
-            : 'Invite an email address to this organization. Existing accounts keep their password and security settings.'}
-        </DialogDescription>
+        <DialogHeader className="pr-6">
+          <DialogTitle className="break-all">
+            {props.user ? `Edit ${props.user.username}` : 'Invite user'}
+          </DialogTitle>
+          <DialogDescription>
+            {props.user
+              ? "Manage this user's permissions, project access, and account status."
+              : 'Invite an email address to this organization. Existing accounts keep their password and security settings.'}
+          </DialogDescription>
+        </DialogHeader>
         <UserForm
           {...props}
           busy={busy}
@@ -335,11 +351,7 @@ function UserForm({
     })
   }
   return (
-    <Form
-      onSubmit={submit}
-      className="mt-5 flex flex-col gap-5"
-      aria-busy={busy}
-    >
+    <Form onSubmit={submit} className="flex flex-col gap-5" aria-busy={busy}>
       <FieldSet disabled={busy} className="min-w-0 flex flex-col gap-5">
         {!user && (
           <Field>
@@ -440,15 +452,19 @@ function UserForm({
         )}
       </FieldSet>
       <ErrorMessage message={error} />
-      <div className="flex flex-wrap justify-end gap-2   pt-4">
-        <Separator className="basis-full" />
-        <Button type="button" disabled={busy} onClick={onCancel}>
+      <DialogFooter className="flex-wrap border-t pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy}
+          onClick={onCancel}
+        >
           Cancel
         </Button>
         <Button type="submit" variant="primary" disabled={busy || !changed}>
           {busy ? 'Saving…' : user ? 'Save access' : 'Invite user'}
         </Button>
-      </div>
+      </DialogFooter>
     </Form>
   )
 }

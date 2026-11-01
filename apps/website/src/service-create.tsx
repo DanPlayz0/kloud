@@ -37,13 +37,8 @@ import {
 import { Button, Input } from './components/ui/controls'
 import { Card } from './components/ui/card'
 import { CollapsibleSection } from './components/ui/collapsible'
-import {
-  Tooltip,
-  TooltipProvider,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipPortal,
-} from './components/ui/tooltip'
+import QuickTip from './components/quickTip'
+import { Alert, AlertDescription } from './components/ui/alert'
 
 type SourceKey = 'dockerfile' | 'git-compose' | 'image' | 'compose'
 const sourceHelp: Record<SourceKey, string> = {
@@ -438,9 +433,11 @@ export function ServiceCreatePage({
           </p>
         </div>
         {!canCreate ? (
-          <Card className="p-6 text-muted-foreground">
-            You need permission to create services in this project.
-          </Card>
+          <Alert>
+            <AlertDescription>
+              You need permission to create services in this project.
+            </AlertDescription>
+          </Alert>
         ) : !selected ? (
           <div className="grid gap-6 md:grid-cols-2">
             {['From a repository', 'From Docker'].map((group) => (
@@ -456,7 +453,7 @@ export function ServiceCreatePage({
                       aria-label={item.title}
                       data-source-choice={item.key}
                       onClick={() => choose(item.key)}
-                      className="group  min-h-36 w-full     text-left"
+                      className="group h-auto min-h-36 w-full text-left"
                       variant="choice"
                     >
                       <span className="flex w-full items-start gap-4">
@@ -498,25 +495,21 @@ export function ServiceCreatePage({
                 <span className="min-w-0 flex-1 font-medium">
                   {source.title}
                 </span>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        aria-label={`About ${source.title}`}
-                        size="icon"
-                        variant="ghost"
-                      >
-                        <Info data-icon="inline-start" aria-hidden="true" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipPortal>
-                      <TooltipContent side="bottom" className="max-w-72">
-                        {sourceHelp[selected]}
-                      </TooltipContent>
-                    </TooltipPortal>
-                  </Tooltip>
-                </TooltipProvider>
+                <QuickTip
+                  content={sourceHelp[selected]}
+                  side="bottom"
+                  className="max-w-72"
+                  portal
+                >
+                  <Button
+                    type="button"
+                    aria-label={`About ${source.title}`}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <Info aria-hidden="true" />
+                  </Button>
+                </QuickTip>
                 <Button type="button" disabled={created} onClick={change}>
                   Change
                 </Button>
@@ -795,7 +788,7 @@ export function ServiceCreatePage({
                   }
                 />
               )}
-              <div className="flex flex-wrap items-center justify-between gap-3   bg-background py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-background py-4">
                 <Separator className="basis-full" />
                 <span className="text-xs text-muted-foreground">
                   {deploying

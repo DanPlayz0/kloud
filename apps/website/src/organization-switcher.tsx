@@ -1,3 +1,10 @@
+import { Alert, AlertDescription } from './components/ui/alert'
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from './components/ui/empty'
 import { useId, useState, type FormEvent } from 'react'
 import { Building2, Check } from 'lucide-react'
 import {
@@ -17,11 +24,12 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
   DialogDescription,
   DialogTitle,
   DialogTrigger,
 } from './components/ui/dialog'
-import { Field, FieldLabel } from './components/ui/field'
+import { Field, FieldLabel, FieldDescription } from './components/ui/field'
 import { Form } from './components/ui/form'
 
 export function organizationSlug(name: string) {
@@ -47,6 +55,9 @@ export function OrganizationSelector() {
           type="button"
           variant="outline"
           className="w-full justify-between"
+          aria-current={
+            organization.slug === currentOrganization() ? 'true' : undefined
+          }
           disabled={organization.slug === currentOrganization()}
           onClick={() => switchOrganization(organization.slug)}
         >
@@ -56,10 +67,20 @@ export function OrganizationSelector() {
           )}
         </Button>
       ))}
-      {!organizations.length && !error && (
+      {!data && !error && (
         <p className="text-sm text-muted-foreground">
           Loading your organizations…
         </p>
+      )}
+      {data && !organizations.length && !error && (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyTitle>No organizations yet</EmptyTitle>
+            <EmptyDescription>
+              Accept an organization invitation to see it here.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
       <ErrorMessage message={error} />
     </div>
@@ -131,17 +152,18 @@ function OrganizationFields({
             setSlug(event.target.value)
           }}
         />
-        <p className="text-sm text-muted-foreground">
+        <FieldDescription>
           {organization
             ? 'The slug remains unchanged so connector and callback URLs keep working.'
             : 'Generated from the name. You can change it; a number is added automatically if the generated slug is already used.'}
-        </p>
+        </FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor={id + '-description'}>Description</FieldLabel>
         <Textarea
           id={id + '-description'}
           name="description"
+          className="font-sans"
           maxLength={1000}
           disabled={busy}
           value={description}
@@ -166,7 +188,7 @@ function OrganizationFields({
           Your current account becomes the new organization’s administrator.
         </p>
       )}
-      <Button disabled={busy} type="submit">
+      <Button variant="primary" disabled={busy} type="submit">
         {busy
           ? 'Saving…'
           : organization
@@ -270,21 +292,23 @@ export function OrganizationSwitcher({ admin = false }: { admin?: boolean }) {
           </Button>
         </DialogTrigger>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogTitle>
-            {view === 'create'
-              ? 'Create organization'
-              : view === 'edit'
-                ? 'Edit organization'
-                : view === 'invite'
-                  ? 'Invite by email'
-                  : 'Organization'}
-          </DialogTitle>
-          <DialogDescription>
-            Use one account across your organizations. Projects, servers,
-            credentials, and permissions stay scoped to the selected
-            organization.
-          </DialogDescription>
-          <div className="mt-4 flex flex-col gap-4">
+          <DialogHeader className="pr-6">
+            <DialogTitle>
+              {view === 'create'
+                ? 'Create organization'
+                : view === 'edit'
+                  ? 'Edit organization'
+                  : view === 'invite'
+                    ? 'Invite by email'
+                    : 'Organization'}
+            </DialogTitle>
+            <DialogDescription>
+              Use one account across your organizations. Projects, servers,
+              credentials, and permissions stay scoped to the selected
+              organization.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
             {view === 'create' || view === 'edit' ? (
               <OrganizationFields
                 key={view}
@@ -319,7 +343,7 @@ export function OrganizationSwitcher({ admin = false }: { admin?: boolean }) {
                   create an account. An organization invitation does not grant
                   project access.
                 </p>
-                <Button disabled={busy} type="submit">
+                <Button variant="primary" disabled={busy} type="submit">
                   {busy ? 'Inviting…' : 'Create invitation'}
                 </Button>
                 {invitationUrl && (
@@ -345,14 +369,15 @@ export function OrganizationSwitcher({ admin = false }: { admin?: boolean }) {
                   </p>
                 )}
                 {data?.website && (
-                  <a
-                    href={data.website}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm underline"
+                  <Button
+                    asChild
+                    variant="link"
+                    className="h-auto justify-start p-0"
                   >
-                    {data.website}
-                  </a>
+                    <a href={data.website} target="_blank" rel="noreferrer">
+                      {data.website}
+                    </a>
+                  </Button>
                 )}
                 {data?.api_url && (
                   <Field>
@@ -390,7 +415,11 @@ export function OrganizationSwitcher({ admin = false }: { admin?: boolean }) {
               </>
             )}
             <ErrorMessage message={error} />
-            {message && <p role="status">{message}</p>}
+            {message && (
+              <Alert role="status">
+                <AlertDescription>{message}</AlertDescription>
+              </Alert>
+            )}
             {view !== 'overview' && (
               <Button
                 type="button"

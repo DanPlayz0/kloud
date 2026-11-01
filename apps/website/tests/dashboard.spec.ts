@@ -283,17 +283,15 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
         .getByRole('navigation', { name: 'Main navigation' })
         .getByRole('link', { name: 'Containers', exact: true }),
     ).toBeVisible()
-    const backdrop = page.getByRole('button', {
-      name: 'Close navigation',
-      exact: true,
-    })
-    const backdropBounds = await backdrop.boundingBox()
-    await backdrop.click({
-      position: {
-        x: backdropBounds!.width - 12,
-        y: backdropBounds!.height / 2,
-      },
-    })
+    await page
+      .getByRole('button', { name: 'Close navigation', exact: true })
+      .click()
+    await expect(
+      page.getByRole('dialog', { name: 'Navigation', exact: true }),
+    ).toHaveCount(0)
+    await expect(
+      page.getByRole('button', { name: 'Toggle navigation' }),
+    ).toBeFocused()
     await page.screenshot({
       path: testInfo.outputPath('containers-mobile.png'),
       fullPage: true,

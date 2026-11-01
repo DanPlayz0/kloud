@@ -75,7 +75,7 @@ export function ConnectorToken({
               readOnly
               spellCheck={false}
               aria-describedby={descriptionId}
-              title="Click to copy connector token"
+              aria-label="Connector token"
               className="min-w-0 flex-1 cursor-copy font-mono"
               onClick={(event) => {
                 void copy(event.currentTarget, event.detail > 0)

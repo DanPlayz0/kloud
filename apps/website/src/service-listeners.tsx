@@ -1,3 +1,4 @@
+import { useConfirmation } from './components/ui/confirmation-dialog'
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { FieldGroup, FieldSet, Field, FieldLabel } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
@@ -29,6 +30,7 @@ export function ServiceListeners({
   canDeploy: boolean
   compose?: boolean
 }) {
+  const { confirm: confirmAction, confirmationDialog } = useConfirmation()
   const base = `/projects/${project}/services/${service}/listeners`
   const [refresh, setRefresh] = useState(0),
     [error, setError] = useState(''),
@@ -61,9 +63,13 @@ export function ServiceListeners({
         application_protocol: form.get('application_protocol'),
       }
       if (
-        !window.confirm(
-          `${config.protocol} ${config.bind_address}:${config.port} → ${target.data.name}:${config.target_port}\nSources: ${sources.length ? sources.join(', ') : 'Allow anyone'}\n${config.enabled ? 'Enable this public listener?' : 'Save disabled listener?'}`,
-        )
+        !(await confirmAction({
+          title: config.enabled
+            ? 'Enable public listener?'
+            : 'Save disabled listener?',
+          description: `${config.protocol} ${config.bind_address}:${config.port} → ${target.data.name}:${config.target_port}\nSources: ${sources.length ? sources.join(', ') : 'Allow anyone'}`,
+          actionLabel: config.enabled ? 'Enable listener' : 'Save listener',
+        }))
       )
         return
       await api(`${base}/${editing?.id ?? crypto.randomUUID()}`, 'PUT', {
@@ -80,12 +86,13 @@ export function ServiceListeners({
   }
   return (
     <div className="flex flex-col gap-4">
+      {confirmationDialog}
       <p className="text-sm text-muted-foreground">
         Optional host-local TCP/UDP forwarding is independent of HTTP domains
-        and VPN connectivity. The organization administrator must enable forwarding
-        and approve bind addresses. PostgreSQL listeners stay blocked until
-        native TLS and renewal are verified. Connections may end when a release
-        is replaced.
+        and VPN connectivity. The organization administrator must enable
+        forwarding and approve bind addresses. PostgreSQL listeners stay blocked
+        until native TLS and renewal are verified. Connections may end when a
+        release is replaced.
       </p>
       <ErrorMessage message={error || loadError} />
       {data?.map((listener) => (
@@ -120,12 +127,16 @@ export function ServiceListeners({
                   Edit
                 </Button>
                 <Button
+                  variant="destructive"
                   disabled={busy}
                   onClick={async () => {
                     if (
-                      !window.confirm(
-                        'Remove this listener and disable its public access?',
-                      )
+                      !(await confirmAction({
+                        title: 'Remove listener?',
+                        description: 'This disables its public access.',
+                        actionLabel: 'Remove listener',
+                        variant: 'destructive',
+                      }))
                     )
                       return
                     setBusy(true)

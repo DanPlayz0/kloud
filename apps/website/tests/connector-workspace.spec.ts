@@ -349,8 +349,10 @@ for (const width of [390, 1280]) {
       ).toHaveAttribute('data-side', width < 720 ? 'bottom' : 'right')
       await page.keyboard.press('Escape')
       if (width < 720) {
-        await page.getByRole('button', { name: 'Toggle navigation' }).click()
-        await expect(page.locator('aside.sidebar')).not.toBeInViewport()
+        await page.getByRole('button', { name: 'Close navigation' }).click()
+        await expect(
+          page.getByRole('dialog', { name: 'Navigation', exact: true }),
+        ).toHaveCount(0)
       }
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),
@@ -397,4 +399,60 @@ test('runtime operators cannot assign containers', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: /Assign to project|Change assignment/ }),
   ).toHaveCount(0)
+})
+
+test('container stop uses an accessible confirmation before dispatch and restores focus when cancelled', async ({
+  page,
+}) => {
+  const { operations } = await fixtures(page)
+  let nativeDialogs = 0
+  page.on('dialog', async (dialog) => {
+    nativeDialogs++
+    await dialog.dismiss()
+  })
+  await page.goto(base + '/compute/containers')
+  await page.getByRole('button', { name: 'Manage web', exact: true }).click()
+  const stop = page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'stop', exact: true })
+  await stop.click()
+  const confirmation = page.getByRole('alertdialog')
+  await expect(confirmation).toContainText('This interrupts its workload.')
+  await expect(
+    confirmation.getByRole('button', { name: 'Cancel', exact: true }),
+  ).toBeFocused()
+  expect(operations.some((operation) => operation.action === 'stop')).toBe(
+    false,
+  )
+  await page.keyboard.press('Escape')
+  await expect(confirmation).not.toBeVisible()
+  await expect(stop).toBeFocused()
+  expect(operations.some((operation) => operation.action === 'stop')).toBe(
+    false,
+  )
+  await stop.click()
+  await confirmation
+    .getByRole('button', { name: 'Stop container', exact: true })
+    .click()
+  await expect
+    .poll(
+      () =>
+        operations.filter((operation) => operation.action === 'stop').length,
+    )
+    .toBe(1)
+  expect(nativeDialogs).toBe(0)
+})
+
+test('inventory utilization exposes named meter values and hides unknown readings', async ({
+  page,
+}) => {
+  await fixtures(page)
+  await page.goto(base + '/compute/containers')
+  await expect(
+    page.getByRole('meter', { name: 'CPU utilization', exact: true }),
+  ).toHaveAttribute('aria-valuenow', '2')
+  await expect(
+    page.getByRole('meter', { name: 'Memory utilization', exact: true }),
+  ).toHaveAttribute('aria-valuenow', '1')
+  await expect(page.getByRole('meter')).toHaveCount(2)
 })

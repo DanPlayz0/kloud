@@ -19,7 +19,15 @@ export function Card({
     <Component
       data-slot="card"
       data-size={size}
-      className={cn('ui-card bg-card text-foreground border-border', className)}
+      className={cn(
+        'ui-card flex min-w-0 flex-col gap-6 rounded-xl border border-border bg-card text-card-foreground shadow-sm break-words',
+        size === 'flush'
+          ? 'gap-0 p-0'
+          : size === 'compact'
+            ? 'gap-4 p-4'
+            : 'p-6',
+        className,
+      )}
       {...props}
     />
   )
@@ -39,7 +47,11 @@ export function TableCard({ className, ...props }: ComponentProps<'div'>) {
 export function FormCard({ className, ...props }: ComponentProps<'form'>) {
   return (
     <Card asChild>
-      <Form className={cn('inline-form', className)} {...props} />
+      <Form
+        layout="inline"
+        className={cn('inline-form', className)}
+        {...props}
+      />
     </Card>
   )
 }
@@ -65,7 +77,7 @@ export function CardHeader({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-header"
-      className={cn('flex flex-col gap-2', className)}
+      className={cn('flex min-w-0 flex-col gap-1.5', className)}
       {...props}
     />
   )
@@ -79,7 +91,10 @@ export function CardTitle({
   return (
     <Component
       data-slot="card-title"
-      className={cn('font-semibold', className)}
+      className={cn(
+        'text-base leading-none font-semibold tracking-tight',
+        className,
+      )}
       {...props}
     />
   )
@@ -97,7 +112,7 @@ export function CardContent({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-content"
-      className={cn('flex min-w-0 flex-col gap-3', className)}
+      className={cn('flex min-w-0 flex-col gap-4', className)}
       {...props}
     />
   )
@@ -106,7 +121,7 @@ export function CardFooter({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-footer"
-      className={cn('flex items-center gap-2', className)}
+      className={cn('flex flex-wrap items-center gap-2', className)}
       {...props}
     />
   )

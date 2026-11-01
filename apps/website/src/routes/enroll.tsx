@@ -147,7 +147,7 @@ function Enroll() {
             <Icon icon={KeyRound} />
           </div>
           <p className="eyebrow">KLOUD</p>
-          <CardTitle asChild>
+          <CardTitle asChild className="text-2xl leading-tight">
             <h1>
               {done
                 ? 'You’re ready'

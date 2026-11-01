@@ -8,7 +8,8 @@ const toggleVariants = cva(
   {
     variants: {
       variant: {
-        choice: 'ui-button ui-button-choice',
+        choice:
+          'h-auto min-h-24 justify-start whitespace-normal rounded-xl border border-border bg-card p-6 text-card-foreground hover:bg-accent data-[state=on]:border-primary data-[state=on]:bg-primary/5',
         default: 'bg-transparent',
         outline:
           'border border-input bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground',

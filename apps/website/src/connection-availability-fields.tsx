@@ -1,6 +1,12 @@
 import type { Project } from './api'
 import { Checkbox } from './components/ui/controls'
-import { Field, FieldDescription, FieldLabel } from './components/ui/field'
+import {
+  Field,
+  FieldSet,
+  FieldLegend,
+  FieldDescription,
+  FieldLabel,
+} from './components/ui/field'
 
 export interface ConnectionAvailability {
   all_projects: boolean
@@ -19,8 +25,8 @@ export function ConnectionAvailabilityFields({
   disabled?: boolean
 }) {
   return (
-    <Field className="space-y-3">
-      <FieldLabel>Project and team availability</FieldLabel>
+    <FieldSet className="gap-3" disabled={disabled}>
+      <FieldLegend variant="label">Project and team availability</FieldLegend>
       <Field orientation="horizontal">
         <Checkbox
           aria-label="Available in all projects and teams"
@@ -76,6 +82,6 @@ export function ConnectionAvailabilityFields({
         remain usable when broad availability is removed; revoke those bindings
         separately. Credentials are never shared with the browser.
       </FieldDescription>
-    </Field>
+    </FieldSet>
   )
 }
