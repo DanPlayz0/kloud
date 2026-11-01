@@ -4,6 +4,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from './components/ui/dialog'
+import { NavigationGroup } from './components/navigation-group'
+import { NavigationSearch } from './components/navigation-search'
 import { Badge } from './components/ui/badge'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
@@ -147,6 +149,7 @@ export function Shell({
     () => window.matchMedia('(width < 720px)').matches,
   )
   const navigationTrigger = useRef<HTMLButtonElement>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
   useEffect(() => {
     const query = window.matchMedia('(width < 720px)')
     const update = () => {
@@ -160,6 +163,7 @@ export function Shell({
   useEffect(() => {
     setOpen(false)
     setAccount(false)
+    setSearchOpen(false)
   }, [pathname])
   const navigation = (
     <aside
@@ -182,8 +186,7 @@ export function Shell({
       />
       <nav aria-label="Main navigation">
         {currentConnector && (
-          <div className="nav-group">
-            <p>CONNECTOR</p>
+          <NavigationGroup title="CONNECTOR" mobile={mobile}>
             {[
               ['Overview', 'overview', Network] as const,
               ...(canBrowseConnectorResources(user)
@@ -210,12 +213,11 @@ export function Shell({
                 {label}
               </Link>
             ))}
-          </div>
+          </NavigationGroup>
         )}
         {project && (
           <>
-            <div className="nav-group">
-              <p>COMPUTE</p>
+            <NavigationGroup title="COMPUTE" mobile={mobile}>
               <Link
                 className={cn(
                   active === 'services' ? 'nav-item active' : 'nav-item',
@@ -263,10 +265,9 @@ export function Shell({
                 <Icon icon={History} />
                 PM2
               </Link>
-            </div>
+            </NavigationGroup>
             {groups.map(([label, items]) => (
-              <div className="nav-group" key={label}>
-                <p>{label}</p>
+              <NavigationGroup title={label} mobile={mobile} key={label}>
                 {items
                   .filter(
                     ([name]) =>
@@ -365,15 +366,14 @@ export function Shell({
                       </QuickTip>
                     ),
                   )}
-              </div>
+              </NavigationGroup>
             ))}
           </>
         )}
         {Object.values(adminCapabilities).some((capability) =>
           hasServer(user, capability),
         ) && (
-          <div className="nav-group">
-            <p>ADMINISTRATION</p>
+          <NavigationGroup title="ADMINISTRATION" mobile={mobile}>
             {(
               [
                 ['Projects', 'projects', Server],
@@ -400,7 +400,7 @@ export function Shell({
                   {label}
                 </Link>
               ))}
-          </div>
+          </NavigationGroup>
         )}
       </nav>
       <div className="account border-border">
@@ -464,25 +464,14 @@ export function Shell({
       >
         <a href="#workspace-content">Skip to content</a>
       </Button>
-      <Button
-        ref={navigationTrigger}
-        className="mobile-toggle hidden max-[720px]:inline-flex"
-        variant="outline"
-        onClick={() => setOpen(!open)}
-        aria-label="Toggle navigation"
-        aria-controls="sidebar-navigation"
-        aria-expanded={open}
-      >
-        <Icon data-icon="inline-start" icon={Menu} />
-      </Button>
       {mobile ? (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent
             closeLabel="Close navigation"
-            className="top-0 left-0 h-dvh max-h-none w-72 max-w-[calc(100vw-2rem)] translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0"
+            className="top-0 left-0 flex h-dvh max-h-none w-72 max-w-[calc(100vw-2rem)] translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0"
             onCloseAutoFocus={(event) => {
               event.preventDefault()
-              navigationTrigger.current?.focus()
+              if (!searchOpen) navigationTrigger.current?.focus()
             }}
           >
             <DialogTitle className="sr-only">Navigation</DialogTitle>
@@ -500,8 +489,20 @@ export function Shell({
         tabIndex={-1}
         className="workspace bg-background outline-none"
       >
-        <header className="topbar border-border text-muted-foreground">
-          <Breadcrumb className="min-w-0">
+        <header className="topbar border-border bg-background text-muted-foreground">
+          <Button
+            ref={navigationTrigger}
+            className="mobile-toggle hidden shrink-0 max-[720px]:inline-flex"
+            variant="outline"
+            size="icon"
+            onClick={() => setOpen(!open)}
+            aria-label="Toggle navigation"
+            aria-controls="sidebar-navigation"
+            aria-expanded={open}
+          >
+            <Icon data-icon="inline-start" icon={Menu} />
+          </Button>
+          <Breadcrumb className="min-w-0 flex-1">
             <BreadcrumbList className="text-xs">
               {(currentConnector
                 ? currentConnector.name + ' / ' + title
@@ -517,13 +518,29 @@ export function Shell({
                           {part}
                         </BreadcrumbPage>
                       ) : (
-                        <span>{part}</span>
+                        <span className="break-all">{part}</span>
                       )}
                     </BreadcrumbItem>
                   </Fragment>
                 ))}
             </BreadcrumbList>
           </Breadcrumb>
+          <NavigationSearch
+            user={user}
+            projects={projects}
+            connectors={
+              Array.isArray(connectors)
+                ? connectors
+                : currentConnector
+                  ? [currentConnector]
+                  : []
+            }
+            open={searchOpen}
+            onOpenChange={(value) => {
+              setSearchOpen(value)
+              if (value) setOpen(false)
+            }}
+          />
           <span className="topbar-brand">KLOUD</span>
         </header>
         {children}

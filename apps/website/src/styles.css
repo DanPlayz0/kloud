@@ -166,6 +166,8 @@
     color: var(--color-foreground);
   }
   .sidebar nav {
+    min-height: 0;
+    overscroll-behavior: contain;
     overflow: auto;
     scrollbar-width: thin;
     flex: 1;
@@ -275,6 +277,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     padding: 0 36px;
     color: var(--color-muted-foreground);
     font-size: 11px;
@@ -653,22 +656,33 @@
     .sidebar.open {
       transform: translateX(0);
     }
+    .sidebar > * {
+      flex-shrink: 0;
+    }
+    .sidebar nav {
+      overflow: visible;
+      flex: 1 0 auto;
+    }
     .workspace {
       margin-left: 0;
     }
     .mobile-toggle {
       display: flex;
-      position: fixed;
-      top: 14px;
-      left: 12px;
-      z-index: 30;
-      padding: 6px 9px;
+      position: static;
     }
     .sidebar.open {
       padding-top: 58px;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
     }
     .topbar {
-      padding: 0 20px 0 60px;
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      height: auto;
+      min-height: 60px;
+      padding: 8px 12px;
     }
     .compute-content,
     .admin-content {

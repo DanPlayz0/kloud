@@ -391,3 +391,94 @@ test('mobile navigation traps keyboard focus and restores its trigger after dism
   await expect(navigation).toHaveCount(0)
   await expect(trigger).toBeFocused()
 })
+
+test('mobile navigation scrolls on short screens, collapses categories, and keeps the menu clear of breadcrumbs', async ({
+  page,
+}) => {
+  await fixtures(page)
+  await page.setViewportSize({ width: 320, height: 420 })
+  await page.goto(`/projects/${project.slug}/compute/serverless`)
+  const trigger = page.getByRole('button', { name: 'Toggle navigation' })
+  const triggerBox = (await trigger.boundingBox())!
+  const breadcrumbBox = (await page
+    .getByRole('navigation', { name: 'breadcrumb' })
+    .boundingBox())!
+  expect(triggerBox.x + triggerBox.width).toBeLessThanOrEqual(breadcrumbBox.x)
+  await trigger.click()
+  const sidebar = page.locator('#sidebar-navigation')
+  const storage = sidebar.getByRole('button', { name: 'STORAGE', exact: true })
+  await expect(storage).toHaveAttribute('aria-expanded', 'true')
+  await storage.click()
+  await expect(storage).toHaveAttribute('aria-expanded', 'false')
+  await expect(
+    sidebar.getByRole('link', { name: 'Databases', exact: true }),
+  ).toHaveCount(0)
+  await storage.focus()
+  await page.keyboard.press('Enter')
+  await expect(storage).toHaveAttribute('aria-expanded', 'true')
+  await expect(
+    sidebar.getByRole('link', { name: 'Databases', exact: true }),
+  ).toBeAttached()
+  expect(
+    await sidebar.evaluate((el) => el.scrollHeight > el.clientHeight),
+  ).toBe(true)
+  const account = sidebar.getByRole('button', {
+    name: new RegExp(owner.username),
+  })
+  await account.scrollIntoViewIfNeeded()
+  expect(await sidebar.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+  const accountBox = (await account.boundingBox())!
+  expect(accountBox.y + accountBox.height).toBeLessThanOrEqual(421)
+})
+
+for (const shortcut of ['Control+k', 'Meta+k']) {
+  test(`${shortcut} searches and navigates project tabs with the keyboard`, async ({
+    page,
+  }) => {
+    await fixtures(page)
+    await page.goto(`/projects/${project.slug}/compute/serverless`)
+    await page.keyboard.press(shortcut)
+    const search = page.getByRole('dialog', {
+      name: 'Go to a page',
+      exact: true,
+    })
+    const input = search.getByRole('combobox', { name: 'Search pages' })
+    await expect(input).toBeFocused()
+    await input.fill('Databases')
+    await expect(search.getByRole('option')).toHaveCount(1)
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(`/projects/${project.slug}/databases`)
+    await expect(search).toHaveCount(0)
+    const trigger = page.getByRole('button', { name: 'Search navigation' })
+    await trigger.click()
+    await search.getByRole('combobox').fill('no such page')
+    await expect(search.getByText('No matching pages.')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(trigger).toBeFocused()
+  })
+}
+
+test('navigation search respects administration permissions and works from the mobile sidebar', async ({
+  page,
+}) => {
+  await fixtures(page)
+  await page.route('**/api/auth/me', (route) =>
+    route.fulfill({ json: { ...owner, admin: false, capabilities: [] } }),
+  )
+  await page.setViewportSize({ width: 390, height: 600 })
+  await page.goto(`/projects/${project.slug}/compute/serverless`)
+  await page.getByRole('button', { name: 'Toggle navigation' }).click()
+  await page.keyboard.press('Control+k')
+  const search = page.getByRole('dialog', { name: 'Go to a page', exact: true })
+  await expect(
+    page.getByRole('dialog', { name: 'Navigation', exact: true }),
+  ).toHaveCount(0)
+  await expect(search.getByRole('combobox')).toBeFocused()
+  await search.getByRole('combobox').fill('Administration')
+  await expect(search.getByRole('option')).toHaveCount(0)
+  await search.getByRole('button', { name: 'Close search' }).click()
+  await expect(search).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Search navigation' }),
+  ).toBeFocused()
+})

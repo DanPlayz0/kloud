@@ -17,7 +17,10 @@ export function Command({
     />
   )
 }
-export function CommandInput(props: ComponentProps<typeof Primitive.Input>) {
+export function CommandInput({
+  className,
+  ...props
+}: ComponentProps<typeof Primitive.Input>) {
   return (
     <div className="flex items-center gap-2 border-b border-border px-3">
       <Search
@@ -25,7 +28,10 @@ export function CommandInput(props: ComponentProps<typeof Primitive.Input>) {
         aria-hidden="true"
       />
       <Primitive.Input
-        className="h-11 min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+        className={cn(
+          'h-11 min-w-0 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground',
+          className,
+        )}
         {...props}
       />
     </div>
