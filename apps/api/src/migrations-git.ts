@@ -2,6 +2,23 @@ import type { PoolClient } from 'pg'
 
 export async function migrateGit(db: PoolClient) {
   if (
+    !(await db.query('SELECT version FROM migrations WHERE version=28'))
+      .rowCount
+  ) {
+    await db.query(`
+      CREATE TABLE github_app_setups (
+        state text PRIMARY KEY, actor uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+        project text NOT NULL, service text NOT NULL, name text NOT NULL,
+        scope text NOT NULL CHECK(scope IN ('personal','shared')),
+        phase text NOT NULL CHECK(phase IN ('manifest','install')),
+        encrypted_credentials text, slug text,
+        expires timestamptz NOT NULL DEFAULT now()+interval '15 minutes',
+        FOREIGN KEY(project,service) REFERENCES services(project_slug,slug) ON DELETE CASCADE
+      );
+      INSERT INTO migrations(version) VALUES(28);
+    `)
+  }
+  if (
     !(await db.query('SELECT version FROM migrations WHERE version=20'))
       .rowCount
   ) {

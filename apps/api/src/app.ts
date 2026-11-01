@@ -2,6 +2,7 @@ import { registryConnections } from './registry-connections.js'
 import { forwarding, forwardingWorker } from './forwarding.js'
 import { recovery, recoveryWorker } from './recovery.js'
 import { gitConnections } from './git-connections.js'
+import { githubAppSetup } from './github-app-setup.js'
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { HTTPException } from 'hono/http-exception'
 import { bodyLimit } from 'hono/body-limit'
@@ -89,6 +90,7 @@ const healthRoute = createRoute({
 })
 
 app.openapi(healthRoute, (c) => c.json({ status: 'ok' as const }, 200))
+app.route('/', githubAppSetup)
 app.route('/', deploymentHooks)
 app.route('/', platformWorker)
 app.route('/', forwardingWorker)

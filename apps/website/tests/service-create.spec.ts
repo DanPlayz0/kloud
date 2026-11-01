@@ -100,6 +100,64 @@ async function image(page: Page) {
   await page.getByLabel('Image', { exact: true }).fill('nginx:alpine')
 }
 
+for (const source of ['image', 'compose'] as const) {
+  test(`imports a production .env while creating a ${source} service`, async ({
+    page,
+  }) => {
+    const calls = await setup(page)
+    if (source === 'image') {
+      await image(page)
+      await page
+        .getByRole('button', { name: 'Environment and secrets', exact: true })
+        .click()
+    } else {
+      await page
+        .getByRole('button', { name: 'Docker Compose', exact: true })
+        .click()
+      await page.getByLabel('Service name').fill('My stack')
+      await page
+        .getByLabel('Compose definition')
+        .fill('services:\n  web:\n    image: nginx:alpine\n')
+    }
+    let dialogs = 0
+    page.on('dialog', async (dialog) => {
+      dialogs++
+      await dialog.dismiss()
+    })
+    const developer = page.getByRole('radio', {
+      name: 'Developer .env',
+      exact: true,
+    })
+    await expect(developer).toBeEnabled()
+    await developer.click()
+    const document = page.getByLabel('Complete .env document')
+    await document.fill(
+      '# Production\nAPI_KEY=secret$value\nMESSAGE="hello world"\nEMPTY=\nPRIVATE_KEY="line one\\nline two"\n',
+    )
+    await page.getByRole('radio', { name: 'Normal', exact: true }).click()
+    await expect(page.getByLabel('Variable name')).toHaveCount(4)
+    await developer.click()
+    await expect(document).toHaveValue(/API_KEY=.*secret\$value/)
+    await document.fill('INVALID LINE')
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click()
+    expect(calls.created).toHaveLength(0)
+    await document.fill(
+      'API_KEY=secret$value\nMESSAGE="hello world"\nEMPTY=\nPRIVATE_KEY="line one\\nline two"\n',
+    )
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click()
+    await expect(page).toHaveURL(
+      `/projects/demo/applications/${source === 'image' ? 'my-image' : 'my-stack'}`,
+    )
+    expect(calls.configurations[0].config.runtime.environment).toEqual({
+      API_KEY: 'secret$value',
+      MESSAGE: 'hello world',
+      EMPTY: '',
+      PRIVATE_KEY: 'line one\nline two',
+    })
+    expect(dialogs).toBe(0)
+  })
+}
+
 test('visual picker supports keyboard navigation and preserves source drafts and custom slugs', async ({
   page,
 }) => {

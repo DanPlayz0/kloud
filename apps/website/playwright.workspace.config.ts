@@ -3,6 +3,7 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: './tests',
   testMatch: [
+    'github-app.spec.ts',
     'connector-workspace.spec.ts',
     'project-picker.spec.ts',
     'layout.spec.ts',

@@ -679,6 +679,7 @@ export function ServiceCreatePage({
                   </CollapsibleSection>
                   {canDeploy && !compose && (
                     <RuntimeFields
+                      allowPlaintext
                       value={config.runtime}
                       onChange={(runtime) => setConfig({ ...config, runtime })}
                       compact
@@ -774,6 +775,7 @@ export function ServiceCreatePage({
                   </CardHeader>
                   <CardContent>
                     <EnvironmentEditor
+                      allowPlaintext
                       value={config.runtime.environment}
                       onChange={(environment) =>
                         setConfig({

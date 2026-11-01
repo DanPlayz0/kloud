@@ -14,11 +14,14 @@ export function EnvironmentEditor({
   onChange,
   revealUrl,
   onReveal,
+  allowPlaintext = false,
 }: {
   value: Record<string, string>
   onChange: (value: Record<string, string>) => void
   revealUrl?: string
   onReveal?: (original: Record<string, string>) => void
+  /** New, locally entered values do not require revealing saved secrets. */
+  allowPlaintext?: boolean
 }) {
   const [mode, setMode] = useState<'normal' | 'developer'>('normal')
   const [rows, setRows] = useState(() => Object.entries(value))
@@ -51,7 +54,7 @@ export function EnvironmentEditor({
   }
   async function developer() {
     setError('')
-    if (!revealed) {
+    if (!allowPlaintext && !revealed) {
       if (!revealUrl) return
       if (
         !window.confirm(
@@ -114,11 +117,14 @@ export function EnvironmentEditor({
         <ToggleGroupItem value="normal" disabled={busy}>
           Normal
         </ToggleGroupItem>
-        <ToggleGroupItem value="developer" disabled={busy || !revealUrl}>
+        <ToggleGroupItem
+          value="developer"
+          disabled={busy || (!allowPlaintext && !revealUrl)}
+        >
           Developer .env
         </ToggleGroupItem>
       </ToggleGroup>
-      {!revealUrl && (
+      {!allowPlaintext && !revealUrl && (
         <p className="text-xs text-muted-foreground">
           Full developer mode requires a saved draft and the separate Reveal
           service secrets permission. Masked editing remains available.
@@ -129,6 +135,7 @@ export function EnvironmentEditor({
         <Field>
           <FieldLabel>Complete .env document</FieldLabel>
           <Textarea
+            placeholder="Paste your existing .env here"
             validationMessage={error}
             rows={16}
             value={text}
@@ -144,9 +151,11 @@ export function EnvironmentEditor({
             }}
           />
           <span className="text-xs text-muted-foreground">
-            Omitted keys are deleted after review. Dollar signs are literal.
-            Double quotes support escaped newlines, tabs, quotes and
-            backslashes; quoted values may span lines.
+            {allowPlaintext
+              ? 'Paste your complete .env to import its variables. '
+              : 'Omitted keys are deleted after review. '}
+            Dollar signs are literal. Double quotes support escaped newlines,
+            tabs, quotes and backslashes; quoted values may span lines.
           </span>
         </Field>
       ) : (

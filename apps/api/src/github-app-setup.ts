@@ -1,0 +1,234 @@
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
+import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
+import { requireUser, type Env } from './auth.js'
+import { permissionTransaction } from './permissions.js'
+import { demandService } from './service-permissions.js'
+import {
+  browserOrigin,
+  digest,
+  isAllowedOrigin,
+  publicOrigin,
+  token,
+} from './security.js'
+import { seal, unseal } from './platform-secrets.js'
+import {
+  appJwt,
+  accessToken,
+  providerRequest,
+  type Credentials,
+  type GitConnection,
+} from './git-provider.js'
+
+const path = '/projects/:project/git-connections/github-app'
+const stateSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
+const github = { provider: 'github_app' as const, origin: 'https://github.com' }
+export const githubAppSetup = new Hono<Env>()
+githubAppSetup.use(`${path}/*`, requireUser)
+
+export function appManifest(name: string, origin: string) {
+  const callback = `${publicOrigin}/api/git/github/callback?opener_origin=${encodeURIComponent(origin)}`
+  return {
+    name,
+    url: publicOrigin,
+    redirect_url: callback,
+    setup_url: callback,
+    public: false,
+    request_oauth_on_install: false,
+    default_permissions: {
+      contents: 'read',
+      metadata: 'read',
+      repository_hooks: 'write',
+    },
+  }
+}
+
+// GitHub's cross-site navigation cannot use the app's SameSite=Strict session.
+// Relay only the callback parameters to the original window, which finishes with
+// an authenticated, origin-checked POST. Never expose app credentials here.
+githubAppSetup.get('/git/github/callback', (c) => {
+  const origin = c.req.query('opener_origin')
+  if (!isAllowedOrigin(origin)) throw new HTTPException(400)
+  const nonce = token()
+  c.header('Referrer-Policy', 'no-referrer')
+  c.header(
+    'Content-Security-Policy',
+    `default-src 'none'; script-src 'nonce-${nonce}'; frame-ancestors 'none'; base-uri 'none'`,
+  )
+  return c.html(`<!doctype html><html lang="en"><meta charset="utf-8"><title>GitHub App setup</title><body><p>Return to service setup to finish connecting GitHub. Keep this window open.</p><script nonce="${nonce}">
+    const params = new URLSearchParams(location.search);
+    if (window.opener) window.opener.postMessage({type:'kloud-github-app',state:params.get('state'),code:params.get('code'),installation_id:params.get('installation_id'),setup_action:params.get('setup_action')}, ${JSON.stringify(origin)});
+  </script></body></html>`)
+})
+
+githubAppSetup.post(`${path}/start`, async (c) => {
+  const body = z
+    .object({
+      service: z.string().min(1),
+      name: z.string().trim().min(1).max(100),
+      scope: z.enum(['personal', 'shared']).default('personal'),
+      organization: z
+        .string()
+        .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/)
+        .optional(),
+    })
+    .strict()
+    .parse(await c.req.json())
+  const state = token()
+  await permissionTransaction(c.get('user'), async (db, actor) => {
+    await demandService(
+      actor,
+      c.req.param('project'),
+      'deploy',
+      body.service,
+      db,
+    )
+    if (body.scope === 'shared' && !actor.admin) throw new HTTPException(403)
+    // Fail before sending the user to GitHub if credentials cannot be stored.
+    seal({})
+    await db.query('DELETE FROM github_app_setups WHERE expires<=now()')
+    await db.query(
+      "INSERT INTO github_app_setups(state,actor,project,service,name,scope,phase) VALUES($1,$2,$3,$4,$5,$6,'manifest')",
+      [
+        digest(state),
+        actor.id,
+        c.req.param('project'),
+        body.service,
+        body.name,
+        body.scope,
+      ],
+    )
+  })
+  return c.json({
+    state,
+    action: `https://github.com/${body.organization ? `organizations/${encodeURIComponent(body.organization)}/` : ''}settings/apps/new?state=${state}`,
+    manifest: appManifest(body.name, browserOrigin(c)),
+  })
+})
+
+githubAppSetup.post(`${path}/finish`, async (c) => {
+  const body = z
+    .object({
+      service: z.string().min(1),
+      state: stateSchema,
+      code: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{1,200}$/)
+        .optional(),
+      installation_id: z.coerce.number().int().positive().safe().optional(),
+      setup_action: z.literal('install').optional(),
+    })
+    .strict()
+    .parse(await c.req.json())
+  const result = await permissionTransaction(
+    c.get('user'),
+    async (db, actor) => {
+      await demandService(
+        actor,
+        c.req.param('project'),
+        'deploy',
+        body.service,
+        db,
+      )
+      const setup = (
+        await db.query(
+          'SELECT * FROM github_app_setups WHERE state=$1 AND actor=$2 AND project=$3 AND service=$4 AND expires>now() FOR UPDATE',
+          [digest(body.state), actor.id, c.req.param('project'), body.service],
+        )
+      ).rows[0]
+      if (!setup)
+        throw new HTTPException(403, {
+          message: 'GitHub setup expired or was already used. Start again.',
+        })
+      if (setup.scope === 'shared' && !actor.admin) throw new HTTPException(403)
+      const nextState = token()
+      if (setup.phase === 'manifest') {
+        if (!body.code || body.installation_id) throw new HTTPException(400)
+        const data = await providerRequest(
+          github,
+          '',
+          `/app-manifests/${body.code}/conversions`,
+          { method: 'POST' },
+        )
+        const app = z
+          .object({
+            id: z.number().int().positive(),
+            slug: z.string().regex(/^[A-Za-z0-9_-]+$/),
+            pem: z.string().min(1),
+            client_id: z.string().min(1),
+            client_secret: z.string().min(1),
+            webhook_secret: z.string().min(1),
+          })
+          .parse(data)
+        const credentials = {
+          app_id: String(app.id),
+          private_key: app.pem,
+          client_id: app.client_id,
+          client_secret: app.client_secret,
+          webhook_secret: app.webhook_secret,
+        }
+        appJwt(credentials)
+        await db.query(
+          "UPDATE github_app_setups SET state=$1,phase='install',slug=$2,encrypted_credentials=$3,expires=now()+interval '15 minutes' WHERE state=$4",
+          [digest(nextState), app.slug, seal(credentials), digest(body.state)],
+        )
+        return {
+          state: nextState,
+          install_url: `https://github.com/apps/${app.slug}/installations/new?state=${nextState}`,
+        }
+      }
+      if (!body.installation_id || body.setup_action !== 'install')
+        throw new HTTPException(400)
+      const credentials: Credentials = {
+        ...unseal(setup.encrypted_credentials),
+        installation_id: body.installation_id,
+      }
+      const installation = await providerRequest(
+        github,
+        appJwt(credentials),
+        `/app/installations/${body.installation_id}`,
+      )
+      if (
+        String(installation.app_id) !== credentials.app_id ||
+        installation.id !== body.installation_id ||
+        installation.suspended_at
+      )
+        throw new HTTPException(403, {
+          message:
+            'This installation does not belong to the GitHub App, or is suspended.',
+        })
+      const row: GitConnection = {
+        ...github,
+        id: randomUUID(),
+        owner: setup.scope === 'personal' ? actor.id : null,
+        encrypted_credentials: seal(credentials),
+      }
+      await accessToken(row, credentials)
+      await db.query(
+        'INSERT INTO git_connections(id,project,name,provider,origin,owner,encrypted_credentials,identity) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+        [
+          row.id,
+          setup.project,
+          setup.name,
+          row.provider,
+          row.origin,
+          row.owner,
+          row.encrypted_credentials,
+          {
+            installation_id: installation.id,
+            account: installation.account?.login,
+            account_id: installation.account?.id,
+            app_id: credentials.app_id,
+            slug: setup.slug,
+          },
+        ],
+      )
+      await db.query('DELETE FROM github_app_setups WHERE state=$1', [
+        digest(body.state),
+      ])
+      return { id: row.id }
+    },
+  )
+  return c.json(result)
+})

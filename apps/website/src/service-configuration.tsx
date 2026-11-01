@@ -441,12 +441,14 @@ export function RuntimeFields({
   compact = false,
   revealUrl,
   onReveal,
+  allowPlaintext = false,
 }: {
   value: RuntimeConfig
   onChange: (value: RuntimeConfig) => void
   compact?: boolean
   revealUrl?: string
   onReveal?: (original: Record<string, string>) => void
+  allowPlaintext?: boolean
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -465,6 +467,7 @@ export function RuntimeFields({
           onChange={(environment) => onChange({ ...value, environment })}
           revealUrl={revealUrl}
           onReveal={onReveal}
+          allowPlaintext={allowPlaintext}
         />
       </CreationSettings>
       <CreationSettings

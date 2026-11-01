@@ -47,7 +47,7 @@ export function ConnectorControls({
         {showOpen && (
           <Button asChild>
             <Link
-              to="/connectors/$connectorId/compute/containers"
+              to="/connectors/$connectorId/overview"
               params={{ connectorId: c.id }}
             >
               Open connector{' '}

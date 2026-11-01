@@ -120,7 +120,11 @@ export async function providerRequest(
     redirect: 'error',
     headers: {
       accept: 'application/json',
-      authorization: `${connection.provider.startsWith('github') ? 'Bearer' : 'token'} ${token}`,
+      ...(token
+        ? {
+            authorization: `${connection.provider.startsWith('github') ? 'Bearer' : 'token'} ${token}`,
+          }
+        : {}),
       'content-type': 'application/json',
       'user-agent': 'Kloud',
       ...(connection.provider.startsWith('github')

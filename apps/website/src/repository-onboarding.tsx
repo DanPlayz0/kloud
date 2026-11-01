@@ -7,6 +7,7 @@ import { api } from './api'
 import { ErrorMessage } from './components'
 import { Button, Input, NativeSelect, Textarea } from './components/ui/controls'
 import { Card } from './components/ui/card'
+import { GithubAppConnect } from './github-app-connect'
 
 interface Connection {
   id: string
@@ -43,9 +44,7 @@ export function RepositoryOnboarding({
 }) {
   const base = `/projects/${project}/git-connections`
   const [connections, setConnections] = useState<Connection[]>([])
-  const [mode, setMode] = useState<'app' | 'pat' | 'selfhost' | 'legacy'>(
-    value.connection_id ? 'app' : 'pat',
-  )
+  const [mode, setMode] = useState<'app' | 'pat' | 'selfhost' | 'legacy'>('app')
   const [connection, setConnection] = useState(value.connection_id ?? '')
   const [url, setUrl] = useState(
     value.repository
@@ -172,7 +171,15 @@ export function RepositoryOnboarding({
             onChange={(e) => {
               setMode(e.target.value as typeof mode)
               setConnection('')
+              setAdding(false)
               setError('')
+              onChange({
+                ...value,
+                repository: '',
+                connection_id: undefined,
+                repository_id: undefined,
+                provider_url: undefined,
+              })
             }}
           >
             <option value="app">GitHub App installation</option>
@@ -283,7 +290,18 @@ export function RepositoryOnboarding({
             >
               {adding ? 'Cancel new connection' : 'Add connection'}
             </Button>
-            {adding && (
+            {adding && mode === 'app' && (
+              <GithubAppConnect
+                project={project}
+                service={service}
+                onConnected={async (id) => {
+                  await refresh()
+                  setConnection(id)
+                  setAdding(false)
+                }}
+              />
+            )}
+            {adding && mode !== 'app' && (
               <FieldGroup className="flex flex-col gap-3 border border-border rounded-md p-3">
                 <Field>
                   <FieldLabel>Connection name</FieldLabel>
@@ -321,31 +339,14 @@ export function RepositoryOnboarding({
                     </p>
                   </>
                 )}
-                {mode === 'app' ? (
-                  <>
-                    <Field>
-                      <FieldLabel>GitHub App ID</FieldLabel>
-                      <Input data-git-new="app_id" />
-                    </Field>
-                    <Field>
-                      <FieldLabel>Installation ID</FieldLabel>
-                      <Input data-git-new="installation_id" type="number" />
-                    </Field>
-                    <Field>
-                      <FieldLabel>App private key (PEM)</FieldLabel>
-                      <Textarea data-git-new="private_key" rows={5} />
-                    </Field>
-                  </>
-                ) : (
-                  <Field>
-                    <FieldLabel>Personal access token</FieldLabel>
-                    <Input
-                      data-git-new="token"
-                      type="password"
-                      autoComplete="new-password"
-                    />
-                  </Field>
-                )}
+                <Field>
+                  <FieldLabel>Personal access token</FieldLabel>
+                  <Input
+                    data-git-new="token"
+                    type="password"
+                    autoComplete="new-password"
+                  />
+                </Field>
                 <Field>
                   <FieldLabel>Ownership</FieldLabel>
                   <NativeSelect data-git-new="scope">
@@ -374,13 +375,7 @@ export function RepositoryOnboarding({
                         provider,
                         service,
                         scope: read('scope'),
-                        ...(mode === 'app'
-                          ? {
-                              app_id: read('app_id'),
-                              installation_id: Number(read('installation_id')),
-                              private_key: read('private_key'),
-                            }
-                          : { token: read('token') }),
+                        token: read('token'),
                         ...(mode === 'selfhost'
                           ? {
                               origin: read('origin'),
