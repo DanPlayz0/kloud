@@ -144,7 +144,7 @@ export function Shell({
         />
       )}
       <aside
-        className={`sidebar bg-background border-border ${open ? 'open' : ''}`}
+        className={`sidebar bg-sidebar border-sidebar-border ${open ? 'open' : ''}`}
       >
         <ProjectPicker user={user} projects={projects} project={project} />
         <nav aria-label="Main navigation">
@@ -157,6 +157,7 @@ export function Shell({
                     active === 'services' ? 'nav-item active' : 'nav-item'
                   }
                   href={`/projects/${project}/services`}
+                  aria-current={active === 'services' ? 'page' : undefined}
                 >
                   <Icon name="box" />
                   Services
@@ -168,6 +169,7 @@ export function Shell({
                   href={
                     project ? `/projects/${project}/compute/containers` : '/'
                   }
+                  aria-current={active === 'containers' ? 'page' : undefined}
                 >
                   <Icon />
                   Containers
@@ -179,6 +181,7 @@ export function Shell({
                   href={
                     project ? `/projects/${project}/compute/serverless` : '/'
                   }
+                  aria-current={active === 'serverless' ? 'page' : undefined}
                 >
                   <Icon name="network" />
                   Serverless<span className="soon">Soon</span>
@@ -186,6 +189,7 @@ export function Shell({
                 <a
                   className={active === 'pm2' ? 'nav-item active' : 'nav-item'}
                   href={`/projects/${project}/compute/pm2`}
+                  aria-current={active === 'pm2' ? 'page' : undefined}
                 >
                   <Icon name="activity" />
                   PM2
@@ -208,6 +212,7 @@ export function Shell({
                           key={name}
                           className={`nav-item ${active === 'dns' ? 'active' : ''}`}
                           href={`/projects/${project}/dns`}
+                          aria-current={active === 'dns' ? 'page' : undefined}
                         >
                           <Icon name={icon} />
                           Cloud DNS
@@ -220,6 +225,9 @@ export function Shell({
                           key={name}
                           className={`nav-item ${active === 'access' ? 'active' : ''}`}
                           href={`/projects/${project}/access`}
+                          aria-current={
+                            active === 'access' ? 'page' : undefined
+                          }
                         >
                           <Icon name={icon} />
                           Access
@@ -244,6 +252,7 @@ export function Shell({
                             >
                               <Icon name={icon} />
                               {name}
+                              <span className="soon">Soon</span>
                             </Button>
                           </span>
                         </QuickTip>
@@ -271,6 +280,9 @@ export function Shell({
                     className={`nav-item ${active === `admin-${path}` ? 'active' : ''}`}
                     key={path}
                     href={`/admin/${path}`}
+                    aria-current={
+                      active === `admin-${path}` ? 'page' : undefined
+                    }
                   >
                     <Icon name={icon} />
                     {label}

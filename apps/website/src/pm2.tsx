@@ -1,3 +1,4 @@
+import { TableCard } from './components/ui/card'
 import { StatusBadge } from './components/ui/status-badge'
 import { InventoryCard } from './components/inventory-card'
 import { Fragment, useEffect, useRef, useState, type RefObject } from 'react'
@@ -107,7 +108,7 @@ export function Pm2Page({
           </Notice>
         )}
         {data && data.length > 0 && (
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
+          <TableCard>
             <table className="w-full text-left text-sm">
               <thead className="border-b border-border text-muted-foreground">
                 <tr>
@@ -138,7 +139,7 @@ export function Pm2Page({
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableCard>
         )}
       </section>
     </Shell>

@@ -11,6 +11,13 @@
   --color-secondary: #191919;
   --color-primary: #eeeeee;
   --color-primary-foreground: #171717;
+  --color-sidebar: var(--color-background);
+  --color-sidebar-foreground: #dedede;
+  --color-sidebar-muted: #aaaaaa;
+  --color-sidebar-disabled: #929292;
+  --color-sidebar-accent: #303030;
+  --color-sidebar-hover: #242424;
+  --color-sidebar-border: #383838;
   --color-status-success: #6ee7b7;
   --color-status-warning: #fcd34d;
   --color-status-danger: #fda4af;
@@ -75,12 +82,20 @@ a,
 .ui-button > svg {
   flex-shrink: 0;
 }
-.ui-card {
-  min-width: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 28px;
-  overflow-wrap: anywhere;
+@layer components {
+  .ui-card {
+    min-width: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 20px;
+    overflow-wrap: anywhere;
+  }
+  .ui-card[data-size='compact'] {
+    padding: 16px;
+  }
+  .ui-card[data-size='flush'] {
+    padding: 0;
+  }
 }
 .ui-button:hover,
 .button:hover {
@@ -157,8 +172,9 @@ small {
 }
 .sidebar {
   width: 264px;
-  background: var(--color-background);
-  border-right: 1px solid #252525;
+  background: var(--color-sidebar);
+  color: var(--color-sidebar-foreground);
+  border-right: 1px solid var(--color-sidebar-border);
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 20;
@@ -179,7 +195,7 @@ small {
 }
 .project-picker > .ui-button:hover,
 .project-picker > .ui-button[data-state='open'] {
-  background: var(--color-card);
+  background: var(--color-sidebar-hover);
 }
 .project-picker-popover {
   width: 280px;
@@ -209,7 +225,7 @@ small {
 .nav-group > p {
   font-size: 10px;
   font-weight: 700;
-  color: #626262;
+  color: var(--color-sidebar-muted);
   letter-spacing: 0.65px;
   margin: 0 10px 5px;
 }
@@ -226,33 +242,39 @@ small {
   padding: 9px 10px;
   font-size: 12px;
   font-weight: 550;
-  color: #999;
+  color: var(--color-sidebar-foreground);
 }
 .nav-item svg {
   flex-shrink: 0;
-  color: #878787;
+  color: currentColor;
 }
 .nav-item.active {
-  background: var(--color-secondary);
-  color: #f4f4f4;
+  background: var(--color-sidebar-accent);
+  color: var(--color-primary);
 }
-.nav-item:hover {
-  background: var(--color-muted);
+.nav-item:not(:disabled):not(.active):hover {
+  background: var(--color-sidebar-hover);
+}
+.nav-item:focus-visible,
+.nav-group > span:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 7px;
 }
 .nav-item.deferred {
   opacity: 1;
-  color: #7c7c7c;
+  color: var(--color-sidebar-disabled);
 }
 .soon {
   font-size: 9px;
   margin-left: auto;
-  color: #575757;
-  border: 1px solid var(--color-border);
+  color: var(--color-sidebar-muted);
+  border: 1px solid var(--color-sidebar-border);
   border-radius: 4px;
   padding: 1px 4px;
 }
 .account {
-  border-top: 1px solid #303030;
+  border-top: 1px solid var(--color-sidebar-border);
   padding-top: 10px;
   position: relative;
 }
@@ -289,10 +311,11 @@ small {
   display: block;
   margin-top: 3px;
   font-size: 10px;
+  color: var(--color-sidebar-muted);
 }
 .account-dots {
   margin-left: auto;
-  color: #6b6b6b;
+  color: var(--color-sidebar-muted);
 }
 .account-menu {
   position: absolute;
@@ -675,10 +698,6 @@ small {
   min-width: 0;
   align-items: end;
   gap: 16px;
-  padding: 22px;
-  border: 1px solid var(--color-border);
-  border-radius: 9px;
-  background: var(--color-card);
   margin-bottom: 24px;
 }
 .inline-form .ui-input:not([type='checkbox']) {
@@ -717,15 +736,13 @@ small {
   opacity: 0.4;
 }
 .admin-row {
-  padding: 22px;
-  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 16px;
   display: flex;
   flex-wrap: wrap;
   min-width: 0;
   gap: 20px;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-card);
   font-size: 12px;
 }
 .admin-row > * {
@@ -806,7 +823,6 @@ small {
   flex: 1;
 }
 .inventory-card {
-  padding: 0;
   overflow: hidden;
 }
 .inventory-card-header {

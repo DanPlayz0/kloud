@@ -432,7 +432,10 @@ export function ServiceCreatePage({
         ) : (
           <form onSubmit={submit} noValidate className="space-y-6">
             <fieldset disabled={busy} className="min-w-0 space-y-6">
-              <Card className="flex flex-wrap items-center gap-3 p-4">
+              <Card
+                size="compact"
+                className="flex flex-wrap items-center gap-3"
+              >
                 <source.icon size={21} aria-hidden="true" />
                 <span className="min-w-0 flex-1 font-medium">
                   {source.title}
@@ -467,7 +470,7 @@ export function ServiceCreatePage({
               )}
               <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_17rem]">
                 <div className="min-w-0 space-y-4">
-                  <Card className="space-y-5 p-5">
+                  <Card className="space-y-5">
                     <Label>
                       Service name
                       <Input
@@ -506,7 +509,10 @@ export function ServiceCreatePage({
                         </p>
                       )}
                       {hosts?.length === 0 && (
-                        <Card className="p-4 text-sm text-muted-foreground">
+                        <Card
+                          size="compact"
+                          className="text-sm text-muted-foreground"
+                        >
                           No hosts connected. Add a connector to deploy
                           services.
                         </Card>
@@ -589,7 +595,7 @@ export function ServiceCreatePage({
                   )}
                 </div>
                 <aside className="hidden min-w-0 space-y-4 xl:sticky xl:top-6 xl:block">
-                  <Card className="space-y-4 p-5">
+                  <Card className="space-y-4">
                     <h2 className="text-sm font-semibold">Your service</h2>
                     <dl className="space-y-4 text-sm">
                       <div>
@@ -620,7 +626,7 @@ export function ServiceCreatePage({
                 </aside>
               </div>
               {deploying && config.source.type === 'github' && (
-                <Card className="space-y-3 p-5">
+                <Card className="space-y-3">
                   <Label>
                     Commit SHA
                     <Input

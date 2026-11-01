@@ -1,3 +1,4 @@
+import { TableCard, FormCard } from './components/ui/card'
 import { useRef, useState, type FormEvent } from 'react'
 import { ServiceGrantsEditor } from './service-grants'
 import { Pm2GrantsEditor } from './pm2-grants'
@@ -113,9 +114,8 @@ export function ProjectAccessPage({
         )}
         {data && (
           <fieldset disabled={busy} className="space-y-6 min-w-0">
-            <form
+            <FormCard
               key={`settings:${revision}`}
-              className="inline-form bg-card border-border"
               onSubmit={(e) => {
                 e.preventDefault()
                 void action(`${base}/settings`, 'PUT', {
@@ -139,7 +139,7 @@ export function ProjectAccessPage({
                 Existing grants stay unchanged. Names follow recreated
                 containers on the same connector in this project.
               </p>
-            </form>
+            </FormCard>
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div className="relative w-80 max-w-full">
                 <Search
@@ -169,7 +169,7 @@ export function ProjectAccessPage({
               are planned and unavailable today, and include View for the same
               target.
             </p>
-            <div className="relative overflow-x-auto rounded-lg border border-border bg-card">
+            <TableCard>
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-border bg-background text-muted-foreground">
                   <tr>
@@ -256,7 +256,7 @@ export function ProjectAccessPage({
                   )}
                 </tbody>
               </table>
-            </div>
+            </TableCard>
           </fieldset>
         )}
       </section>
@@ -352,8 +352,12 @@ function MemberEditor({
   saving,
 }: MemberEditorProps & { onCancel: () => void; saving: boolean }) {
   const [saveError, setSaveError] = useState('')
-  const [pm2Grants, setPm2Grants] = useState<Pm2Grant[]>(member?.pm2_grants ?? [])
-  const [dnsGrants, setDnsGrants] = useState<DnsGrant[]>(member?.dns_grants ?? [])
+  const [pm2Grants, setPm2Grants] = useState<Pm2Grant[]>(
+    member?.pm2_grants ?? [],
+  )
+  const [dnsGrants, setDnsGrants] = useState<DnsGrant[]>(
+    member?.dns_grants ?? [],
+  )
   const [role, setRole] = useState(member?.role ?? 'member')
   const [grants, setGrants] = useState<Grant[]>(member?.grants ?? [])
   const [serviceGrants, setServiceGrants] = useState<ServiceGrant[]>(
@@ -399,7 +403,10 @@ function MemberEditor({
       grants,
       service_grants: serviceGrants,
       pm2_grants: pm2Grants,
-      ...(JSON.stringify(dnsGrants) !== JSON.stringify(member?.dns_grants ?? []) || !member ? {dns_grants: dnsGrants} : {}),
+      ...(JSON.stringify(dnsGrants) !==
+        JSON.stringify(member?.dns_grants ?? []) || !member
+        ? { dns_grants: dnsGrants }
+        : {}),
       ...(!member
         ? { username: new FormData(e.currentTarget).get('username') }
         : {}),
@@ -465,7 +472,12 @@ function MemberEditor({
           onChange={setPm2Grants}
           disabled={role === 'admin'}
         />
-        <DnsMemberGrants project={project} grants={dnsGrants} onChange={setDnsGrants} disabled={role === 'admin'}/>
+        <DnsMemberGrants
+          project={project}
+          grants={dnsGrants}
+          onChange={setDnsGrants}
+          disabled={role === 'admin'}
+        />
         <div className="space-y-2">
           <h3>Container grants</h3>
           {grants.map((g, index) => (
@@ -594,7 +606,8 @@ function MemberEditor({
               JSON.stringify(pm2Grants) ===
                 JSON.stringify(member.pm2_grants ?? []) &&
               JSON.stringify(grants) === JSON.stringify(member.grants) &&
-              JSON.stringify(dnsGrants) === JSON.stringify(member.dns_grants ?? []) &&
+              JSON.stringify(dnsGrants) ===
+                JSON.stringify(member.dns_grants ?? []) &&
               JSON.stringify(serviceGrants) ===
                 JSON.stringify(member.service_grants ?? []))
           }

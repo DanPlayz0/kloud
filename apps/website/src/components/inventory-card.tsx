@@ -18,7 +18,7 @@ export function InventoryCard({
   onSubmit: ComponentProps<'form'>['onSubmit']
 }) {
   return (
-    <Card className="inventory-card">
+    <Card size="flush" className="inventory-card">
       <div className="inventory-card-header">
         <div className="inventory-card-icon bg-muted text-muted-foreground border-border">
           <Icon size={20} aria-hidden="true" />

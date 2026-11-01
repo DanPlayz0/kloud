@@ -1,3 +1,4 @@
+import { TableCard } from './ui/card'
 import { useRef, useState, type FormEvent } from 'react'
 import { KeyRound, Search, UserPen, UserPlus } from 'lucide-react'
 import {
@@ -73,7 +74,7 @@ export function Users({
         <UserDialog current={current} projects={projects} action={action} />
       </div>
       <ErrorMessage message={error} />
-      <div className="relative overflow-x-auto rounded-lg border border-border bg-card">
+      <TableCard>
         <table className="w-full text-left text-sm">
           <thead className="border-b border-border bg-background text-muted-foreground">
             <tr>
@@ -188,7 +189,7 @@ export function Users({
             )}
           </tbody>
         </table>
-      </div>
+      </TableCard>
     </div>
   )
 }

@@ -128,7 +128,7 @@ export function ServicesPage({
                 c.stale || !c.seen || Date.now() - Date.parse(c.seen) > 20000,
             )
             return (
-              <Card key={service.slug} className="space-y-4 p-5">
+              <Card key={service.slug} className="space-y-4">
                 <div className="flex items-start gap-3">
                   <Boxes size={20} />
                   <div className="min-w-0">

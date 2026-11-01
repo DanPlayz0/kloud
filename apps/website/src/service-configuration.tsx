@@ -1,8 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import type {
-  PlatformConfig,
-  RuntimeConfig,
-} from '@kloud/protocol/platform'
+import type { PlatformConfig, RuntimeConfig } from '@kloud/protocol/platform'
 import {
   Button,
   Input,
@@ -802,7 +799,9 @@ function CreationSettings({
       </CollapsibleSection>
     )
   return card ? (
-    <Card className="space-y-3 p-4">{children}</Card>
+    <Card size="compact" className="space-y-3">
+      {children}
+    </Card>
   ) : (
     <>{children}</>
   )

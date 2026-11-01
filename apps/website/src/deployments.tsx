@@ -90,7 +90,7 @@ export function DeploymentSettings({
         />
       )}
       {data && (
-        <Card className="space-y-4 p-5">
+        <Card className="space-y-4">
           {canDeploy && (
             <form
               className="flex flex-wrap items-end gap-3"
@@ -263,7 +263,7 @@ function DeploymentForm({
     }
   }
   return (
-    <Card className="space-y-5 p-5">
+    <Card className="space-y-5">
       <form
         onSubmit={save}
         onChange={() => setSaved(false)}

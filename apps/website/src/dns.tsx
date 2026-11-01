@@ -1,3 +1,4 @@
+import { TableCard, Card } from './components/ui/card'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Globe, Plus, Trash2, Pencil } from 'lucide-react'
 import {
@@ -322,10 +323,7 @@ export function DnsProviders({
         <p className="text-muted-foreground">No DNS providers connected.</p>
       )}
       {data?.map((p) => (
-        <div
-          className="rounded border border-border bg-card p-4 space-y-3"
-          key={p.id}
-        >
+        <Card size="compact" className="space-y-3" key={p.id}>
           <div className="flex flex-wrap gap-3 items-center">
             <Globe size={18} />
             <strong>{p.name}</strong>
@@ -412,7 +410,7 @@ export function DnsProviders({
               disabled={busy}
             />
           )}
-        </div>
+        </Card>
       ))}
     </div>
   )
@@ -483,10 +481,7 @@ function ProviderZones({
         <>
           <h3>Project delegations</h3>
           {current.delegations.map((d) => (
-            <div
-              key={d.project}
-              className="rounded border border-border p-3 space-y-2"
-            >
+            <Card size="compact" key={d.project} className="space-y-2">
               <strong>
                 {projects.find((p) => p.slug === d.project)?.name ?? d.project}
               </strong>
@@ -525,7 +520,7 @@ function ProviderZones({
               >
                 Revoke access
               </Button>
-            </div>
+            </Card>
           ))}
           {current.delegations.length > 1 && (
             <p className="text-sm text-muted-foreground">
@@ -785,7 +780,7 @@ function DnsRecords({
         )}
       </div>
       {!data && !error && <p>Loading records…</p>}
-      <div className="overflow-x-auto rounded border border-border bg-card">
+      <TableCard>
         <table className="w-full min-w-160 text-left text-sm">
           <thead className="text-muted-foreground border-b border-border">
             <tr>
@@ -840,7 +835,7 @@ function DnsRecords({
             )}
           </tbody>
         </table>
-      </div>
+      </TableCard>
       <Dialog
         open={edit !== null}
         onOpenChange={(open) => {

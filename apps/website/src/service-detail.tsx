@@ -190,7 +190,7 @@ export function ServiceDetail({
       {tab === 'Overview' && (
         <>
           <div className="grid gap-4 md:grid-cols-3">
-            <Card className="space-y-2 p-5">
+            <Card className="space-y-2">
               <p className="text-sm text-muted-foreground">Runtime</p>
               <p className="font-semibold">
                 <StatusBadge>
@@ -216,7 +216,7 @@ export function ServiceDetail({
                 {containers?.length ?? 0} containers
               </p>
             </Card>
-            <Card className="space-y-2 p-5">
+            <Card className="space-y-2">
               <p className="text-sm text-muted-foreground">Latest deployment</p>
               <p className="font-semibold">
                 <StatusBadge deployment>
@@ -227,7 +227,7 @@ export function ServiceDetail({
                 Deployment success is separate from runtime health.
               </p>
             </Card>
-            <Card className="space-y-2 p-5">
+            <Card className="space-y-2">
               <p className="text-sm text-muted-foreground">Resources</p>
               <p>
                 {stale || !containers?.length
@@ -251,7 +251,7 @@ export function ServiceDetail({
       )}
       {(tab === 'Source' || tab === 'Configuration') &&
         (canDeploy && !latest && legacy?.config ? (
-          <Card className="space-y-3 p-5">
+          <Card className="space-y-3">
             <p className="text-sm text-muted-foreground">
               This service uses existing Git deployment configuration.
             </p>
@@ -304,7 +304,7 @@ export function ServiceDetail({
       {tab === 'Deployments' && (
         <div className="space-y-5">
           {canDeploy && latest && (
-            <Card className="space-y-4 p-5">
+            <Card className="space-y-4">
               <h2 className="font-semibold">Deploy saved draft</h2>
               {config.source.type === 'github' && (
                 <Label>
@@ -330,7 +330,7 @@ export function ServiceDetail({
             </Card>
           )}
           {history?.runs?.map((run) => (
-            <Card key={run.id} className="space-y-3 p-5">
+            <Card key={run.id} className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm">
                   <StatusBadge deployment>{run.status}</StatusBadge> ·{' '}
@@ -351,7 +351,7 @@ export function ServiceDetail({
               </pre>
             </Card>
           ))}
-          <Card className="p-4">
+          <Card size="compact">
             <Button
               aria-expanded={legacyOpen}
               onClick={() => setLegacyOpen(!legacyOpen)}
@@ -378,8 +378,9 @@ export function ServiceDetail({
           )}
           {containers?.map((c) => (
             <Card
+              size="compact"
               key={`${c.connector_id}:${c.container_id}`}
-              className="flex flex-wrap items-center justify-between gap-4 p-4"
+              className="flex flex-wrap items-center justify-between gap-4"
             >
               <div>
                 <p className="font-medium break-all">{c.data.name}</p>
@@ -414,7 +415,7 @@ function GitWebhook({ project, slug }: { project: string; slug: string }) {
     [busy, setBusy] = useState(false)
   if (!data) return null
   return (
-    <Card className="space-y-3 p-4">
+    <Card size="compact" className="space-y-3">
       <h2 className="font-semibold">GitHub push deployments</h2>
       <Label>
         Webhook URL
@@ -516,8 +517,9 @@ function ServiceDomains({
       <ErrorMessage message={error || loadError} />
       {data?.map((route) => (
         <Card
+          size="compact"
           key={route.id}
-          className="flex flex-wrap items-center justify-between gap-3 p-4"
+          className="flex flex-wrap items-center justify-between gap-3"
         >
           <div>
             <p>
@@ -550,7 +552,7 @@ function ServiceDomains({
       ))}
       {canDeploy && (
         <form onSubmit={save}>
-          <Card className="space-y-4 p-5">
+          <Card className="space-y-4">
             <h2 className="font-semibold">Add domain</h2>
             <fieldset disabled={busy} className="space-y-4">
               <Label>

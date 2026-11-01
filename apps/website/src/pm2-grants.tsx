@@ -1,3 +1,4 @@
+import { CardFieldset } from './components/ui/card'
 import { useState } from 'react'
 import { normalizePm2Grants, type Pm2Grant } from '@kloud/protocol/pm2'
 import type { Pm2App } from './pm2'
@@ -38,10 +39,7 @@ export function Pm2GrantsEditor({
   const [target, setTarget] = useState(''),
     [selected, setSelected] = useState<string[]>(['view'])
   return (
-    <fieldset
-      disabled={disabled}
-      className="space-y-3 rounded border border-border p-4"
-    >
+    <CardFieldset disabled={disabled}>
       <legend className="px-2 font-medium">PM2 permissions</legend>
       <p className="text-sm text-muted-foreground">
         Project administrators have all PM2 permissions. Other permissions
@@ -139,6 +137,6 @@ export function Pm2GrantsEditor({
       >
         Add PM2 grants
       </Button>
-    </fieldset>
+    </CardFieldset>
   )
 }

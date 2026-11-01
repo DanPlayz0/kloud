@@ -1,3 +1,4 @@
+import { CardFieldset } from './components/ui/card'
 import { useState } from 'react'
 import { serviceCapabilities, type ServiceGrant, type Service } from './api'
 import { Button, Label, NativeSelect } from './components/ui/controls'
@@ -62,10 +63,7 @@ export function ServiceGrantsEditor({
     )
   }
   return (
-    <fieldset
-      disabled={disabled}
-      className="space-y-3 rounded border border-border p-4"
-    >
+    <CardFieldset disabled={disabled}>
       <legend className="px-2 font-medium">Service permissions</legend>
       <p className="text-sm text-muted-foreground">
         Project administrators have all service permissions. Deployment access
@@ -155,6 +153,6 @@ export function ServiceGrantsEditor({
       >
         Add service permissions
       </Button>
-    </fieldset>
+    </CardFieldset>
   )
 }

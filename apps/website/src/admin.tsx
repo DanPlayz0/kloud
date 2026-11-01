@@ -1,3 +1,4 @@
+import { Card, FormCard } from './components/ui/card'
 import { StatusBadge } from './components/ui/status-badge'
 import { Container } from 'lucide-react'
 import { InventoryCard } from './components/inventory-card'
@@ -159,14 +160,14 @@ function Projects({
   return (
     <>
       {canCreate && (
-        <form className="inline-form bg-card border-border" onSubmit={submit}>
+        <FormCard onSubmit={submit}>
           <ProjectFields />
           <Button className="primary">Create project</Button>
-        </form>
+        </FormCard>
       )}
       <ErrorMessage message={error} />
       {data?.map((p) => (
-        <div className="admin-row bg-card border-border" key={p.slug}>
+        <Card className="admin-row" key={p.slug}>
           <div>
             <strong>{p.name}</strong>
             <small>{p.slug}</small>
@@ -207,7 +208,7 @@ function Projects({
               </a>
             </Button>
           </div>
-        </div>
+        </Card>
       ))}
       {data?.length === 0 && (
         <Notice title="No projects yet">
@@ -246,7 +247,7 @@ function Connectors({
   }
   return (
     <>
-      <form className="inline-form bg-card border-border" onSubmit={submit}>
+      <FormCard onSubmit={submit}>
         <Label>
           Connector name
           <Input
@@ -257,14 +258,14 @@ function Connectors({
           />
         </Label>
         <Button className="primary">Create connector token</Button>
-      </form>
+      </FormCard>
       <p className="helper">
         Install the connector on your Docker host using the token. Discovery
         allows unassigned containers to appear in the admin inventory.
       </p>
       <ErrorMessage message={error} />
       {data?.map((c) => (
-        <div className="admin-row bg-card border-border" key={c.id}>
+        <Card className="admin-row" key={c.id}>
           <div>
             <strong>{c.name}</strong>
             <small>
@@ -319,7 +320,7 @@ function Connectors({
               Revoke token
             </Button>
           </div>
-        </div>
+        </Card>
       ))}
       {data?.length === 0 && (
         <Notice title="Connect a Docker host">
