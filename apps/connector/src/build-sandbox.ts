@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, stat, unlink } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { buildArtifactSchema, type DeploymentJob } from '@kloud/protocol'
+import type { BuildInputs } from '@kloud/protocol/platform'
 import type { ConnectorConfig } from './config.js'
 import { engine, runCommand, dockerHost } from './deployment-process.js'
 
@@ -45,26 +46,35 @@ export function helperSpec(
   labels: Record<string, string>,
   local: boolean,
   phase: 'checkout' | 'build' = 'build',
+  sourceAuth?: { token: string; url: string; username?: string },
+  buildInputs?: BuildInputs,
 ) {
+  const { source_auth: _sourceAuth, ...publicJob } = job
+  const source = sourceAuth ?? job.source_auth
   return {
     Image: config.buildHelperImage,
     User: '1000:1000',
     Cmd: ['node', 'apps/connector/dist/build-helper.js'],
     Env: [
-      `DEPLOYMENT_JOB=${JSON.stringify(job)}`,
+      `DEPLOYMENT_JOB=${JSON.stringify(publicJob)}`,
       `COMPOSE_PROJECT_NAME=${project}`,
       `DEPLOYMENT_PHASE=${phase}`,
       'HOME=/tmp',
       'DOCKER_CONFIG=/tmp/docker',
+      ...(source && !local && phase === 'checkout'
+        ? [`DEPLOYMENT_SOURCE_AUTH=${JSON.stringify(source)}`]
+        : []),
+      ...(buildInputs && phase === 'build'
+        ? [`DEPLOYMENT_BUILD_INPUTS=${JSON.stringify(buildInputs)}`]
+        : []),
       // Only the explicitly configured source credential crosses this boundary.
-      ...(config.githubToken && !local && phase === 'checkout'
+      ...(config.githubToken && !source && !local && phase === 'checkout'
         ? [`DEPLOYMENT_GITHUB_TOKEN=${config.githubToken}`]
         : []),
     ],
     Labels: {
       ...labels,
-      'kloud.role':
-        phase === 'checkout' ? 'source-checkout' : 'build-helper',
+      'kloud.role': phase === 'checkout' ? 'source-checkout' : 'build-helper',
     },
     HostConfig: {
       NetworkMode: network,
@@ -91,6 +101,8 @@ export async function sandboxBuild(
   signal: AbortSignal,
   log: (s: string) => void,
   checkout?: string,
+  sourceAuth?: { token: string; url: string; username?: string },
+  buildInputs?: BuildInputs,
 ) {
   await mkdir(config.deploymentsDir, { recursive: true })
   const directory = await mkdtemp(
@@ -184,6 +196,7 @@ export async function sandboxBuild(
             labels,
             false,
             'checkout',
+            sourceAuth,
           ),
         )
       ).Id
@@ -208,7 +221,18 @@ export async function sandboxBuild(
         config.dockerSocket,
         'POST',
         `/containers/create?name=${name}-helper`,
-        helperSpec(job, config, project, network, volume, labels, !!checkout),
+        helperSpec(
+          job,
+          config,
+          project,
+          network,
+          volume,
+          labels,
+          !!checkout,
+          'build',
+          undefined,
+          buildInputs,
+        ),
       )
     ).Id
     if (checkout) {

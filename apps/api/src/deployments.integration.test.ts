@@ -137,6 +137,10 @@ test(
         (await pool.query('SELECT * FROM deployment_builds')).rowCount,
         1,
       )
+      await pool.query(
+        "UPDATE connectors SET capabilities=ARRAY['deploy','rollout-v1'] WHERE id=$1",
+        [connector],
+      )
       const claims = await Promise.all([machine('claim'), machine('claim')])
       const jobs = await Promise.all(
         claims.map(async (r) => ((await r.json()) as any).job),
@@ -178,7 +182,7 @@ test(
             "SELECT 1 FROM deployment_builds WHERE status='queued'",
           )
         ).rowCount,
-        0,
+        1,
       )
       assert.deepEqual(await (await push()).json(), { queued: false })
       const rotated = (await (await request('POST')).json()) as any

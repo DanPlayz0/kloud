@@ -7,8 +7,20 @@ import {
   type RuntimeConfig,
 } from '@kloud/protocol/platform'
 import type { DeploymentJob } from '@kloud/protocol'
+import {
+  applyComposeRelease,
+  SkippedDeployment,
+  reconcileComposeRelease,
+} from './compose-rollout.js'
+import { type RolloutContext, UncertainRolloutError } from './rollout.js'
 import type { ConnectorConfig } from './config.js'
-import { engine, runCommand, dockerHost } from './deployment-process.js'
+import { formatComposeEnvironment } from './compose-environment.js'
+import {
+  engine,
+  runCommand,
+  runComposeConfig,
+  dockerHost,
+} from './deployment-process.js'
 import {
   replaceContainer,
   executeDeployment,
@@ -75,6 +87,31 @@ export async function executeServiceRun(
   log: (text: string) => void = () => {},
 ) {
   const desired = platformConfigSchema.parse(job.config)
+  if (!desired.deployment)
+    throw new Error(
+      'Review and save this application deployment policy before deploying',
+    )
+  if (
+    desired.deployment.readiness.http ||
+    Object.values(desired.deployment.compose?.services ?? {}).some(
+      (value) => value.http,
+    )
+  ) {
+    try {
+      await engine(
+        config.dockerSocket,
+        'GET',
+        `/images/${encodeURIComponent(config.buildHelperImage)}/json`,
+      )
+    } catch {
+      throw new Error(
+        `HTTP readiness requires the configured helper image ${config.buildHelperImage}. Install it on this host before deployment.`,
+      )
+    }
+  }
+  const rollout = rolloutContext(job, desired.deployment, config, signal)
+  if (job.reconcile)
+    return reconcileServiceRun(job, config, rollout, signal, log)
   log('Preparing saved service revision.\n')
   if (desired.source.type === 'github') {
     const identity = createHash('sha256')
@@ -88,6 +125,7 @@ export async function executeServiceRun(
       project: job.project,
       application: job.service,
       commit: job.artifacts?.commit ?? job.commit,
+      watch_baselines: job.compose_state?.commits,
       config: {
         ...desired.source.config,
         connector_id: desired.connector_id,
@@ -107,10 +145,20 @@ export async function executeServiceRun(
         log,
         desired.runtime,
         job.artifacts.image,
+        rollout,
       )
       return job.artifacts
     }
-    return executeDeployment(gitJob, config, signal, log, desired.runtime)
+    return executeDeployment(
+      gitJob,
+      config,
+      signal,
+      log,
+      desired.runtime,
+      rollout,
+      job.source_auth,
+      desired.build_inputs,
+    )
   }
   const directory = resolve(
     config.deploymentsDir,
@@ -123,30 +171,38 @@ export async function executeServiceRun(
   const docker = ['--host', dockerHost(config.dockerSocket)]
   const auth = join(directory, 'auth')
   try {
+    const registries = [
+      ...(desired.build_inputs?.registries ?? []),
+      ...(desired.source.type === 'image' && desired.source.registry
+        ? [desired.source.registry]
+        : []),
+    ]
+    if (registries.length) {
+      await mkdir(auth, { mode: 0o700 })
+      await writeFile(
+        join(auth, 'config.json'),
+        JSON.stringify({
+          auths: Object.fromEntries(
+            registries.map((credentials) => [
+              credentials.server,
+              {
+                auth: Buffer.from(
+                  `${credentials.username}:${credentials.password}`,
+                ).toString('base64'),
+              },
+            ]),
+          ),
+        }),
+        { mode: 0o600 },
+      )
+      docker.unshift('--config', auth)
+    }
     if (desired.source.type === 'image') {
       log(
         job.artifacts
           ? 'Using retained image for rollback.\n'
           : 'Pulling registry image.\n',
       )
-      if (desired.source.registry) {
-        await mkdir(auth, { mode: 0o700 })
-        const credentials = desired.source.registry
-        await writeFile(
-          join(auth, 'config.json'),
-          JSON.stringify({
-            auths: {
-              [credentials.server]: {
-                auth: Buffer.from(
-                  `${credentials.username}:${credentials.password}`,
-                ).toString('base64'),
-              },
-            },
-          }),
-          { mode: 0o600 },
-        )
-        docker.unshift('--config', auth)
-      }
       const image = job.artifacts?.image ?? desired.source.image
       if (!job.artifacts)
         await runCommand(
@@ -187,6 +243,7 @@ export async function executeServiceRun(
         () => {},
         inspected.Id,
         desired.runtime,
+        rollout,
       )
       await engine(
         config.dockerSocket,
@@ -195,24 +252,38 @@ export async function executeServiceRun(
       )
       return { image: `kloud/retained:${job.id}` }
     }
+    if (
+      !desired.deployment.compose &&
+      (desired.deployment.strategy !== 'stop-first' ||
+        !desired.deployment.allowDowntime)
+    )
+      throw new Error(
+        'This Compose stack requires a verified selective-service compatibility plan; blue/green never duplicates database dependencies',
+      )
     const source = join(directory, 'compose.yaml')
     log('Validating Compose definition.\n')
     await writeFile(source, desired.source.content, { mode: 0o600 })
+    const envFile = join(directory, 'runtime.env')
+    await writeFile(
+      envFile,
+      formatComposeEnvironment(desired.runtime.environment),
+      { mode: 0o600 },
+    )
     const prefix = [
       ...docker,
       'compose',
+      '--env-file',
+      envFile,
       '--project-name',
       `kloud-${job.project}-${job.service}`,
       '--file',
       source,
     ]
     const parsed = JSON.parse(
-      await runCommand(
-        'docker',
+      await runComposeConfig(
         [...prefix, 'config', '--format', 'json'],
         directory,
         signal,
-        () => {},
       ),
     )
     if (!Object.keys(parsed.services ?? {}).length)
@@ -242,18 +313,8 @@ export async function executeServiceRun(
       if (job.artifacts?.[name]) service.image = job.artifacts[name]
     }
     const runtime = join(directory, 'runtime.json')
-    // Compose interpolation must not process literal dollars from canonical output again.
-    const escape = (v: any): any =>
-      typeof v === 'string'
-        ? v.replaceAll('$', '$$')
-        : Array.isArray(v)
-          ? v.map(escape)
-          : v && typeof v === 'object'
-            ? Object.fromEntries(
-                Object.entries(v).map(([k, x]) => [k, escape(x)]),
-              )
-            : v
-    await writeFile(runtime, JSON.stringify(escape(parsed)), { mode: 0o600 })
+    // Compose's canonical JSON already escapes literal dollars for a second parse.
+    await writeFile(runtime, JSON.stringify(parsed), { mode: 0o600 })
     const args = [
       ...docker,
       'compose',
@@ -288,7 +349,23 @@ export async function executeServiceRun(
       artifacts[name] = pinned
       service.image = pinned
     }
-    await writeFile(runtime, JSON.stringify(escape(parsed)), { mode: 0o600 })
+    await writeFile(runtime, JSON.stringify(parsed), { mode: 0o600 })
+    if (desired.deployment.compose) {
+      await applyComposeRelease({
+        model: parsed,
+        file: runtime,
+        directory,
+        project: `kloud-${job.project}-${job.service}`,
+        job,
+        connector: config,
+        context: rollout,
+        signal,
+        log,
+        escaped: true,
+        dockerPrefix: docker,
+      })
+      return artifacts
+    }
     log('Applying Compose stack and waiting for startup checks.\n')
     await runCommand(
       'docker',
@@ -309,7 +386,7 @@ export async function executeServiceRun(
   } finally {
     await rm(auth, { recursive: true, force: true })
     // Canonical runtime definitions can contain secrets; keep only encrypted API revisions.
-    for (const file of ['compose.yaml', 'runtime.json'])
+    for (const file of ['compose.yaml', 'runtime.json', 'runtime.env'])
       await rm(join(directory, file), { force: true })
   }
 }
@@ -329,11 +406,40 @@ export async function serviceWorker(
             ...Object.values(job.config.runtime?.environment ?? {}),
             job.config.source?.registry?.password,
             config.githubToken,
+            job.source_auth?.token,
+            ...Object.values(job.config.build_inputs?.secrets ?? {}),
+            ...(job.config.build_inputs?.registries ?? []).map(
+              (v: any) => v.password,
+            ),
           ])
             if (typeof secret === 'string' && secret.length)
               text = text.split(secret).join('[redacted]')
           output = (output + text).slice(-47000)
         }
+        const lease = new AbortController()
+        const executionSignal = AbortSignal.any([
+          signal,
+          lease.signal,
+          AbortSignal.timeout(30 * 60 * 1000),
+        ])
+        let heartbeatBusy = false
+        const heartbeat = setInterval(async () => {
+          if (heartbeatBusy || executionSignal.aborted) return
+          heartbeatBusy = true
+          try {
+            const response = await platformPost(
+              config,
+              `${job.id}/heartbeat`,
+              {},
+              executionSignal,
+            )
+            if (!response.ok) lease.abort()
+          } catch {
+            lease.abort()
+          } finally {
+            heartbeatBusy = false
+          }
+        }, 10000)
         try {
           result = {
             status: 'succeeded',
@@ -341,14 +447,17 @@ export async function serviceWorker(
             artifacts: await executeServiceRun(
               job,
               config,
-              AbortSignal.any([signal, AbortSignal.timeout(30 * 60 * 1000)]),
+              executionSignal,
               log,
             ),
           }
           result.log =
             output +
             '\nDeployment completed. Check runtime health in Containers.'
-        } catch {
+        } catch (error) {
+          log(
+            `\n${error instanceof Error ? error.message : 'Deployment failed'}\n`,
+          )
           result = {
             status: 'failed',
             log:
@@ -356,6 +465,17 @@ export async function serviceWorker(
               '\nDeployment failed. Check host connectivity, source credentials, image availability, and runtime configuration. Volumes were retained.',
             artifacts: null,
           }
+          if (error instanceof UncertainRolloutError) result.uncertain = true
+          if (error instanceof SkippedDeployment)
+            result = {
+              status: 'skipped',
+              log:
+                output + '\nNo selected Compose service matched changed paths.',
+              artifacts: null,
+            }
+          if (lease.signal.aborted) result.uncertain = true
+        } finally {
+          clearInterval(heartbeat)
         }
         for (let attempt = 0; attempt < 5; attempt++) {
           try {
@@ -397,4 +517,229 @@ export async function platformPost(
   )
   if (!response.ok) throw new Error(`Platform API returned ${response.status}`)
   return response.json()
+}
+
+function rolloutContext(
+  job: any,
+  policy: import('@kloud/protocol/platform').DeploymentPolicy,
+  config: ConnectorConfig,
+  signal: AbortSignal,
+): RolloutContext {
+  const context: RolloutContext = {
+    policy,
+    job,
+    serving: job.serving ?? null,
+    progress: (stage, candidate, previous) =>
+      platformPost(
+        config,
+        `${job.id}/rollout`,
+        {
+          stage,
+          candidate,
+          previous,
+          ...(context.compose ? { compose: context.compose } : {}),
+        },
+        signal,
+      ),
+    httpProbe: async (candidate, probe, probeSignal) => {
+      let id: string | undefined
+      try {
+        const script =
+          "try { const response = await fetch(process.argv[1], {redirect:'manual',signal:AbortSignal.timeout(Number(process.argv[2]))}); process.exit(response.status >= 200 && response.status <= 299 ? 0 : 1) } catch { process.exit(1) }"
+        id = (
+          await engine(config.dockerSocket, 'POST', '/containers/create', {
+            Image: config.buildHelperImage,
+            Cmd: [
+              'node',
+              '--input-type=module',
+              '-e',
+              script,
+              `http://127.0.0.1:${probe.port}${probe.path}`,
+              String(probe.timeoutSeconds * 1000),
+            ],
+            Labels: {
+              'kloud.internal': 'true',
+              'kloud.role': 'readiness-probe',
+              'kloud.run': job.id,
+            },
+            HostConfig: {
+              NetworkMode: `container:${candidate}`,
+              ReadonlyRootfs: true,
+              CapDrop: ['ALL'],
+              SecurityOpt: ['no-new-privileges'],
+              Memory: 64 * 1024 * 1024,
+              PidsLimit: 32,
+            },
+          })
+        ).Id
+        await engine(config.dockerSocket, 'POST', `/containers/${id}/start`)
+        while (!probeSignal.aborted) {
+          const state = (
+            await engine(config.dockerSocket, 'GET', `/containers/${id}/json`)
+          ).State
+          if (state.Status === 'exited') return state.ExitCode === 0
+          await delay(100, undefined, { signal: probeSignal })
+        }
+        return false
+      } catch {
+        return false
+      } finally {
+        if (id)
+          await engine(
+            config.dockerSocket,
+            'DELETE',
+            `/containers/${id}?force=true`,
+          ).catch(() => {})
+      }
+    },
+  }
+  return context
+}
+
+async function reconcileServiceRun(
+  job: any,
+  config: ConnectorConfig,
+  context: RolloutContext,
+  signal: AbortSignal,
+  log: (text: string) => void,
+) {
+  const details = job.reconcile
+  if (details.details?.targets) {
+    context.compose = details.details
+    return reconcileComposeRelease(job, config, context, signal, log)
+  }
+  const inspect = async (name: string | null) => {
+    if (!name) return null
+    try {
+      const value = await engine(
+        config.dockerSocket,
+        'GET',
+        `/containers/${encodeURIComponent(name)}/json`,
+      )
+      if (
+        value.Config.Labels?.['kloud.project'] !== job.project ||
+        value.Config.Labels?.['kloud.application'] !== job.service
+      )
+        throw new Error('Release ownership changed')
+      return value
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith('Docker GET failed (404):')
+      )
+        return null
+      throw error
+    }
+  }
+  let candidate = await inspect(details.candidate)
+  if (candidate && candidate.Config.Labels?.['kloud.run'] !== job.id)
+    candidate = null
+  const previous = await inspect(details.previous)
+  if (details.stage === 'failed') {
+    if (candidate)
+      await engine(
+        config.dockerSocket,
+        'DELETE',
+        `/containers/${candidate.Id}?force=true`,
+      )
+    throw new Error(
+      'Interrupted candidate already failed before cutover; previous release was preserved',
+    )
+  }
+  if (details.stage === 'retired' && candidate?.State.Running)
+    return { image: candidate.Image, commit: job.commit ?? '0'.repeat(40) }
+  if (
+    ['prepared', 'started', 'failed'].includes(details.stage) &&
+    !candidate?.State.Running
+  ) {
+    await context.progress('failed', details.candidate, details.previous)
+    throw new Error(
+      'Interrupted candidate startup failed; previous release was preserved',
+    )
+  }
+  if (candidate?.State.Running) {
+    try {
+      if (details.stage === 'failed')
+        throw new Error('This candidate already failed before cutover')
+      const { waitReadiness } = await import('./rollout.js')
+      const driver = {
+        inspect: async (id: string) =>
+          engine(config.dockerSocket, 'GET', `/containers/${id}/json`),
+        create: async () => '',
+        start: async () => {},
+        stop: async () => {},
+        remove: async () => {},
+      }
+      await waitReadiness(driver, candidate.Id, context, signal, log)
+      if (details.stage === 'prepared')
+        await context.progress('started', details.candidate, details.previous)
+      if (['prepared', 'started'].includes(details.stage))
+        await context.progress('ready', details.candidate, details.previous)
+      const deadline =
+        Date.now() + context.policy.readiness.timeoutSeconds * 1000
+      while (
+        !(
+          await context.progress('cutover', details.candidate, details.previous)
+        ).applied
+      ) {
+        if (Date.now() > deadline)
+          throw new Error('Proxy reconciliation timed out')
+        await delay(1000, undefined, { signal })
+      }
+      await context.progress('serving', details.candidate, details.previous)
+      if (previous) {
+        await engine(
+          config.dockerSocket,
+          'POST',
+          `/containers/${previous.Id}/stop?t=${context.policy.stopGraceSeconds}`,
+        )
+        await engine(
+          config.dockerSocket,
+          'DELETE',
+          `/containers/${previous.Id}`,
+        )
+      }
+      await context.progress('retired', details.candidate, details.previous)
+      return { image: candidate.Image, commit: job.commit ?? '0'.repeat(40) }
+    } catch (error) {
+      // A still-running prior release can recover a failed candidate, but only after confirmed routing.
+      if (!previous?.State.Running)
+        throw new UncertainRolloutError(
+          'Candidate reconciliation failed and no running previous release is available',
+        )
+    }
+  }
+  if (!previous?.State.Running)
+    throw new UncertainRolloutError(
+      'Neither release can establish a known serving state',
+    )
+  const deadline = Date.now() + context.policy.readiness.timeoutSeconds * 1000
+  while (
+    !(
+      await platformPost(
+        config,
+        `${job.id}/reconcile`,
+        {
+          previous_running: true,
+          candidate_running: !!candidate?.State.Running,
+        },
+        signal,
+      )
+    ).applied
+  ) {
+    if (Date.now() > deadline)
+      throw new UncertainRolloutError(
+        'Previous release routing could not be confirmed',
+      )
+    await delay(1000, undefined, { signal })
+  }
+  if (candidate)
+    await engine(
+      config.dockerSocket,
+      'DELETE',
+      `/containers/${candidate.Id}?force=true`,
+    )
+  throw new Error(
+    'Failed candidate was retired after restoring the known previous release',
+  )
 }

@@ -1,3 +1,4 @@
+import { addressNumber } from '@kloud/protocol/forwarding'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { randomUUID } from 'node:crypto'
@@ -560,4 +561,60 @@ export async function saveDnsGrants(
       'INSERT INTO dns_member_grants(user_id,project_slug,zone_id,rule) VALUES($1,$2,$3,$4)',
       [user, project, rule.zone_id, JSON.stringify(rule)],
     )
+}
+
+function sameAddress(left: unknown, right: string) {
+  if (typeof left !== 'string') return false
+  try {
+    const a = addressNumber(left),
+      b = addressNumber(right)
+    return a.bits === b.bits && a.value === b.value
+  } catch {
+    return false
+  }
+}
+
+// Domain onboarding reuses DNS delegation; creating a route never grants DNS access.
+export async function ensureDomainDns(
+  db: Pick<PoolClient, 'query'>,
+  actor: User,
+  project: string,
+  zone: string,
+  input: { type: 'A' | 'AAAA'; name: string; content: string },
+) {
+  const body = dnsRecordSchema.parse({
+    ...input,
+    name: dnsName(input.name),
+    ttl: 1,
+    proxied: false,
+  })
+  const access = await zoneAccess(db, actor, project, zone)
+  if (!access.allows('create', body))
+    throw new HTTPException(403, {
+      message:
+        'DNS create permission required for this hostname and record type. Configure DNS manually or request delegation.',
+    })
+  const client = provider(access.zone)
+  const existing = (await client.records(access.zone.external_id)).filter(
+    (record) =>
+      dnsName(record.name) === body.name &&
+      (record.type === body.type || record.type === 'CNAME'),
+  )
+  if (existing.length) {
+    if (
+      existing.every(
+        (record) =>
+          record.type === body.type &&
+          sameAddress(record.content, input.content) &&
+          !record.proxied,
+      )
+    )
+      return { unchanged: true }
+    throw new HTTPException(409, {
+      message:
+        'Conflicting DNS records were preserved. Review them in Cloud DNS and explicitly update them with DNS update permission.',
+    })
+  }
+  await client.create(access.zone.external_id, body)
+  return { unchanged: false }
 }

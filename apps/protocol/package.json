@@ -23,6 +23,18 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
+    },
+    "./environment": {
+      "types": "./environment.d.ts",
+      "default": "./environment.js"
+    },
+    "./addresses": {
+      "types": "./addresses.d.ts",
+      "default": "./addresses.js"
+    },
+    "./forwarding": {
+      "types": "./forwarding.d.ts",
+      "default": "./forwarding.js"
     }
   },
   "dependencies": {

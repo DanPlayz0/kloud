@@ -10,7 +10,39 @@ export interface RuntimeConfig {
   cpus?: number
   healthcheck?: { command: string[]; intervalSeconds: number }
 }
+export interface BuildInputs {
+  registry_connection_ids?: string[]
+  secrets: Record<string, string>
+  registries: { server: string; username: string; password: string }[]
+}
+export const buildInputsSchema: z.ZodType<BuildInputs>
+export interface DeploymentPolicy {
+  strategy: 'blue-green' | 'stop-first'
+  allowDowntime: boolean
+  compatibilityReviewed: boolean
+  stopGraceSeconds: number
+  compose?: {
+    services: Record<
+      string,
+      {
+        include: string[]
+        exclude: string[]
+        action: 'redeploy' | 'restart'
+        http?: { port: number; path: string; timeoutSeconds: number }
+      }
+    >
+  }
+  readiness: {
+    dockerHealth: boolean
+    http?: { port: number; path: string; timeoutSeconds: number }
+    timeoutSeconds: number
+    intervalSeconds: number
+  }
+}
+export const deploymentPolicySchema: z.ZodType<DeploymentPolicy>
 export interface PlatformConfig {
+  deployment?: DeploymentPolicy
+  build_inputs?: BuildInputs
   connector_id: string
   source:
     | { type: 'github'; config: DeploymentConfig }

@@ -1,13 +1,21 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, rm } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { deploymentJobSchema, type DeploymentJob } from '@kloud/protocol'
 import type { ConnectorConfig } from './config.js'
-import { engine, runCommand, dockerHost } from './deployment-process.js'
+import { formatComposeEnvironment } from './compose-environment.js'
+import {
+  engine,
+  runCommand,
+  runComposeConfig,
+  dockerHost,
+} from './deployment-process.js'
 export { repositoryPath, runCommand } from './deployment-process.js'
 import { sandboxBuild, cleanupExpiredBuilds } from './build-sandbox.js'
 import { applyRuntime } from './platform.js'
 import type { RuntimeConfig } from '@kloud/protocol/platform'
+import { applyComposeRelease } from './compose-rollout.js'
+import { runBlueGreen, type RolloutContext } from './rollout.js'
 
 export function replacementSpec(
   original: any,
@@ -86,18 +94,23 @@ export function replacementSpec(
       ...original.Config.Labels,
       'kloud.project': job.project,
       'kloud.application': job.application,
+      'kloud.run': job.id,
     },
     HostConfig: host,
     NetworkingConfig: { EndpointsConfig: endpoints },
   }
 }
 
-async function managedContainer(job: DeploymentJob, socket: string) {
+async function managedContainer(
+  job: DeploymentJob,
+  socket: string,
+  serving?: string | null,
+) {
   try {
     const container = await engine(
       socket,
       'GET',
-      `/containers/${encodeURIComponent(job.config.container_name)}/json`,
+      `/containers/${encodeURIComponent(serving ?? job.config.container_name)}/json`,
     )
     const labels = container.Config.Labels ?? {}
     if (
@@ -123,6 +136,7 @@ export function initialContainerSpec(job: DeploymentJob, image: string) {
     Labels: {
       'kloud.project': job.project,
       'kloud.application': job.application,
+      'kloud.run': job.id,
     },
     HostConfig: { RestartPolicy: { Name: 'unless-stopped' } },
   }
@@ -135,10 +149,17 @@ export async function replaceContainer(
   log: (s: string) => void,
   imageOverride?: string,
   runtime?: RuntimeConfig,
+  rollout?: RolloutContext,
 ) {
+  if (!rollout)
+    throw new Error(
+      'Review the application deployment policy before deploying; downtime is never enabled implicitly',
+    )
+  if (rollout.policy.strategy === 'stop-first' && !rollout.policy.allowDowntime)
+    throw new Error('Stop-before-start requires explicit downtime permission')
   const name = job.config.container_name
   const original = job.config.managed
-    ? await managedContainer(job, socket)
+    ? await managedContainer(job, socket, rollout.serving)
     : await engine(
         socket,
         'GET',
@@ -149,6 +170,96 @@ export async function replaceContainer(
   if (original?.Config.Labels?.['com.docker.compose.project'])
     throw new Error('Use Compose mode for Compose-managed containers')
   const image = imageOverride ?? `kloud/${job.deployment_id}:${job.commit}`
+  if (rollout.policy.strategy === 'blue-green') {
+    const newImage = await engine(
+      socket,
+      'GET',
+      `/images/${encodeURIComponent(image)}/json`,
+    )
+    let spec = original
+      ? replacementSpec(
+          original,
+          image,
+          job,
+          (
+            await engine(
+              socket,
+              'GET',
+              `/images/${encodeURIComponent(original.Image)}/json`,
+            )
+          ).Config,
+          newImage.Config,
+        )
+      : {
+          ...initialContainerSpec(job, image),
+          Healthcheck: newImage.Config.Healthcheck,
+          Volumes: newImage.Config.Volumes,
+        }
+    if (runtime)
+      spec = applyRuntime(
+        {
+          ...spec,
+          Env: newImage.Config.Env ?? [],
+          Healthcheck: newImage.Config.Healthcheck,
+        },
+        runtime,
+      )
+    const driver = {
+      inspect: (id: string) =>
+        engine(socket, 'GET', `/containers/${encodeURIComponent(id)}/json`),
+      create: async (candidate: string, value: any) =>
+        (
+          await engine(
+            socket,
+            'POST',
+            `/containers/create?name=${encodeURIComponent(candidate)}`,
+            value,
+          )
+        ).Id as string,
+      start: async (id: string) => {
+        await engine(socket, 'POST', `/containers/${id}/start`)
+      },
+      stop: async (id: string, seconds: number) => {
+        await engine(socket, 'POST', `/containers/${id}/stop?t=${seconds}`)
+      },
+      remove: async (id: string) => {
+        await engine(socket, 'DELETE', `/containers/${id}?force=true`)
+      },
+    }
+    return runBlueGreen(
+      driver,
+      spec,
+      `${name}-release-${job.id}`,
+      original,
+      rollout,
+      signal,
+      log,
+    )
+  }
+  const journalPrevious = original ? `${name}-backup-${job.id}` : null
+  await rollout.progress('prepared', name, journalPrevious)
+  const completeStopFirst = async () => {
+    const previous = journalPrevious
+    try {
+      await rollout.progress('started', name, previous)
+      await rollout.progress('ready', name, previous)
+      const deadline =
+        Date.now() + rollout.policy.readiness.timeoutSeconds * 1000
+      while (!(await rollout.progress('cutover', name, previous)).applied) {
+        if (Date.now() > deadline)
+          throw new Error('Proxy application timed out')
+        await delay(1000, undefined, { signal })
+      }
+      await rollout.progress('serving', name, previous)
+      await rollout.progress('retired', name, previous)
+    } catch {
+      await rollout.progress('uncertain', name, previous).catch(() => {})
+      const { UncertainRolloutError } = await import('./rollout.js')
+      throw new UncertainRolloutError(
+        'Runtime changed but proxy outcome requires reconciliation',
+      )
+    }
+  }
   if (!original) {
     signal.throwIfAborted()
     const created = await engine(
@@ -166,6 +277,7 @@ export async function replaceContainer(
       await engine(socket, 'DELETE', `/containers/${created.Id}?force=true`)
       throw error
     }
+    await completeStopFirst()
     return
   }
   const oldImage = await engine(
@@ -243,12 +355,13 @@ export async function replaceContainer(
       await engine(
         socket,
         'POST',
-        `/containers/${original.Id}/rename?name=${encodeURIComponent(name)}`,
+        `/containers/${original.Id}/rename?name=${encodeURIComponent(original.Name?.replace(/^\//, '') ?? name)}`,
       )
     if (stopped)
       await engine(socket, 'POST', `/containers/${original.Id}/start`)
     throw error
   }
+  await completeStopFirst()
   // Keep volumes; removing the stopped backup must never delete persistent data.
   try {
     await engine(socket, 'DELETE', `/containers/${original.Id}`)
@@ -263,9 +376,25 @@ export async function executeDeployment(
   signal: AbortSignal,
   log: (s: string) => void,
   runtime?: RuntimeConfig,
+  rollout?: RolloutContext,
+  sourceAuth?: { token: string; url: string },
+  buildInputs?: any,
 ) {
+  if (!rollout)
+    throw new Error(
+      'Review and save the application deployment policy before building or deploying',
+    )
   const project = await composeProject(job, config)
-  const result = await sandboxBuild(job, config, project, signal, log)
+  const result = await sandboxBuild(
+    job,
+    config,
+    project,
+    signal,
+    log,
+    undefined,
+    sourceAuth ?? job.source_auth,
+    buildInputs,
+  )
   await deployArtifact(
     job,
     config,
@@ -274,6 +403,8 @@ export async function executeDeployment(
     signal,
     log,
     runtime,
+    undefined,
+    rollout,
   )
   if (job.config.kind === 'dockerfile') {
     const image = await engine(
@@ -354,6 +485,7 @@ export async function deployArtifact(
   log: (s: string) => void,
   runtime?: RuntimeConfig,
   retainedImage?: string,
+  rollout?: RolloutContext,
 ) {
   log('\nDeploying built artifacts on the service host.\n')
   if (job.config.kind === 'dockerfile')
@@ -364,6 +496,16 @@ export async function deployArtifact(
       log,
       retainedImage,
       runtime,
+      rollout,
+    )
+  if (
+    !rollout ||
+    (!rollout.policy.compose &&
+      (rollout.policy.strategy !== 'stop-first' ||
+        !rollout.policy.allowDowntime))
+  )
+    throw new Error(
+      'This Compose stack requires a selective-service compatibility plan; explicitly allow downtime until candidate isolation is verified',
     )
   const manifest = JSON.parse(
     await readFile(join(directory, 'output', 'compose.json'), 'utf8'),
@@ -388,25 +530,104 @@ export async function deployArtifact(
     return value
   }
   const file = join(directory, 'runtime-compose.json')
-  await writeFile(file, JSON.stringify(rebase(manifest)))
-  const args = [
-    '--host',
-    dockerHost(config.dockerSocket),
-    'compose',
-    '--project-name',
-    project,
-    '--file',
-    file,
-    'up',
-    '--detach',
-    '--no-build',
-    '--wait',
-    '--wait-timeout',
-    '60',
-  ]
-  if (!job.config.managed)
-    args.push('--no-deps', '--force-recreate', job.config.service)
-  await runCommand('docker', args, directory, signal, log)
+  let resolved = rebase(manifest)
+  await writeFile(file, JSON.stringify(resolved), { mode: 0o600 })
+  const envFile = join(directory, 'runtime.env')
+  await writeFile(
+    envFile,
+    formatComposeEnvironment(runtime?.environment ?? {}),
+    { mode: 0o600 },
+  )
+  const auth = join(directory, 'runtime-auth')
+  const docker = ['--host', dockerHost(config.dockerSocket)]
+  try {
+    const registries = rollout.job?.config?.build_inputs?.registries ?? []
+    if (registries.length) {
+      await mkdir(auth, { mode: 0o700, recursive: true })
+      await writeFile(
+        join(auth, 'config.json'),
+        JSON.stringify({
+          auths: Object.fromEntries(
+            registries.map((credentials: any) => [
+              credentials.server,
+              {
+                auth: Buffer.from(
+                  `${credentials.username}:${credentials.password}`,
+                ).toString('base64'),
+              },
+            ]),
+          ),
+        }),
+        { mode: 0o600 },
+      )
+      docker.unshift('--config', auth)
+    }
+    resolved = JSON.parse(
+      await runComposeConfig(
+        [
+          ...docker,
+          'compose',
+          '--env-file',
+          envFile,
+          '--project-name',
+          project,
+          '--file',
+          file,
+          'config',
+          '--format',
+          'json',
+        ],
+        directory,
+        signal,
+      ),
+    )
+    await writeFile(file, JSON.stringify(resolved), { mode: 0o600 })
+    for (const service of Object.values(resolved.services) as any[]) {
+      if (service.pull_policy === 'never') continue
+      await runCommand(
+        'docker',
+        [...docker, 'pull', service.image],
+        directory,
+        signal,
+        log,
+      )
+    }
+    if (rollout.policy.compose)
+      return await applyComposeRelease({
+        model: resolved,
+        file,
+        directory,
+        project,
+        job: rollout.job ?? job,
+        connector: config,
+        context: rollout,
+        signal,
+        log,
+        escaped: true,
+        dockerPrefix: docker,
+      })
+    const args = [
+      ...docker,
+      'compose',
+      '--project-name',
+      project,
+      '--file',
+      file,
+      'up',
+      '--detach',
+      '--no-build',
+      '--wait',
+      '--wait-timeout',
+      String(rollout.policy.readiness.timeoutSeconds),
+    ]
+    if (!job.config.managed)
+      args.push('--no-deps', '--force-recreate', job.config.service)
+    await runCommand('docker', args, directory, signal, log)
+  } finally {
+    await rm(auth, { recursive: true, force: true })
+    await rm(file, { force: true })
+    await rm(envFile, { force: true })
+  }
 }
 
 async function verifyStartup(socket: string, id: string, signal: AbortSignal) {

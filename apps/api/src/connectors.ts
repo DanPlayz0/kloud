@@ -25,6 +25,11 @@ export async function acceptSnapshot(
       [snapshot.host, connector],
     )
     if (!result.rowCount) return false
+    if (snapshot.public_addresses)
+      await db.query('UPDATE connectors SET public_addresses=$2 WHERE id=$1', [
+        connector,
+        snapshot.public_addresses,
+      ])
     const discovery = result.rows[0].discovery
     await db.query('DELETE FROM inventory WHERE connector_id=$1', [connector])
     const assigned = new Set(
@@ -146,9 +151,12 @@ export function attachConnectors(server: Server) {
             const allowed = [
               'runtime',
               'deploy',
+              'rollout-v1',
               'proxy',
               'pm2',
               'host-terminal',
+              'postgres',
+              'forwarding',
             ]
             if (
               !Array.isArray(message.capabilities) ||

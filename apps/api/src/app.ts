@@ -1,3 +1,7 @@
+import { registryConnections } from './registry-connections.js'
+import { forwarding, forwardingWorker } from './forwarding.js'
+import { recovery, recoveryWorker } from './recovery.js'
+import { gitConnections } from './git-connections.js'
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { HTTPException } from 'hono/http-exception'
 import { bodyLimit } from 'hono/body-limit'
@@ -13,11 +17,15 @@ import { connectorWorkspace } from './connector-workspace.js'
 export const app = new OpenAPIHono<Env>()
 app.use('*', (c, next) =>
   bodyLimit({
-    maxSize: c.req.path.startsWith('/hooks/github/')
-      ? 2 * 1024 * 1024
-      : c.req.path.startsWith('/connectors/deployments/')
-        ? 350000
-        : 65536,
+    maxSize: /^\/projects\/[^/]+\/databases\/imports$/.test(c.req.path)
+      ? 64 * 1024 * 1024
+      : /\/(?:configuration|variables)$/.test(c.req.path)
+        ? 1024 * 1024
+        : c.req.path.startsWith('/hooks/github/')
+          ? 2 * 1024 * 1024
+          : c.req.path.startsWith('/connectors/deployments/')
+            ? 350000
+            : 65536,
     onError: (c) => c.json({ error: 'Request too large' }, 413),
   })(c, next),
 )
@@ -32,7 +40,7 @@ app.use('*', async (c, next) => {
       c.req.method === 'POST'
     ) &&
     !(
-      /^\/connectors\/(?:deployments|platform)\/(claim|proxy|[0-9a-f-]+\/result)$/.test(
+      /^\/connectors\/(?:deployments|platform|recovery|forwarding)\/(claim|proxy|sync|[0-9a-f-]+\/(?:result|rollout|reconcile|heartbeat))$/.test(
         c.req.path,
       ) && c.req.method === 'POST'
     )
@@ -83,8 +91,14 @@ const healthRoute = createRoute({
 app.openapi(healthRoute, (c) => c.json({ status: 'ok' as const }, 200))
 app.route('/', deploymentHooks)
 app.route('/', platformWorker)
+app.route('/', forwardingWorker)
+app.route('/', recoveryWorker)
 app.route('/', deployments)
 app.route('/', platform)
+app.route('/', forwarding)
+app.route('/', recovery)
+app.route('/', gitConnections)
+app.route('/', registryConnections)
 app.route('/', pm2)
 app.route('/', connectorWorkspace)
 app.route('/', dashboard)

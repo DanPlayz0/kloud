@@ -71,7 +71,7 @@ test(
         [member],
       )
       await pool.query(
-        "INSERT INTO connectors(id,name,token,capabilities,seen,docker_seen) VALUES($1,'Host',$2,ARRAY['deploy','runtime','proxy'],now(),now())",
+        "INSERT INTO connectors(id,name,token,capabilities,seen,docker_seen) VALUES($1,'Host',$2,ARRAY['deploy','runtime','proxy','rollout-v1'],now(),now())",
         [host, digest(credential)],
       )
       const base = '/projects/demo/services/web'
@@ -263,6 +263,8 @@ test(
         runtime: {},
       }
       const gitSaved = await request(`${base}/configuration`, 'PUT', {
+        previous: revision,
+        confirmed_removals: ['TOKEN'],
         config: gitConfig,
       })
       assert.equal(gitSaved.status, 201, await gitSaved.clone().text())
@@ -298,6 +300,43 @@ test(
           },
           body: payload,
         })
+      assert.equal(
+        (
+          await request(
+            `${base}/automatic-deployment`,
+            'PUT',
+            { enabled: false },
+            memberSession,
+          )
+        ).status,
+        403,
+      )
+      assert.equal(
+        (
+          await request(`${base}/automatic-deployment`, 'PUT', {
+            enabled: false,
+          })
+        ).status,
+        200,
+      )
+      assert.equal(((await (await hookRequest()).json()) as any).queued, false)
+      assert.equal(
+        (
+          await request('/projects/demo/applications/web/deployment', 'POST', {
+            commit: 'd'.repeat(40),
+          })
+        ).status,
+        200,
+        'manual deployment remains available with automatic deployment disabled',
+      )
+      assert.equal(
+        (
+          await request(`${base}/automatic-deployment`, 'PUT', {
+            enabled: true,
+          })
+        ).status,
+        200,
+      )
       assert.equal((await hookRequest()).status, 202)
       assert.equal((await hookRequest()).status, 202)
       assert.equal(
@@ -326,10 +365,17 @@ test(
         409,
       )
       const proxy = (await (
-        await machine('proxy', { applied: null, error: null })
+        await machine('proxy', {
+          applied: null,
+          error: null,
+          certificates: { 'app.example.com': 'error' },
+        })
       ).json()) as any
       assert.equal(proxy.routes.length, 1)
       assert.equal(proxy.desired.length, 64)
+      const domains = (await (await request(`${base}/domains`)).json()) as any[]
+      assert.equal(domains[0].certificates['app.example.com'], 'error')
+      assert.equal(domains[0].applied, null)
       await pool.query('UPDATE connectors SET revoked=true WHERE id=$1', [host])
       assert.equal((await machine('claim')).status, 401)
     } finally {

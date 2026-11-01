@@ -1,3 +1,7 @@
+import { migrateForwarding } from './forwarding.js'
+import { migrateRecovery } from './migrations-recovery.js'
+import { migrateGit } from './migrations-git.js'
+import { migrateRollouts } from './migrations-rollouts.js'
 import { pool, transaction } from './db.js'
 import { rpID } from './security.js'
 export const migration = `
@@ -277,6 +281,31 @@ export async function migrate() {
       await db.query('DELETE FROM auth_pending')
       await db.query('INSERT INTO migrations(version) VALUES(12)')
     }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=13'))
+        .rowCount
+    ) {
+      await db.query(`
+        ALTER TABLE service_grants DROP CONSTRAINT service_grants_capability_check;
+        ALTER TABLE service_grants ADD CONSTRAINT service_grants_capability_check
+          CHECK(capability IN ('read','create','update','delete','deploy','reveal'));
+        ALTER TABLE service_revisions ADD COLUMN revision_number bigint GENERATED ALWAYS AS IDENTITY;
+        CREATE INDEX service_revisions_latest ON service_revisions(project,service,revision_number DESC);
+        INSERT INTO migrations(version) VALUES(13);
+      `)
+    }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=14'))
+        .rowCount
+    ) {
+      await db.query(
+        `ALTER TABLE service_domains ADD COLUMN dns_status jsonb NOT NULL DEFAULT '{}'; ALTER TABLE proxy_status ADD COLUMN certificates jsonb NOT NULL DEFAULT '{}'; ALTER TABLE connectors ADD COLUMN public_addresses jsonb; ALTER TABLE connectors ADD COLUMN dns_targets jsonb NOT NULL DEFAULT '{}'; ALTER TABLE connectors ADD COLUMN private_addresses jsonb NOT NULL DEFAULT '[]'; INSERT INTO migrations(version) VALUES(14);`,
+      )
+    }
+    await migrateGit(db)
+    await migrateRollouts(db)
+    await migrateRecovery(db)
+    await migrateForwarding(db)
   })
 }
 if (

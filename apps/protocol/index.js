@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { publicAddressesSchema } from './addresses.js'
 export const buildArtifactSchema = z
   .object({
     images: z
@@ -30,6 +31,9 @@ export const deploymentSchema = z
       .string()
       .regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/)
       .max(201),
+    connection_id: z.string().uuid().optional(),
+    repository_id: z.string().min(1).max(100).optional(),
+    provider_url: z.string().url().max(500).optional(),
     branch: z
       .string()
       .min(1)
@@ -43,7 +47,14 @@ export const deploymentSchema = z
           !s.endsWith('.lock'),
       ),
     kind: z.enum(['dockerfile', 'compose']),
+    app_root: relativePath.optional(),
     build_file: relativePath,
+    build_arguments: z
+      .record(
+        z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+        z.string().max(16384),
+      )
+      .optional(),
     context: relativePath.default('.'),
     service: z
       .string()
@@ -62,6 +73,23 @@ export const deploymentJobSchema = z
     application: z.string(),
     commit: z.string().regex(/^[a-f0-9]{40}$/),
     config: deploymentSchema,
+    watch_baselines: z
+      .record(
+        z
+          .string()
+          .regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/)
+          .max(100),
+        z.string().regex(/^[a-f0-9]{40}$/),
+      )
+      .optional(),
+    source_auth: z
+      .object({
+        token: z.string().min(1).max(4096),
+        url: z.string().url().max(500),
+        username: z.string().max(100).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
 export const slug = z
@@ -93,6 +121,7 @@ export const snapshotSchema = z
   .object({
     version: z.literal(1),
     type: z.literal('snapshot'),
+    public_addresses: publicAddressesSchema.optional(),
     host: z.string().min(1).max(256),
     containers: z.array(containerSchema).max(5000),
   })

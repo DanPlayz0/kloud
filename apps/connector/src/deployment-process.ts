@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process'
 import { request } from 'node:http'
-import { realpath } from 'node:fs/promises'
-import { resolve, relative, isAbsolute } from 'node:path'
+import { realpath, access } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { resolve, relative, isAbsolute, delimiter, join } from 'node:path'
 
 export function commandEnvironment(
   command: string,
@@ -91,6 +92,7 @@ export function runCommand(
   cwd: string,
   signal: AbortSignal,
   log: (s: string) => void,
+  options?: { environment: NodeJS.ProcessEnv },
 ): Promise<string> {
   return new Promise((resolveCommand, reject) => {
     const child = spawn(command, args, {
@@ -98,7 +100,7 @@ export function runCommand(
       signal,
       killSignal: 'SIGKILL',
       windowsHide: true,
-      env: {
+      env: options?.environment ?? {
         ...commandEnvironment(command),
         GIT_TERMINAL_PROMPT: '0',
         GIT_CONFIG_COUNT: process.env.GIT_CONFIG_COUNT ?? '1',
@@ -124,3 +126,37 @@ export function runCommand(
 
 export const dockerHost = (socket: string) =>
   process.platform === 'win32' ? `npipe://${socket}` : `unix://${socket}`
+
+let dockerPath: string | undefined
+export async function runComposeConfig(
+  args: string[],
+  cwd: string,
+  signal: AbortSignal,
+) {
+  if (!dockerPath) {
+    const filenames =
+      process.platform === 'win32' ? ['docker.exe', 'docker'] : ['docker']
+    for (const directory of (process.env.PATH ?? '').split(delimiter)) {
+      for (const filename of filenames) {
+        const candidate = join(directory, filename)
+        try {
+          await access(
+            candidate,
+            process.platform === 'win32' ? constants.F_OK : constants.X_OK,
+          )
+          dockerPath = candidate
+          break
+        } catch {}
+      }
+      if (dockerPath) break
+    }
+  }
+  if (!dockerPath)
+    throw new Error(
+      'Docker CLI is required to resolve runtime Compose configuration',
+    )
+  // No host environment participates in app interpolation, including HOME/PATH/DOCKER_*/COMPOSE_*.
+  return runCommand(dockerPath, args, cwd, signal, () => {}, {
+    environment: {},
+  })
+}

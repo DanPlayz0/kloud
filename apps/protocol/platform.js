@@ -49,9 +49,138 @@ export const runtimeSchema = z
       .optional(),
   })
   .strict()
+export const buildInputsSchema = z
+  .object({
+    registry_connection_ids: z.array(z.string().uuid()).max(20).optional(),
+    secrets: z
+      .record(
+        z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+        z.string().max(16384),
+      )
+      .default({}),
+    registries: z
+      .array(
+        z
+          .object({
+            server: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9.:-]*$/),
+            username: z.string().min(1).max(256),
+            password: z.string().min(1).max(4096),
+          })
+          .strict(),
+      )
+      .max(20)
+      .default([]),
+  })
+  .strict()
+export const deploymentPolicySchema = z
+  .object({
+    strategy: z.enum(['blue-green', 'stop-first']).default('blue-green'),
+    allowDowntime: z.boolean().default(false),
+    compatibilityReviewed: z.boolean().default(false),
+    stopGraceSeconds: z.number().int().min(0).max(300).default(10),
+    compose: z
+      .object({
+        services: z.record(
+          z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/),
+          z
+            .object({
+              include: z
+                .array(
+                  z
+                    .string()
+                    .min(1)
+                    .max(256)
+                    .refine(
+                      (v) =>
+                        !v.startsWith('/') &&
+                        !v.includes('\\') &&
+                        !v.split('/').includes('..'),
+                      'Use repository-relative POSIX globs',
+                    ),
+                )
+                .max(100)
+                .default([]),
+              exclude: z
+                .array(
+                  z
+                    .string()
+                    .min(1)
+                    .max(256)
+                    .refine(
+                      (v) =>
+                        !v.startsWith('/') &&
+                        !v.includes('\\') &&
+                        !v.split('/').includes('..'),
+                      'Use repository-relative POSIX globs',
+                    ),
+                )
+                .max(100)
+                .default([]),
+              action: z.enum(['redeploy', 'restart']).default('redeploy'),
+              http: z
+                .object({
+                  port: z.number().int().min(1).max(65535),
+                  path: z
+                    .string()
+                    .regex(/^\/[^\s]*$/)
+                    .default('/'),
+                  timeoutSeconds: z.number().int().min(1).max(60).default(5),
+                })
+                .strict()
+                .optional(),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .optional(),
+    readiness: z
+      .object({
+        dockerHealth: z.boolean().default(true),
+        http: z
+          .object({
+            port: z.number().int().min(1).max(65535),
+            path: z
+              .string()
+              .regex(/^\/[^\s]*$/)
+              .max(1000)
+              .default('/'),
+            timeoutSeconds: z.number().int().min(1).max(60).default(5),
+          })
+          .strict()
+          .optional(),
+        timeoutSeconds: z.number().int().min(1).max(1800).default(120),
+        intervalSeconds: z.number().int().min(1).max(60).default(2),
+      })
+      .strict()
+      .default({ dockerHealth: true, timeoutSeconds: 120, intervalSeconds: 2 }),
+  })
+  .strict()
+  .superRefine((policy, ctx) => {
+    if (policy.strategy === 'stop-first' && !policy.allowDowntime)
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Stop-before-start requires explicit downtime permission',
+      })
+    if (
+      policy.strategy === 'blue-green' &&
+      !policy.readiness.dockerHealth &&
+      !policy.readiness.http &&
+      !(
+        Object.keys(policy.compose?.services ?? {}).length &&
+        Object.values(policy.compose.services).every((service) => service.http)
+      )
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Blue/green requires at least one readiness check',
+      })
+  })
 export const platformConfigSchema = z
   .object({
     connector_id: z.string().uuid(),
+    deployment: deploymentPolicySchema.optional(),
+    build_inputs: buildInputsSchema.optional(),
     source: z.discriminatedUnion('type', [
       z
         .object({ type: z.literal('github'), config: deploymentSchema })

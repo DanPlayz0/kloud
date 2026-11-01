@@ -12,6 +12,7 @@ export const serviceCapabilities = [
   'update',
   'delete',
   'deploy',
+  'reveal',
 ] as const
 export const serviceGrantSchema = z
   .object({
@@ -34,7 +35,8 @@ export function normalizeServiceGrants(
     if (
       g.capability === 'update' ||
       g.capability === 'delete' ||
-      g.capability === 'deploy'
+      g.capability === 'deploy' ||
+      g.capability === 'reveal'
     ) {
       const read = { ...g, capability: 'read' as const }
       normalized.set(JSON.stringify(read), read)

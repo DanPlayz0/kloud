@@ -6,8 +6,13 @@ export interface DeploymentConfig {
   connector_id: string
   container_name: string
   repository: string
+  connection_id?: string
+  repository_id?: string
+  provider_url?: string
   branch: string
   kind: 'dockerfile' | 'compose'
+  app_root?: string
+  build_arguments?: Record<string, string>
   build_file: string
   context: string
   service: string
@@ -15,6 +20,8 @@ export interface DeploymentConfig {
   managed?: boolean
 }
 export interface DeploymentJob {
+  watch_baselines?: Record<string, string>
+  source_auth?: { token: string; url: string; username?: string }
   id: string
   deployment_id: string
   project: string
@@ -45,6 +52,7 @@ export interface Container {
 export interface Snapshot {
   version: 1
   type: 'snapshot'
+  public_addresses?: import('./addresses.js').PublicAddresses
   host: string
   containers: Container[]
 }

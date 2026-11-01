@@ -12,6 +12,8 @@ import { pool, transaction } from './db.js'
 import { requireUser, type Env } from './auth.js'
 import { permissionTransaction, projectAccess } from './permissions.js'
 import { token, digest, publicOrigin } from './security.js'
+import { seal, unseal } from './platform-secrets.js'
+import { resolveGitSource, validateGitSource } from './git-connections.js'
 import { demandService } from './service-permissions.js'
 function deliveryKey(deployment: string, delivery: string) {
   const hash = createHash('sha256')
@@ -39,23 +41,30 @@ deploymentHooks.post('/hooks/github/:id', async (c) => {
     await pool.query('SELECT * FROM deployments WHERE id=$1', [id])
   ).rows[0]
   const raw = new Uint8Array(await c.req.arrayBuffer())
+  const selfHosted =
+    !!deployment?.config?.provider_url &&
+    deployment.config.provider_url !== 'https://github.com'
+  const signature = selfHosted
+    ? `sha256=${c.req.header('x-forgejo-signature') ?? c.req.header('x-gitea-signature') ?? ''}`
+    : c.req.header('x-hub-signature-256')
   if (
     !deployment ||
-    !verifySignature(
-      raw,
-      deployment.webhook_secret,
-      c.req.header('x-hub-signature-256'),
-    )
+    !verifySignature(raw, deployment.webhook_secret, signature)
   )
     return c.json({ error: 'Invalid webhook signature' }, 401)
-  const event = c.req.header('x-github-event')
+  const event = selfHosted
+    ? (c.req.header('x-forgejo-event') ?? c.req.header('x-gitea-event'))
+    : c.req.header('x-github-event')
   if (event !== 'push') return c.json({ ignored: true })
   const payload = z
     .object({
       ref: z.string(),
       after: z.string().regex(/^[a-f0-9]{40}$/),
       deleted: z.boolean().optional(),
-      repository: z.object({ full_name: z.string() }),
+      repository: z.object({
+        full_name: z.string(),
+        id: z.union([z.string(), z.number()]).optional(),
+      }),
     })
     .parse(JSON.parse(new TextDecoder().decode(raw)))
   const delivery = z
@@ -63,7 +72,12 @@ deploymentHooks.post('/hooks/github/:id', async (c) => {
     .min(1)
     .max(100)
     .regex(/^[a-zA-Z0-9-]+$/)
-    .parse(c.req.header('x-github-delivery'))
+    .parse(
+      selfHosted
+        ? (c.req.header('x-forgejo-delivery') ??
+            c.req.header('x-gitea-delivery'))
+        : c.req.header('x-github-delivery'),
+    )
   const queued = await transaction(async (db) => {
     // Serialize webhook delivery with configuration changes and job claims.
     const current = (
@@ -74,6 +88,12 @@ deploymentHooks.post('/hooks/github/:id', async (c) => {
     const config = deploymentSchema.parse(current.config)
     if (
       !config.enabled ||
+      (config.connection_id &&
+        !['automatic', 'manual', 'manual-verified'].includes(
+          current.webhook_mode,
+        )) ||
+      (config.repository_id !== undefined &&
+        String(payload.repository.id) !== String(config.repository_id)) ||
       payload.deleted ||
       payload.after === '0'.repeat(40) ||
       payload.ref !== `refs/heads/${config.branch}` ||
@@ -81,23 +101,36 @@ deploymentHooks.post('/hooks/github/:id', async (c) => {
         config.repository.toLowerCase()
     )
       return false
+    if (current.webhook_mode === 'manual')
+      await db.query(
+        "UPDATE deployments SET webhook_mode='manual-verified',webhook_error=NULL WHERE id=$1",
+        [id],
+      )
     if (current.service_revision) {
       await db.query(
-        `INSERT INTO service_runs(id,revision,connector_id,request_key,commit) VALUES($1,$2,$3,$4,$5) ON CONFLICT(request_key) DO NOTHING`,
+        `INSERT INTO service_runs(id,revision,connector_id,request_key,commit,requested_by) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(request_key) DO NOTHING`,
         [
           randomUUID(),
           current.service_revision,
           current.connector_id,
           deliveryKey(id, delivery),
           payload.after,
+          current.configured_by,
         ],
       )
       return true
     }
     await db.query(
-      `INSERT INTO deployment_builds(id,deployment_id,delivery,commit,config)
-      VALUES($1,$2,$3,$4,$5) ON CONFLICT(deployment_id,delivery) DO NOTHING`,
-      [randomUUID(), id, delivery, payload.after, config],
+      `INSERT INTO deployment_builds(id,deployment_id,delivery,commit,config,requested_by)
+      VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(deployment_id,delivery) DO NOTHING`,
+      [
+        randomUUID(),
+        id,
+        delivery,
+        payload.after,
+        config,
+        current.configured_by,
+      ],
     )
     return true
   })
@@ -134,10 +167,29 @@ deploymentHooks.post('/connectors/deployments/claim', async (c) => {
   const job = await withConnector(
     c.req.header('authorization'),
     async (db, connector) => {
+      const host = (
+        await db.query('SELECT capabilities FROM connectors WHERE id=$1', [
+          connector,
+        ])
+      ).rows[0]
+      if (!host?.capabilities.includes('rollout-v1')) return null
       // Never retry an ambiguous execution automatically. The worker has a 30 minute deadline.
       await db.query(
+        `INSERT INTO deployment_pauses(deployment,reason) SELECT deployment_id,'Worker disconnected; serving state requires explicit reconciliation' FROM deployment_builds WHERE config->>'connector_id'=$1::text AND status='running' AND started<now()-interval '40 minutes' ON CONFLICT(deployment) DO UPDATE SET reason=EXCLUDED.reason,updated=now()`,
+        [connector],
+      )
+      await db.query(
+        `INSERT INTO service_release_state(project,service,connector_id,paused,reason)
+        SELECT d.project,d.application,$1::uuid,true,'Legacy worker disconnected; inspect serving state before further deployment'
+        FROM deployment_builds b JOIN deployments d ON d.id=b.deployment_id JOIN services s ON s.project_slug=d.project AND s.slug=d.application
+        WHERE b.config->>'connector_id'=$1::text AND b.status='running' AND b.started<now()-interval '40 minutes'
+        ON CONFLICT(project,service) DO UPDATE SET paused=true,reason=EXCLUDED.reason,updated=now()`,
+        [connector],
+      )
+
+      await db.query(
         `UPDATE deployment_builds b SET status='failed',finished=now(),log=log || E'\nWorker disconnected or exceeded deadline.'
-      FROM deployments d WHERE b.deployment_id=d.id AND d.connector_id=$1 AND b.status='running' AND b.started < now()-interval '40 minutes'`,
+      FROM deployments d WHERE b.deployment_id=d.id AND b.config->>'connector_id'=$1::text AND b.status='running' AND b.started < now()-interval '40 minutes'`,
         [connector],
       )
       if (
@@ -149,7 +201,7 @@ deploymentHooks.post('/connectors/deployments/claim', async (c) => {
         ).rowCount ||
         (
           await db.query(
-            `SELECT 1 FROM deployment_builds b JOIN deployments d ON d.id=b.deployment_id WHERE d.connector_id=$1 AND b.status='running'`,
+            `SELECT 1 FROM deployment_builds b JOIN deployments d ON d.id=b.deployment_id WHERE b.config->>'connector_id'=$1::text AND b.status='running'`,
             [connector],
           )
         ).rowCount
@@ -157,10 +209,10 @@ deploymentHooks.post('/connectors/deployments/claim', async (c) => {
         return null
       const row = (
         await db.query(
-          `SELECT b.id,b.deployment_id,b.commit,b.config,d.project,d.application
+          `SELECT b.id,b.deployment_id,b.commit,b.config,b.requested_by,d.project,d.application
       FROM deployment_builds b JOIN deployments d ON d.id=b.deployment_id
-      WHERE d.connector_id=$1 AND b.status='queued' AND (d.config->>'enabled')::boolean
-      ORDER BY b.created,b.id LIMIT 1 FOR UPDATE OF d,b`,
+      WHERE b.config->>'connector_id'=$1::text AND b.status='queued' AND NOT EXISTS (SELECT 1 FROM deployment_pauses paused WHERE paused.deployment=d.id) AND NOT EXISTS (SELECT 1 FROM deployment_builds older JOIN deployments od ON od.id=older.deployment_id WHERE od.project=d.project AND od.application=d.application AND older.status IN ('queued','running') AND older.receipt_order<b.receipt_order) AND NOT EXISTS (SELECT 1 FROM service_release_state state WHERE state.project=d.project AND state.service=d.application AND state.paused) AND NOT EXISTS (SELECT 1 FROM service_runs r JOIN service_revisions v ON v.id=r.revision WHERE v.project=d.project AND v.service=d.application AND r.status IN ('queued','running') AND r.receipt_order<b.receipt_order)
+      ORDER BY b.receipt_order LIMIT 1 FOR UPDATE OF d,b`,
           [connector],
         )
       ).rows[0]
@@ -169,7 +221,43 @@ deploymentHooks.post('/connectors/deployments/claim', async (c) => {
         "UPDATE deployment_builds SET status='running',started=now() WHERE id=$1",
         [row.id],
       )
-      return row
+      try {
+        const actor = (
+          await db.query(
+            'SELECT id,username,admin,capabilities FROM users WHERE id=$1 AND NOT disabled',
+            [row.requested_by],
+          )
+        ).rows[0]
+        if (!actor) throw new Error('Deployment actor unavailable')
+        if (!actor.admin)
+          await demandService(actor, row.project, 'deploy', row.application, db)
+        const source_auth = await resolveGitSource(
+          db,
+          row.project,
+          row.application,
+          row.config,
+        )
+        if (source_auth)
+          await db.query(
+            'UPDATE deployment_builds SET encrypted_dispatch_secrets=$2 WHERE id=$1',
+            [
+              row.id,
+              seal([
+                source_auth.token,
+                Buffer.from(
+                  `${source_auth.username ?? 'x-access-token'}:${source_auth.token}`,
+                ).toString('base64'),
+              ]),
+            ],
+          )
+        return { ...row, source_auth }
+      } catch {
+        await db.query(
+          "UPDATE deployment_builds SET status='failed',finished=now(),log='Source connection authorization is no longer available; select an authorized connection before deploying again' WHERE id=$1",
+          [row.id],
+        )
+        return null
+      }
     },
   )
   return c.json({ job })
@@ -185,12 +273,29 @@ deploymentHooks.post('/connectors/deployments/:id/result', async (c) => {
     .parse(await c.req.json())
   const updated = await withConnector(
     c.req.header('authorization'),
-    async (db, connector) =>
-      db.query(
+    async (db, connector) => {
+      const row = (
+        await db.query(
+          "SELECT encrypted_dispatch_secrets FROM deployment_builds WHERE id=$1 AND config->>'connector_id'=$2::text",
+          [id, connector],
+        )
+      ).rows[0]
+      const secrets = row?.encrypted_dispatch_secrets
+        ? (unseal(row.encrypted_dispatch_secrets) as string[])
+        : []
+      const log = secrets
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length)
+        .reduce(
+          (text, secret) => text.split(secret).join('[redacted]'),
+          result.log,
+        )
+      return db.query(
         `UPDATE deployment_builds b SET status=$1,log=$2,finished=now() FROM deployments d
-      WHERE b.id=$3 AND b.deployment_id=d.id AND d.connector_id=$4 AND b.status='running' RETURNING b.id`,
-        [result.status, result.log, id, connector],
-      ),
+      WHERE b.id=$3 AND b.deployment_id=d.id AND b.config->>'connector_id'=$4::text AND b.status='running' RETURNING b.id`,
+        [result.status, log, id, connector],
+      )
+    },
   )
   return c.json({ ok: !!updated.rowCount })
 })
@@ -212,7 +317,7 @@ deployments.use(base, async (c, next) => {
 deployments.get(base, async (c) => {
   const row = (
     await pool.query(
-      'SELECT id,config FROM deployments WHERE project=$1 AND application=$2',
+      'SELECT id,config,webhook_mode,webhook_error FROM deployments WHERE project=$1 AND application=$2',
       [c.req.param('project'), c.req.param('application')],
     )
   ).rows[0]
@@ -258,31 +363,36 @@ deployments.post(base, async (c) => {
       ).rows[0]
       if (!deployment)
         throw new HTTPException(404, { message: 'Deployment not found' })
-      if (!deployment.config.enabled)
-        throw new HTTPException(409, {
-          message: 'Enable deployments before queuing a build',
-        })
+      await validateGitSource(
+        db,
+        actor,
+        c.req.param('project'),
+        c.req.param('application'),
+        deployment.config,
+      )
       if (deployment.service_revision) {
         await db.query(
-          'INSERT INTO service_runs(id,revision,connector_id,request_key,commit) VALUES($1,$2,$3,$4,$5)',
+          'INSERT INTO service_runs(id,revision,connector_id,request_key,commit,requested_by,manual) VALUES($1,$2,$3,$4,$5,$6,true)',
           [
             randomUUID(),
             deployment.service_revision,
             deployment.connector_id,
             randomUUID(),
             body.commit,
+            actor.id,
           ],
         )
         return
       }
       await db.query(
-        'INSERT INTO deployment_builds(id,deployment_id,delivery,commit,config) VALUES($1,$2,$3,$4,$5)',
+        'INSERT INTO deployment_builds(id,deployment_id,delivery,commit,config,requested_by) VALUES($1,$2,$3,$4,$5,$6)',
         [
           randomUUID(),
           deployment.id,
           `manual-${randomUUID()}`,
           body.commit,
           deployment.config,
+          actor.id,
         ],
       )
       return
@@ -311,6 +421,13 @@ deployments.put(base, async (c) => {
           db,
         )
       await projectAccess(actor, c.req.param('project')!, db)
+      await validateGitSource(
+        db,
+        actor,
+        c.req.param('project'),
+        c.req.param('application'),
+        config,
+      )
       const service = (
         await db.query(
           'SELECT type FROM services WHERE project_slug=$1 AND slug=$2',
@@ -378,15 +495,10 @@ deployments.put(base, async (c) => {
         throw new HTTPException(400, {
           message: 'Choose an existing container assigned to this application',
         })
-      if (existing)
-        await db.query(
-          "UPDATE deployment_builds SET status='failed',finished=now(),log='Cancelled by configuration change' WHERE deployment_id=$1 AND status='queued'",
-          [existing.id],
-        )
       return (
         await db.query(
-          `INSERT INTO deployments(id,project,application,connector_id,config,webhook_secret) VALUES($1,$2,$3,$4,$5,$6)
-      ON CONFLICT(project,application) DO UPDATE SET connector_id=$4,config=$5,service_revision=NULL RETURNING id`,
+          `INSERT INTO deployments(id,project,application,connector_id,config,webhook_secret,configured_by) VALUES($1,$2,$3,$4,$5,$6,$7)
+      ON CONFLICT(project,application) DO UPDATE SET connector_id=$4,config=$5,service_revision=NULL,configured_by=$7 RETURNING id`,
           [
             randomUUID(),
             c.req.param('project'),
@@ -394,6 +506,7 @@ deployments.put(base, async (c) => {
             config.connector_id,
             config,
             secret,
+            actor.id,
           ],
         )
       ).rows[0]

@@ -7,7 +7,7 @@ import {
   stat,
 } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
-import { createHash } from 'node:crypto'
+import { createHash, X509Certificate } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { domainSchema, type Domain } from '@kloud/protocol/platform'
 import type { ConnectorConfig } from './config.js'
@@ -62,6 +62,7 @@ export async function proxyWorker(
   await mkdir(join(root, 'certificates'), { recursive: true, mode: 0o700 })
   const docker = ['--host', dockerHost(config.dockerSocket)]
   const image = process.env.PROXY_NGINX_IMAGE ?? 'nginx:stable-alpine'
+  let certificates: Record<string, 'ready' | 'pending' | 'error'> = {}
   let applied: string | null = null,
     error: string | null = null,
     activeHash = '',
@@ -209,7 +210,7 @@ export async function proxyWorker(
       const state = await platformPost(
         config,
         'proxy',
-        { applied, error },
+        { applied, error, certificates },
         signal,
       )
       const targets: {
@@ -217,6 +218,7 @@ export async function proxyWorker(
         address: string
         certificate: boolean
       }[] = []
+      const nextCertificates: typeof certificates = {}
       const networks = new Set<string>()
       for (const route of state.routes) {
         const domain = domainSchema.parse(route.config)
@@ -239,7 +241,7 @@ export async function proxyWorker(
         let certificate = false
         if (domain.https)
           try {
-            await readFile(
+            const pem = await readFile(
               join(
                 root,
                 'certificates',
@@ -248,10 +250,17 @@ export async function proxyWorker(
                 'fullchain.pem',
               ),
             )
-            certificate = true
+            const leaf = new X509Certificate(pem)
+            certificate =
+              Date.parse(leaf.validTo) > Date.now() &&
+              Date.parse(leaf.validFrom) <= Date.now() &&
+              !!leaf.checkHost(domain.hostname)
           } catch {}
+        if (domain.https)
+          nextCertificates[domain.hostname] = certificate ? 'ready' : 'pending'
         targets.push({ config: domain, address, certificate })
       }
+      certificates = nextCertificates
       const hash = createHash('sha256')
         .update(JSON.stringify(targets))
         .digest('hex')
@@ -303,27 +312,31 @@ export async function proxyWorker(
       }
       for (const target of targets)
         if (target.config.https && !target.certificate) {
-          await run([
-            'run',
-            '--rm',
-            '--label',
-            'kloud.internal=true',
-            '--mount',
-            `type=bind,source=${join(root, 'acme')},target=/var/www/acme`,
-            '--mount',
-            `type=bind,source=${join(root, 'certificates')},target=/etc/letsencrypt`,
-            process.env.PROXY_CERTBOT_IMAGE ?? 'certbot/certbot:latest',
-            'certonly',
-            '--non-interactive',
-            '--agree-tos',
-            '--register-unsafely-without-email',
-            '--webroot',
-            '-w',
-            '/var/www/acme',
-            '-d',
-            target.config.hostname,
-          ])
-          activeHash = ''
+          try {
+            await run([
+              'run',
+              '--rm',
+              '--label',
+              'kloud.internal=true',
+              '--mount',
+              `type=bind,source=${join(root, 'acme')},target=/var/www/acme`,
+              '--mount',
+              `type=bind,source=${join(root, 'certificates')},target=/etc/letsencrypt`,
+              process.env.PROXY_CERTBOT_IMAGE ?? 'certbot/certbot:latest',
+              'certonly',
+              '--non-interactive',
+              '--agree-tos',
+              '--register-unsafely-without-email',
+              '--webroot',
+              '-w',
+              '/var/www/acme',
+              '-d',
+              target.config.hostname,
+            ])
+            activeHash = ''
+          } catch {
+            certificates[target.config.hostname] = 'error'
+          }
         }
       if (
         Date.now() - renewal > 12 * 60 * 60 * 1000 &&

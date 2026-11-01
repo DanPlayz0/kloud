@@ -10,6 +10,8 @@ import {
   pm2ResultSchema,
 } from '@kloud/protocol/pm2'
 import { requireUser, currentUser, type Env, type User } from './auth.js'
+import { isPublicIPv4, isPublicIPv6 } from '@kloud/protocol/addresses'
+import { permissionTransaction } from './permissions.js'
 import { hasServer, demandServer } from './permissions.js'
 import { pool } from './db.js'
 import { inventoryQuery } from './dashboard.js'
@@ -20,7 +22,7 @@ export const connectorWorkspace = new Hono<Env>()
 connectorWorkspace.use('*', requireUser)
 const uuid = z.string().uuid()
 const containerId = z.string().regex(/^[a-f0-9]{64}$/)
-const metadataQuery = `SELECT id,name,host,seen,discovery,revoked,capabilities,
+const metadataQuery = `SELECT id,name,host,seen,discovery,revoked,capabilities,public_addresses,dns_targets,private_addresses,
   (seen IS NULL OR seen<now()-interval '20 seconds' OR revoked) AS stale
   FROM connectors`
 export function canBrowseConnector(user: User) {
@@ -57,6 +59,34 @@ connectorWorkspace.get('/connectors', async (c) => {
 connectorWorkspace.get('/connectors/:connector', async (c) => {
   demandBrowse(c.get('user'))
   return c.json(await host(uuid.parse(c.req.param('connector'))))
+})
+
+connectorWorkspace.put('/connectors/:connector/addresses', async (c) => {
+  const body = z
+    .object({
+      dns_targets: z
+        .object({
+          ipv4: z.string().refine(isPublicIPv4).nullable(),
+          ipv6: z.string().refine(isPublicIPv6).nullable(),
+        })
+        .strict(),
+      private_addresses: z.array(z.union([z.ipv4(), z.ipv6()])).max(32),
+    })
+    .strict()
+    .parse(await c.req.json())
+  await permissionTransaction(c.get('user'), async (db, actor) => {
+    demandServer(actor, 'connectors.manage')
+    const result = await db.query(
+      'UPDATE connectors SET dns_targets=$2,private_addresses=$3 WHERE id=$1 AND NOT revoked RETURNING id',
+      [
+        uuid.parse(c.req.param('connector')),
+        body.dns_targets,
+        JSON.stringify([...new Set(body.private_addresses)]),
+      ],
+    )
+    if (!result.rowCount) throw new HTTPException(404)
+  })
+  return c.json({ saved: true })
 })
 
 // Connector scope is always enforced in SQL, including for globally unique PM2 IDs.

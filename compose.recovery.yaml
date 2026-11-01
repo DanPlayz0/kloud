@@ -1,0 +1,10 @@
+# Add to either the full stack or standalone connector Compose configuration.
+# Create KLOUD_BACKUP_DIRECTORY on the host and grant the connector user write access.
+services:
+  connector:
+    environment:
+      DATABASES_ENABLED: 'true'
+      BACKUP_DISK_ROOT: /var/lib/kloud/backups
+      BACKUP_STAGING_ROOT: /var/lib/kloud/deployments/database-staging
+    volumes:
+      - ${KLOUD_BACKUP_DIRECTORY:-/var/lib/kloud/backups}:/var/lib/kloud/backups

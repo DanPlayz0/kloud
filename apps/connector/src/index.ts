@@ -1,3 +1,6 @@
+import { forwardingWorker } from './forwarding.js'
+import { databaseWorker } from './postgres-recovery.js'
+import { publicAddressDiscovery } from './public-addresses.js'
 import { createServer } from 'node:http'
 import { setTimeout as delay } from 'node:timers/promises'
 import WebSocket from 'ws'
@@ -20,8 +23,19 @@ if (!/^[A-Za-z0-9_-]{43}$/.test(config.token))
     'CONNECTOR_TOKEN must be a credential created in the dashboard',
   )
 const shutdown = new AbortController()
+const addresses = publicAddressDiscovery(shutdown.signal)
 const runtimeEnabled =
   config.dockerEnabled && process.env.RUNTIME_ENABLED === 'true'
+const forwardingEnabled =
+  config.dockerEnabled && process.env.FORWARDING_ENABLED === 'true'
+const forwarding = forwardingEnabled
+  ? forwardingWorker(config, shutdown.signal)
+  : Promise.resolve()
+const databasesEnabled =
+  config.dockerEnabled && process.env.DATABASES_ENABLED === 'true'
+const databases = databasesEnabled
+  ? databaseWorker(config, shutdown.signal)
+  : Promise.resolve()
 const proxyEnabled =
   config.dockerEnabled && process.env.PROXY_ENABLED === 'true'
 const runtime = runtimeOperations(config)
@@ -122,7 +136,10 @@ try {
           const snapshot = await collectSnapshot()
           dockerReachable = true
           if (ws.readyState === WebSocket.OPEN) {
-            const data = JSON.stringify(snapshot)
+            const data = JSON.stringify({
+              ...snapshot,
+              public_addresses: addresses.snapshot(),
+            })
             if (Buffer.byteLength(data) > 2 * 1024 * 1024)
               throw new Error('Snapshot exceeds protocol limit')
             awaiting = true
@@ -152,9 +169,11 @@ try {
             capabilities: [
               ...(runtimeEnabled ? ['runtime'] : []),
               ...(config.dockerEnabled && config.deploymentsEnabled
-                ? ['deploy']
+                ? ['deploy', 'rollout-v1']
                 : []),
               ...(proxyEnabled ? ['proxy'] : []),
+              ...(databasesEnabled ? ['postgres'] : []),
+              ...(forwardingEnabled ? ['forwarding'] : []),
               ...(pm2 ? ['pm2'] : []),
               ...(config.hostTerminal ? ['host-terminal'] : []),
             ],
@@ -295,7 +314,10 @@ try {
   shutdown.abort()
   await worker
   await services
+  await databases
+  await forwarding
   await proxy
+  await addresses.work
   runtime.close()
   hostTerminal.close()
   pm2?.close()

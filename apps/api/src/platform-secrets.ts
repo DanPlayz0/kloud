@@ -1,3 +1,4 @@
+import { getBuildSecrets } from './build-inputs.js'
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import { HTTPException } from 'hono/http-exception'
 function key() {
@@ -33,6 +34,7 @@ export function unseal(value: string): any {
 export function redact(text: string, config: any) {
   const secrets = [
     ...Object.values(config.runtime?.environment ?? {}),
+    ...getBuildSecrets(config),
     config.source?.registry?.password,
   ]
     .filter((v): v is string => typeof v === 'string' && v.length > 0)

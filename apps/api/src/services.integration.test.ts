@@ -157,6 +157,16 @@ test(
         enabled: true,
       }
       assert.equal(
+        (await request(member, deployment, 'PUT', config)).status,
+        403,
+        'deployment permission alone cannot use a new broad legacy source credential',
+      )
+      // Fixture an explicit administrator approval for this exact app/repository/host.
+      await pool.query(
+        "INSERT INTO legacy_source_grants(project,service,repository,connector_id) VALUES('demo','web',$1,$2)",
+        [config.repository, connector],
+      )
+      assert.equal(
         (
           await request(member, deployment, 'PUT', {
             ...config,
@@ -258,6 +268,15 @@ test(
         [savedData.id],
       )
       assert.equal((await request(member, `${base}/web`, 'DELETE')).status, 200)
+      assert.equal(
+        (
+          await pool.query(
+            "SELECT 1 FROM legacy_source_grants WHERE project='demo' AND service='web'",
+          )
+        ).rowCount,
+        0,
+        'deleting an app retires its legacy source approvals',
+      )
       assert.equal(
         (
           await pool.query('SELECT 1 FROM deployments WHERE id=$1', [
