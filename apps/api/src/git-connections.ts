@@ -1,3 +1,7 @@
+import {
+  validateGitAvailability,
+  saveGitAvailability,
+} from './git-availability.js'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { randomUUID } from 'node:crypto'
@@ -40,7 +44,7 @@ gitConnections.use('/projects/:project/git-connections*', requireUser)
 async function connection(db: Database, project: string, id: string) {
   const row = (
     await db.query<GitConnection>(
-      'SELECT * FROM git_connections WHERE id=$1 AND project=$2 AND NOT revoked',
+      `SELECT c.*, (c.all_projects OR EXISTS(SELECT 1 FROM git_connection_projects g WHERE g.connection=c.id AND g.project=$2)) AS project_access FROM git_connections c WHERE c.id=$1 AND NOT c.revoked`,
       [id, project],
     )
   ).rows[0]
@@ -231,7 +235,7 @@ gitConnections.get(path, async (c) => {
   const rows = (
     await pool.query(
       `SELECT c.id,c.name,c.provider,c.origin,c.owner,c.identity,c.created FROM git_connections c
-    WHERE c.project=$1 AND NOT c.revoked AND (c.owner=$2 OR (c.owner IS NULL AND ($3 OR c.project_access)) OR EXISTS(SELECT 1 FROM git_repository_bindings b WHERE b.connection=c.id AND b.project=$1 AND b.service=$4))
+    WHERE NOT c.revoked AND (c.owner=$2 OR (c.owner IS NULL AND ($3 OR c.all_projects OR EXISTS(SELECT 1 FROM git_connection_projects g WHERE g.connection=c.id AND g.project=$1))) OR EXISTS(SELECT 1 FROM git_repository_bindings b WHERE b.connection=c.id AND b.project=$1 AND b.service=$4))
     AND (c.owner IS NULL OR EXISTS(SELECT 1 FROM users u WHERE u.id=c.owner AND NOT u.disabled AND (u.admin OR EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id AND m.project_slug=$1)))) ORDER BY c.name,c.id`,
       [
         project,
@@ -252,6 +256,11 @@ gitConnections.post(path, async (c) => {
       scope: z.enum(['personal', 'shared']).default('personal'),
       service: z.string().min(1).optional(),
       project_access: z.boolean().default(false),
+      all_projects: z.boolean().default(false),
+      available_projects: z
+        .array(z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/))
+        .max(1000)
+        .optional(),
       token: z.string().min(1).max(4096).optional(),
       username: z
         .string()
@@ -266,7 +275,15 @@ gitConnections.post(path, async (c) => {
     .parse(await c.req.json())
   const id = await permissionTransaction(c.get('user'), async (db, actor) => {
     await demandGitCreation(db, actor, c.req.param('project'), body.service)
-    demandGitSharing(actor, body.scope, body.project_access)
+    const availability = await validateGitAvailability(
+      db,
+      actor,
+      body.scope,
+      c.req.param('project'),
+      body.project_access,
+      body.available_projects,
+      body.all_projects,
+    )
     const origin = providerOrigin(body.provider, body.origin)
     const credentials: Credentials =
       body.provider === 'github_app'
@@ -325,9 +342,10 @@ gitConnections.post(path, async (c) => {
         row.owner,
         row.encrypted_credentials,
         identity,
-        body.project_access,
+        false,
       ],
     )
+    await saveGitAvailability(db, row.id, availability)
     return row.id
   })
   return c.json({ id }, 201)

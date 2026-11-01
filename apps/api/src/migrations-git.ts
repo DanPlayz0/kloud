@@ -93,4 +93,28 @@ export async function migrateGit(db: PoolClient) {
       INSERT INTO migrations(version) VALUES(29);
     `)
   }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=30'))
+      .rowCount
+  ) {
+    await db.query(`
+      ALTER TABLE git_connections ALTER COLUMN project DROP NOT NULL;
+      ALTER TABLE git_connections DROP CONSTRAINT git_connections_project_fkey;
+      ALTER TABLE git_connections ADD CONSTRAINT git_connections_project_fkey FOREIGN KEY(project) REFERENCES projects(slug) ON DELETE SET NULL;
+      ALTER TABLE git_connections ADD COLUMN all_projects boolean NOT NULL DEFAULT false;
+      ALTER TABLE git_connections ADD CONSTRAINT shared_all_projects CHECK(NOT all_projects OR owner IS NULL);
+      CREATE TABLE git_connection_projects (
+        connection uuid NOT NULL REFERENCES git_connections ON DELETE CASCADE,
+        project text NOT NULL REFERENCES projects(slug) ON DELETE CASCADE,
+        PRIMARY KEY(connection,project)
+      );
+      INSERT INTO git_connection_projects(connection,project) SELECT id,project FROM git_connections WHERE project_access;
+      ALTER TABLE github_app_setups ADD COLUMN all_projects boolean NOT NULL DEFAULT false;
+      ALTER TABLE github_app_setups ADD COLUMN available_projects text[];
+      ALTER TABLE registry_connections ALTER COLUMN project DROP NOT NULL;
+      ALTER TABLE registry_connections DROP CONSTRAINT registry_connections_project_fkey;
+      ALTER TABLE registry_connections ADD CONSTRAINT registry_connections_project_fkey FOREIGN KEY(project) REFERENCES projects(slug) ON DELETE SET NULL;
+      INSERT INTO migrations(version) VALUES(30);
+    `)
+  }
 }

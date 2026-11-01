@@ -269,7 +269,9 @@ export function RepositoryOnboarding({
                     {item.identity.account
                       ? ` · ${item.identity.account} · installation ${item.identity.installation_id}`
                       : ` · ${item.origin}`}
-                    {item.owner ? ' · personal' : ' · shared'}
+                    {item.owner
+                      ? ' · personal, reusable'
+                      : ' · shared across authorized teams'}
                   </option>
                 ))}
               </NativeSelect>
@@ -277,8 +279,9 @@ export function RepositoryOnboarding({
             {!available.length && (
               <p className="text-xs text-muted-foreground">
                 No authorized connections are available. Ask an administrator to
-                prepare a shared connection or delegate a repository to this
-                service.
+                make a saved shared connection available to this project’s team,
+                or delegate a repository to this service. The same connection
+                can be reused across multiple projects.
               </p>
             )}
             {canCreate ? (

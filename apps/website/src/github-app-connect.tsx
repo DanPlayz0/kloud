@@ -44,12 +44,16 @@ export function GithubAppConnect({
   administration = false,
   allowShared = false,
   projectAccess = false,
+  allProjects,
+  availableProjects,
 }: {
   project: string
   service?: string
   administration?: boolean
   allowShared?: boolean
   projectAccess?: boolean
+  allProjects?: boolean
+  availableProjects?: string[]
   onConnected: (id: string) => Promise<void>
 }) {
   const [name, setName] = useState(defaultGithubAppName)
@@ -58,6 +62,7 @@ export function GithubAppConnect({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
+  const [installUrl, setInstallUrl] = useState('')
   const cleanup = useRef<() => void>(() => {})
   useEffect(() => () => cleanup.current(), [])
 
@@ -72,6 +77,7 @@ export function GithubAppConnect({
       return
     }
     setError('')
+    setInstallUrl('')
     setBusy(true)
     setStatus(
       'Create the app on GitHub, then install it for the repositories you want to use.',
@@ -80,7 +86,10 @@ export function GithubAppConnect({
     let expectedState = '',
       callbackOrigin = '',
       processing = false,
-      cancelled = false
+      polling = false,
+      cancelled = false,
+      expiresAt = Date.now() + 15 * 60 * 1000,
+      lastPollAt = 0
     const stop = () => {
       cancelled = true
       window.removeEventListener('message', receive)
@@ -91,6 +100,7 @@ export function GithubAppConnect({
       stop()
       setBusy(false)
       setStatus('')
+      setInstallUrl('')
       setName((current) =>
         /^Kloud-\d{4}-\d{2}-\d{2}-[a-z0-9]{6}$/.test(current)
           ? defaultGithubAppName()
@@ -99,6 +109,64 @@ export function GithubAppConnect({
       setError(
         error instanceof Error ? error.message : 'Unable to connect GitHub.',
       )
+    }
+    const complete = (data: {
+      code?: string
+      installation_id?: string | number
+      setup_action?: string
+      error?: string
+    }) => {
+      if (cancelled || processing) return
+      if (data.error) {
+        fail(new Error(data.error))
+        return
+      }
+      processing = true
+      void (async () => {
+        const result = await api<{
+          state?: string
+          install_url?: string
+          id?: string
+        }>(`${base}/finish`, 'POST', {
+          service,
+          state: expectedState,
+          ...(data.code ? { code: data.code } : {}),
+          ...(data.installation_id
+            ? {
+                installation_id: Number(data.installation_id),
+                setup_action: data.setup_action,
+              }
+            : {}),
+        })
+        if (cancelled) return
+        if (result.install_url && result.state) {
+          expectedState = result.state
+          expiresAt = Date.now() + 15 * 60 * 1000
+          // GitHub may sever opener references. Continue in the original popup
+          // when possible; authenticated status polling handles a lost opener.
+          setInstallUrl(result.install_url)
+          try {
+            popup.location.href = result.install_url
+          } catch {
+            /* The continuation link is the user-initiated fallback. */
+          }
+          setStatus(
+            'Install the GitHub App and grant access to your repositories.',
+          )
+          processing = false
+        } else if (result.id) {
+          await onConnected(result.id)
+          if (cancelled) return
+          stop()
+          setInstallUrl('')
+          setBusy(false)
+          setStatus(
+            administration
+              ? 'GitHub connection saved. Select its repository when setting up a service.'
+              : 'GitHub connected. Select a repository below.',
+          )
+        } else throw new Error('GitHub setup returned an incomplete response.')
+      })().catch(fail)
     }
     const receive = (event: MessageEvent) => {
       if (
@@ -110,47 +178,36 @@ export function GithubAppConnect({
         event.data.state !== expectedState
       )
         return
-      processing = true
-      void (async () => {
-        const result = await api<{
-          state?: string
-          install_url?: string
-          id?: string
-        }>(`${base}/finish`, 'POST', {
-          service,
-          state: expectedState,
-          ...(event.data.code ? { code: event.data.code } : {}),
-          ...(event.data.installation_id
-            ? {
-                installation_id: Number(event.data.installation_id),
-                setup_action: event.data.setup_action,
-              }
-            : {}),
-        })
-        if (cancelled) return
-        if (result.install_url && result.state) {
-          expectedState = result.state
-          popup.location.href = result.install_url
-          setStatus(
-            'Install the GitHub App and grant access to your repositories.',
-          )
-          processing = false
-        } else if (result.id) {
-          await onConnected(result.id)
-          if (cancelled) return
-          stop()
-          setBusy(false)
-          setStatus(
-            administration
-              ? 'GitHub connection saved. Select its repository when setting up a service.'
-              : 'GitHub connected. Select a repository below.',
-          )
-        } else throw new Error('GitHub setup returned an incomplete response.')
-      })().catch(fail)
+      complete(event.data)
     }
     const timer = window.setInterval(() => {
-      if (popup.closed && !processing)
-        fail(new Error('GitHub setup was closed. Start again to connect.'))
+      if (cancelled || processing || polling) return
+      if (Date.now() >= expiresAt) {
+        fail(new Error('GitHub setup expired. Start again to connect.'))
+        return
+      }
+      if (!expectedState || Date.now() - lastPollAt < 1500) return
+      polling = true
+      lastPollAt = Date.now()
+      const state = expectedState
+      void api<{
+        callback: {
+          code?: string
+          installation_id?: number
+          setup_action?: string
+          error?: string
+        } | null
+      }>(`${base}/status`, 'POST', { service, state })
+        .then((result) => {
+          if (!cancelled && state === expectedState && result.callback)
+            complete(result.callback)
+        })
+        .catch((error) => {
+          if (!cancelled && !processing && state === expectedState) fail(error)
+        })
+        .finally(() => {
+          polling = false
+        })
     }, 500)
     cleanup.current = stop
     window.addEventListener('message', receive)
@@ -164,6 +221,12 @@ export function GithubAppConnect({
         name,
         scope,
         ...(administration ? { project_access: projectAccess } : {}),
+        ...(scope === 'shared' && allProjects !== undefined
+          ? { all_projects: allProjects }
+          : {}),
+        ...(scope === 'shared' && availableProjects !== undefined
+          ? { available_projects: availableProjects }
+          : {}),
         ...(organization.trim() ? { organization: organization.trim() } : {}),
       })
       if (cancelled) return
@@ -182,7 +245,7 @@ export function GithubAppConnect({
         <Input
           value={name}
           disabled={busy}
-          maxLength={100}
+          maxLength={34}
           onChange={(e) => setName(e.target.value)}
         />
         <FieldDescription>
@@ -225,6 +288,13 @@ export function GithubAppConnect({
         <GitBranch data-icon="inline-start" />
         {busy ? 'Waiting for GitHub…' : 'Create GitHub App'}
       </Button>
+      {busy && installUrl && (
+        <Button asChild>
+          <a href={installUrl} target="_blank" rel="noopener noreferrer">
+            Continue GitHub installation
+          </a>
+        </Button>
+      )}
       {busy && (
         <Button
           type="button"
@@ -233,6 +303,7 @@ export function GithubAppConnect({
             cleanup.current()
             setBusy(false)
             setStatus('')
+            setInstallUrl('')
           }}
         >
           Cancel GitHub setup

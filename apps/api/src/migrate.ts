@@ -1,6 +1,7 @@
 import { migrateForwarding } from './forwarding.js'
 import { migrateRecovery } from './migrations-recovery.js'
 import { migrateGit } from './migrations-git.js'
+import { migrateGithubCallbacks } from './migrations-github-callbacks.js'
 import { migrateRollouts } from './migrations-rollouts.js'
 import { pool, transaction } from './db.js'
 import { rpID } from './security.js'
@@ -303,6 +304,7 @@ export async function migrate() {
       )
     }
     await migrateGit(db)
+    await migrateGithubCallbacks(db)
     await migrateRollouts(db)
     await migrateRecovery(db)
     await migrateForwarding(db)

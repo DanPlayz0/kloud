@@ -158,13 +158,94 @@ test(
         /^https:\/\/github.com\/organizations\/my-org\/settings\/apps\/new\?state=/,
       )
       assert.equal(started.manifest.request_oauth_on_install, false)
-      assert.deepEqual(started.manifest.callback_urls, [
+      assert.equal(
         started.manifest.redirect_url,
-      ])
+        `${publicOrigin}/api/git/github/manifest`,
+      )
+      assert.equal(
+        started.manifest.setup_url,
+        `${publicOrigin}/api/git/github/setup`,
+      )
+      assert.equal(
+        started.manifest.callback_urls,
+        undefined,
+        'installation authentication does not register an unused user OAuth callback',
+      )
       assert.equal(started.manifest.default_permissions.contents, 'read')
       assert.equal(
         started.manifest.default_permissions.repository_hooks,
         'write',
+      )
+      assert.equal(
+        (await request('/start', { service: 'web', name: 'x'.repeat(35) }))
+          .status,
+        400,
+        'GitHub limits App names to 34 characters',
+      )
+      const callbackPath = `/git/github/manifest?state=${started.state}&code=manifest-code`
+      assert.equal(
+        (await request('/status', { service: 'web', state: started.state }, 1))
+          .status,
+        403,
+      )
+      assert.equal(
+        (
+          await app.request(
+            `/git/github/setup?state=${started.state}&installation_id=456&setup_action=install`,
+          )
+        ).status,
+        403,
+      )
+      const relayed = await app.request(
+        callbackPath + '&opener_origin=https://evil.example',
+      )
+      assert.equal(relayed.status, 200)
+      assert.match(
+        relayed.headers.get('content-security-policy')!,
+        /frame-ancestors 'none'/,
+      )
+      assert.equal(relayed.headers.get('referrer-policy'), 'no-referrer')
+      const relayHtml = await relayed.text()
+      assert.ok(relayHtml.includes(JSON.stringify(publicOrigin)))
+      assert.ok(
+        !relayHtml.includes('evil.example'),
+        'relay authority comes from stored state, never query parameters',
+      )
+      assert.equal(
+        (await app.request(callbackPath)).status,
+        200,
+        'identical callback reload is idempotent',
+      )
+      assert.equal(
+        (
+          await app.request(
+            `/git/github/manifest?state=${started.state}&code=different-code`,
+          )
+        ).status,
+        409,
+      )
+      assert.equal(
+        (await app.request(callbackPath + '&installation_id=456')).status,
+        400,
+      )
+      const receipt = await (
+        await request('/status', { service: 'web', state: started.state })
+      ).json()
+      assert.deepEqual(receipt.callback, {
+        phase: 'manifest',
+        code: 'manifest-code',
+      })
+      const encryptedReceipt = (
+        await pool.query(
+          'SELECT callback_payload FROM github_app_setups WHERE state=$1',
+          [digest(started.state)],
+        )
+      ).rows[0].callback_payload
+      assert.equal(encryptedReceipt.includes('manifest-code'), false)
+      assert.equal(
+        calls,
+        0,
+        'the unauthenticated relay never exchanges provider credentials',
       )
       const finish = {
         service: 'web',
@@ -183,10 +264,32 @@ test(
       assert.notEqual(install.state, started.state)
       assert.equal(JSON.stringify(install).includes(pem), false)
       assert.equal((await request('/finish', finish)).status, 403)
+      assert.equal(
+        (await request('/status', { service: 'web', state: started.state }))
+          .status,
+        403,
+      )
+      assert.equal((await app.request(callbackPath)).status, 403)
       const stored = (await pool.query('SELECT * FROM github_app_setups'))
         .rows[0]
       assert.notEqual(stored.state, install.state)
       assert.equal(stored.encrypted_credentials.includes('PRIVATE KEY'), false)
+      assert.equal(
+        stored.callback_payload,
+        null,
+        'a rotated phase cannot replay the creation callback',
+      )
+      const installPath = `/git/github/setup?state=${install.state}&installation_id=456&setup_action=install`
+      const installCallback = await app.request(installPath)
+      assert.equal(installCallback.status, 200)
+      assert.deepEqual(
+        (
+          await (
+            await request('/status', { service: 'web', state: install.state })
+          ).json()
+        ).callback,
+        { phase: 'install', installation_id: 456, setup_action: 'install' },
+      )
       const completed = {
         service: 'web',
         state: install.state,
@@ -225,23 +328,34 @@ test(
         (await request('/finish', { ...finish, state: expired.state })).status,
         403,
       )
-      const callback = await app.request(
-        '/git/github/callback?opener_origin=' +
-          encodeURIComponent(publicOrigin),
+      assert.equal(
+        (await app.request(installPath)).status,
+        403,
+        'completed installation states cannot be replayed',
       )
-      assert.equal(callback.status, 200)
-      assert.match(
-        callback.headers.get('content-security-policy')!,
-        /frame-ancestors 'none'/,
+      assert.equal(
+        (await app.request('/git/github/manifest?state=bad&code=x')).status,
+        400,
       )
+      assert.equal(
+        (await app.request(`/git/github/manifest?state=${token()}&code=x`))
+          .status,
+        403,
+      )
+      const denied = await (await start()).json()
       assert.equal(
         (
           await app.request(
-            '/git/github/callback?opener_origin=https://evil.example',
+            `/git/github/manifest?state=${denied.state}&error=access_denied&error_description=untrusted`,
           )
         ).status,
-        400,
+        200,
       )
+      const denial = await (
+        await request('/status', { service: 'web', state: denied.state })
+      ).json()
+      assert.match(denial.callback.error, /GitHub setup was denied/)
+      assert.ok(!JSON.stringify(denial).includes('untrusted'))
       // The same complete manifest/install flow also works before any service exists.
       optionalSecretsAbsent = true
       await pool.query(

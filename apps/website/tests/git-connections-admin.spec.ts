@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-test('administration prepares a connection without a service, edits availability and revokes it', async ({
+test('administration reuses one connection across project teams, edits availability and revokes it', async ({
   page,
 }) => {
   const connections: any[] = []
@@ -15,7 +15,10 @@ test('administration prepares a connection without a service, edits availability
       path === '/api/projects' ||
       path === '/api/admin/git-connections/projects'
     )
-      json = [{ slug: 'demo', name: 'Demo' }]
+      json = [
+        { slug: 'demo', name: 'Demo' },
+        { slug: 'operations', name: 'Operations' },
+      ]
     else if (path === '/api/admin/git-connections') json = connections
     else if (
       path === '/api/projects/demo/git-connections' &&
@@ -31,7 +34,9 @@ test('administration prepares a connection without a service, edits availability
         origin: 'https://github.com',
         owner: null,
         identity: {},
-        project_access: created.project_access,
+        all_projects: created.all_projects,
+        available_projects: created.available_projects,
+        project_access: false,
         revoked: false,
         bindings: 0,
       })
@@ -57,6 +62,7 @@ test('administration prepares a connection without a service, edits availability
   await expect(page.getByLabel('GitHub App name', { exact: true })).toHaveValue(
     /^Kloud-\d{4}-\d{2}-\d{2}-[a-z0-9]{6}$/,
   )
+  await page.getByLabel('Available in Operations', { exact: true }).check()
   await page.getByLabel('Connection type').selectOption('github')
   await page
     .getByLabel('Connection name', { exact: true })
@@ -71,7 +77,8 @@ test('administration prepares a connection without a service, edits availability
     provider: 'github',
     token: 'private-token',
     scope: 'shared',
-    project_access: true,
+    all_projects: false,
+    available_projects: ['demo', 'operations'],
   })
   expect(created.service).toBeUndefined()
   await expect(page.getByLabel('Personal access token')).toHaveValue('')
@@ -99,11 +106,19 @@ test('administration prepares a connection without a service, edits availability
   await dialog
     .getByLabel('Connection name', { exact: true })
     .fill('Production GitHub')
-  await dialog.getByLabel('Available to project deployers').uncheck()
+  await dialog.getByLabel('Available in all projects and teams').check()
+  await dialog.getByRole('button', { name: 'Save changes' }).click()
+  await expect(
+    page.getByRole('cell', { name: 'All projects and teams', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Manage Production GitHub' }).click()
+  await dialog.getByLabel('Available in all projects and teams').uncheck()
+  await dialog.getByLabel('Available in Demo', { exact: true }).uncheck()
+  await dialog.getByLabel('Available in Operations', { exact: true }).uncheck()
   await dialog.getByRole('button', { name: 'Save changes' }).click()
   await expect(dialog).toBeHidden()
   await expect(
-    page.getByRole('cell', { name: 'Delegated services only' }),
+    page.getByRole('cell', { name: 'Delegated services only' }).first(),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Manage Production GitHub' }).click()
   page.once('dialog', (dialog) => dialog.accept())
@@ -192,6 +207,9 @@ test('a user denied connection creation can select a prepared connection during 
         {
           id: 'connection',
           name: 'Prepared GitHub',
+          project: 'operations',
+          all_projects: true,
+          available_projects: [],
           provider: 'github_app',
           origin: 'https://github.com',
           owner: null,

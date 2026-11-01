@@ -2,8 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { GitBranch, Pencil, Trash2 } from 'lucide-react'
 import { api, hasServer, type Project, type User } from './api'
 import { ErrorMessage, usePolling } from './components'
+import {
+  ConnectionAvailabilityFields,
+  type ConnectionAvailability,
+} from './connection-availability-fields'
 import { GithubAppConnect } from './github-app-connect'
-import { Button, Checkbox, Input, NativeSelect } from './components/ui/controls'
+import { Button, Input, NativeSelect } from './components/ui/controls'
 import {
   Card,
   CardHeader,
@@ -44,8 +48,10 @@ import {
 
 interface Connection {
   id: string
-  project: string
-  project_name: string
+  project: string | null
+  project_name: string | null
+  all_projects?: boolean
+  available_projects?: string[]
   name: string
   provider: string
   origin: string
@@ -61,7 +67,8 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
   const [revision, setRevision] = useState(0)
   const [selectedProject, setSelectedProject] = useState('')
   const [method, setMethod] = useState('app')
-  const [projectAccess, setProjectAccess] = useState(true)
+  const [availability, setAvailability] =
+    useState<ConnectionAvailability | null>(null)
   const { data: projects, error: projectsError } = usePolling<Project[]>(
     '/admin/git-connections/projects',
   )
@@ -70,6 +77,10 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
     revision,
   )
   const project = selectedProject || projects?.[0]?.slug || ''
+  const sharing = availability ?? {
+    all_projects: false,
+    available_projects: project ? [project] : [],
+  }
   const refresh = async () => {
     setRevision((n) => n + 1)
   }
@@ -86,13 +97,13 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
           <CardHeader>
             <CardTitle>Create a connection</CardTitle>
             <CardDescription>
-              Shared connections belong to a project and keep credentials
-              encrypted on the server.
+              Save credentials once and make them available across projects and
+              teams. Credentials remain encrypted on the server.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Field>
-              <FieldLabel>Project</FieldLabel>
+              <FieldLabel>Setup project</FieldLabel>
               <NativeSelect
                 value={project}
                 onChange={(e) => setSelectedProject(e.target.value)}
@@ -106,6 +117,10 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
                   </option>
                 ))}
               </NativeSelect>
+              <FieldDescription>
+                This project provides setup context; it does not limit where a
+                saved connection can be reused.
+              </FieldDescription>
             </Field>
             <Field>
               <FieldLabel>Connection type</FieldLabel>
@@ -119,9 +134,10 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
                 <option value="gitea">Gitea access token</option>
               </NativeSelect>
             </Field>
-            <ProjectAccess
-              checked={projectAccess}
-              onChange={setProjectAccess}
+            <ConnectionAvailabilityFields
+              value={sharing}
+              projects={projects ?? []}
+              onChange={setAvailability}
             />
             {project &&
               (method === 'app' ? (
@@ -129,7 +145,8 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
                   key={project}
                   project={project}
                   administration
-                  projectAccess={projectAccess}
+                  allProjects={sharing.all_projects}
+                  availableProjects={sharing.available_projects}
                   onConnected={refresh}
                 />
               ) : (
@@ -137,7 +154,7 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
                   key={`${project}:${method}`}
                   project={project}
                   provider={method}
-                  projectAccess={projectAccess}
+                  availability={sharing}
                   onConnected={refresh}
                 />
               ))}
@@ -152,8 +169,8 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
         <CardHeader>
           <CardTitle>Saved connections</CardTitle>
           <CardDescription>
-            Manage names, project availability, and revocation. Credentials are
-            never displayed.
+            Manage names, availability across projects and teams, and
+            revocation. Credentials are never displayed.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -177,7 +194,7 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Connection</TableHead>
-                  <TableHead>Project</TableHead>
+                  <TableHead>Availability</TableHead>
                   <TableHead>Access</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
@@ -195,12 +212,26 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
                           : connection.provider}
                       </p>
                     </TableCell>
-                    <TableCell>{connection.project_name}</TableCell>
+                    <TableCell>
+                      {connection.owner
+                        ? 'Owner’s authorized projects'
+                        : connection.all_projects
+                          ? 'All projects and teams'
+                          : selectedProjects(connection)
+                              .map(
+                                (slug) =>
+                                  projects?.find(
+                                    (project) => project.slug === slug,
+                                  )?.name ?? slug,
+                              )
+                              .join(', ') || 'Delegated services only'}
+                    </TableCell>
                     <TableCell>
                       {connection.owner
                         ? `Personal · ${connection.owner_name ?? 'Unknown owner'}`
-                        : connection.project_access
-                          ? 'Project deployers'
+                        : connection.all_projects ||
+                            selectedProjects(connection).length
+                          ? 'Deployers in available projects'
                           : 'Delegated services only'}
                       <p className="text-xs text-muted-foreground">
                         {connection.bindings} repository bindings
@@ -216,6 +247,7 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
                     <TableCell>
                       <ConnectionEditor
                         connection={connection}
+                        projects={projects ?? []}
                         onSaved={refresh}
                       />
                     </TableCell>
@@ -230,40 +262,24 @@ export function GitConnectionsAdmin({ user }: { user: User }) {
   )
 }
 
-function ProjectAccess({
-  checked,
-  onChange,
-}: {
-  checked: boolean
-  onChange: (value: boolean) => void
-}) {
+function selectedProjects(connection: Connection) {
   return (
-    <Field>
-      <Field orientation="horizontal">
-        <Checkbox
-          checked={checked}
-          onCheckedChange={(v) => onChange(v === true)}
-        />
-        <FieldLabel>Available to project deployers</FieldLabel>
-      </Field>
-      <FieldDescription>
-        Users with deployment permission can browse and select any repository
-        authorized by this shared connection. Turn this off to require explicit
-        service delegation. Existing repository bindings remain valid.
-      </FieldDescription>
-    </Field>
+    connection.available_projects ??
+    (connection.project_access && connection.project
+      ? [connection.project]
+      : [])
   )
 }
 
 function TokenConnection({
   project,
   provider,
-  projectAccess,
+  availability,
   onConnected,
 }: {
   project: string
   provider: string
-  projectAccess: boolean
+  availability: ConnectionAvailability
   onConnected: () => Promise<void>
 }) {
   const [name, setName] = useState(''),
@@ -282,7 +298,7 @@ function TokenConnection({
         provider,
         token,
         scope: 'shared',
-        project_access: projectAccess,
+        ...availability,
         ...(provider !== 'github' ? { origin, username } : {}),
       })
       setName('')
@@ -351,14 +367,19 @@ function TokenConnection({
 
 function ConnectionEditor({
   connection,
+  projects,
   onSaved,
 }: {
   connection: Connection
+  projects: Project[]
   onSaved: () => Promise<void>
 }) {
   const [open, setOpen] = useState(false),
     [name, setName] = useState(connection.name),
-    [access, setAccess] = useState(connection.project_access)
+    [availability, setAvailability] = useState<ConnectionAvailability>({
+      all_projects: connection.all_projects ?? false,
+      available_projects: selectedProjects(connection),
+    })
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('')
   async function save(revoke = false) {
@@ -368,7 +389,9 @@ function ConnectionEditor({
       await api(
         `/admin/git-connections/${connection.id}`,
         'PUT',
-        revoke ? { revoked: true } : { name, project_access: access },
+        revoke
+          ? { revoked: true }
+          : { name, ...(!connection.owner ? availability : {}) },
       )
       await onSaved()
       setOpen(false)
@@ -386,7 +409,10 @@ function ConnectionEditor({
       onOpenChange={(next) => {
         setOpen(next)
         setName(connection.name)
-        setAccess(connection.project_access)
+        setAvailability({
+          all_projects: connection.all_projects ?? false,
+          available_projects: selectedProjects(connection),
+        })
         setError('')
       }}
     >
@@ -399,8 +425,9 @@ function ConnectionEditor({
       <DialogContent>
         <DialogTitle>Manage {connection.name}</DialogTitle>
         <DialogDescription>
-          {connection.project_name}. Revoking a connection blocks future builds
-          that use it.
+          Setup context:{' '}
+          {connection.project_name ?? 'No remaining setup project'}. Revoking a
+          connection blocks future builds that use it.
         </DialogDescription>
         <Form
           onSubmit={(e) => {
@@ -419,7 +446,11 @@ function ConnectionEditor({
               />
             </Field>
             {!connection.owner && (
-              <ProjectAccess checked={access} onChange={setAccess} />
+              <ConnectionAvailabilityFields
+                value={availability}
+                projects={projects}
+                onChange={setAvailability}
+              />
             )}
             <ErrorMessage message={error} />
             <div className="flex flex-wrap gap-2">

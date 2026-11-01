@@ -27,8 +27,8 @@ async function connection(
 ) {
   const row = (
     await db.query<Connection>(
-      'SELECT * FROM registry_connections WHERE id=$1 AND project=$2 AND NOT revoked',
-      [id, project],
+      'SELECT * FROM registry_connections WHERE id=$1 AND NOT revoked',
+      [id],
     )
   ).rows[0]
   if (!row)
@@ -131,7 +131,7 @@ registryConnections.get(base, async (c) => {
   return c.json(
     (
       await pool.query(
-        `SELECT c.id,c.name,c.server,c.owner,c.created FROM registry_connections c WHERE c.project=$1 AND NOT c.revoked
+        `SELECT c.id,c.name,c.server,c.owner,c.created FROM registry_connections c WHERE NOT c.revoked
     AND (c.owner=$2 OR (c.owner IS NULL AND $3) OR EXISTS(SELECT 1 FROM registry_bindings b WHERE b.connection=c.id AND b.project=$1 AND b.service=$4))
     AND (c.owner IS NULL OR EXISTS(SELECT 1 FROM users u WHERE u.id=c.owner AND NOT disabled AND (u.admin OR EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id AND m.project_slug=$1)))) ORDER BY c.name`,
         [
@@ -230,8 +230,8 @@ registryConnections.delete(`${base}/:id`, async (c) => {
     await projectAccess(actor, c.req.param('project'), db)
     const row = (
       await db.query<Connection>(
-        'SELECT * FROM registry_connections WHERE id=$1 AND project=$2',
-        [uuid.parse(c.req.param('id')), c.req.param('project')],
+        'SELECT * FROM registry_connections WHERE id=$1',
+        [uuid.parse(c.req.param('id'))],
       )
     ).rows[0]
     if (!row) throw new HTTPException(404)

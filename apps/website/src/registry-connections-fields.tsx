@@ -66,7 +66,9 @@ export function RegistryConnectionsFields({
           />
           <span className="text-sm">
             {registry.name} · {registry.server} ·{' '}
-            {registry.owner ? 'personal' : 'shared'}
+            {registry.owner
+              ? 'personal, reusable'
+              : 'shared across authorized teams'}
           </span>
           <Button
             type="button"
@@ -169,9 +171,10 @@ export function RegistryConnectionsFields({
         </FieldGroup>
       )}
       <p className="text-xs text-muted-foreground">
-        Credential owners authorize persistent app bindings. Removing an owner
-        from the project, disabling them, or revoking credentials prevents
-        future pulls without stopping the serving app.
+        Saved credentials can be reused across project teams through authorized
+        app bindings. A personal owner must keep access to each consuming
+        project. Removing that access, disabling the owner, or revoking the
+        connection blocks future pulls without stopping the serving app.
       </p>
     </div>
   )
