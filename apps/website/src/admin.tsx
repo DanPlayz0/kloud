@@ -1,3 +1,4 @@
+import { Link, useRouter } from '@tanstack/react-router'
 import { X, ArrowRight } from 'lucide-react'
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
 import { Card, FormCard } from './components/ui/card'
@@ -17,7 +18,7 @@ import {
   type ContainerRow,
   type Connector,
 } from './api'
-import { Shell, usePolling, ErrorMessage, Notice, Icon } from './components'
+import { usePolling, ErrorMessage, Notice, Icon } from './components'
 import { Users } from './components/users'
 import { DnsProviders } from './dns'
 import { Pm2Inventory } from './pm2'
@@ -30,6 +31,7 @@ export function Admin({
   projects: Project[]
   section: string
 }) {
+  const router = useRouter()
   const [revision, setRevision] = useState(0),
     [message, setMessage] = useState(''),
     [error, setError] = useState(''),
@@ -59,6 +61,7 @@ export function Admin({
         void api<Project[]>('/projects')
           .then(setProjectList)
           .catch(() => {})
+        void router.invalidate()
       }
       return true
     } catch (e) {
@@ -76,12 +79,7 @@ export function Admin({
     dns: 'DNS providers',
   }
   return (
-    <Shell
-      user={user}
-      projects={projectList}
-      active={`admin-${section}`}
-      title={`Administration / ${titles[section]}`}
-    >
+    <>
       <section className="admin-content">
         <div className="page-heading">
           <div>
@@ -135,7 +133,7 @@ export function Admin({
           )}
         </FieldSet>
       </section>
-    </Shell>
+    </>
   )
 }
 type Action = (path: string, method: string, body: unknown) => Promise<boolean>
@@ -172,7 +170,12 @@ function Projects({
           </div>
           <div className="flex flex-wrap gap-2">
             <Button asChild>
-              <a href={`/projects/${p.slug}/access`}>Manage access</a>
+              <Link
+                to="/projects/$projectSlug/access"
+                params={{ projectSlug: p.slug }}
+              >
+                Manage access
+              </Link>
             </Button>
             <Button
               type="button"
@@ -201,9 +204,12 @@ function Projects({
               Delete
             </Button>
             <Button asChild>
-              <a href={`/projects/${p.slug}/compute/containers`}>
+              <Link
+                to="/projects/$projectSlug/compute/containers"
+                params={{ projectSlug: p.slug }}
+              >
                 Open project <Icon data-icon="inline-start" icon={ArrowRight} />
-              </a>
+              </Link>
             </Button>
           </div>
         </Card>

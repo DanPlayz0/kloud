@@ -30,7 +30,7 @@ import {
   type DnsLiveRecord,
 } from '@kloud/protocol/dns'
 import { api, type Project, type User } from './api'
-import { Shell, ErrorMessage, usePolling } from './components'
+import { ErrorMessage, usePolling } from './components'
 import { Button, Input, NativeSelect, Checkbox } from './components/ui/controls'
 import {
   Dialog,
@@ -680,13 +680,7 @@ export function DnsPage({
   }, [zones.data, zone])
   const [showProviders, setShowProviders] = useState(false)
   return (
-    <Shell
-      user={user}
-      projects={projects}
-      project={project}
-      active="dns"
-      title="Networking / Cloud DNS"
-    >
+    <>
       <section className="admin-content flex flex-col gap-5">
         <div className="page-heading">
           <div>
@@ -747,7 +741,7 @@ export function DnsPage({
           />
         )}
       </section>
-    </Shell>
+    </>
   )
 }
 function DnsRecords({

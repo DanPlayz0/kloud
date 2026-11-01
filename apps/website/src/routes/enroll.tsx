@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { KeyRound, ArrowRight } from 'lucide-react'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -63,10 +64,10 @@ function Enroll() {
                 authentication in account security after signing in.
               </p>
               <Button asChild variant="primary">
-                <a href="/login">
+                <Link to="/login" search={{ next: '/' }}>
                   Continue to sign in{' '}
                   <Icon data-icon="inline-start" icon={ArrowRight} />
-                </a>
+                </Link>
               </Button>
             </>
           ) : !invitation ? (

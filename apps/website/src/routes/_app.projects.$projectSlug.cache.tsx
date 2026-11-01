@@ -1,23 +1,19 @@
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { createFileRoute } from '@tanstack/react-router'
 import { projectSession } from '../api'
-import { Shell } from '../components'
 import { Card } from '../components/ui/card'
 import { StatusBadge } from '../components/ui/status-badge'
 
-export const Route = createFileRoute('/projects/$projectSlug/cache')({
+export const Route = createFileRoute('/_app/projects/$projectSlug/cache')({
+  remountDeps: ({ params }) => params,
+  staticData: { shell: { title: 'Storage / Cache', active: 'cache' } },
   loader: ({ params }) => projectSession(params.projectSlug),
   component: Page,
 })
 
 function Page() {
   return (
-    <Shell
-      {...Route.useLoaderData()}
-      project={Route.useParams().projectSlug}
-      active="cache"
-      title="Storage / Cache"
-    >
+    <>
       <section className="admin-content flex flex-col gap-6">
         <div className="page-heading">
           <div>
@@ -44,6 +40,6 @@ function Page() {
           ))}
         </div>
       </section>
-    </Shell>
+    </>
   )
 }

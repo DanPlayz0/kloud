@@ -1,28 +1,29 @@
+import { Link } from '@tanstack/react-router'
 import { createFileRoute } from '@tanstack/react-router'
 import { projectSession } from '../api'
-import { Shell, Notice } from '../components'
+import { Notice } from '../components'
 export const Route = createFileRoute(
-  '/projects/$projectSlug/compute/serverless',
+  '/_app/projects/$projectSlug/compute/serverless',
 )({
+  remountDeps: ({ params }) => params,
+  staticData: {
+    shell: { title: 'Compute / Serverless', active: 'serverless' },
+  },
   loader: ({ params }) => projectSession(params.projectSlug),
   component: Page,
 })
 function Page() {
   return (
-    <Shell
-      {...Route.useLoaderData()}
-      project={Route.useParams().projectSlug}
-      active="serverless"
-      title="Compute / Serverless"
-    >
+    <>
       <Notice title="Serverless is coming later">
         Kubernetes integration will be available in a future update.{' '}
-        <a
-          href={`/projects/${Route.useParams().projectSlug}/compute/containers`}
+        <Link
+          to="/projects/$projectSlug/compute/containers"
+          params={{ projectSlug: Route.useParams().projectSlug }}
         >
           View containers
-        </a>
+        </Link>
       </Notice>
-    </Shell>
+    </>
   )
 }

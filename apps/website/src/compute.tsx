@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Table,
   TableHeader,
@@ -10,7 +11,7 @@ import { Fragment, useRef, useState } from 'react'
 import { TableCard } from './components/ui/card'
 import { Button } from './components/ui/controls'
 import { StatusBadge } from './components/ui/status-badge'
-import { usePolling, Shell, ErrorMessage, Notice, bytes } from './components'
+import { usePolling, ErrorMessage, Notice, bytes } from './components'
 import {
   resourceBase,
   type ResourceScope,
@@ -43,14 +44,7 @@ export function Compute({
     row.stale || !row.seen || now - Date.parse(row.seen) > 20000
   const stale = data?.some(isStale)
   return (
-    <Shell
-      user={user}
-      projects={projects}
-      project={project}
-      connector={connector}
-      title="Compute / Containers"
-      active={connector ? 'compute/containers' : 'containers'}
-    >
+    <>
       <section className="compute-content flex flex-col gap-4">
         <div className="page-heading">
           <div>
@@ -121,7 +115,7 @@ export function Compute({
           </>
         )}
       </section>
-    </Shell>
+    </>
   )
 }
 
@@ -162,25 +156,27 @@ function ContainerInventoryRow({
             {row.container_id.slice(0, 12)}
           </p>
           {scope.kind === 'project' && row.application && (
-            <a
+            <Link
               className="mt-1 block text-xs text-muted-foreground hover:underline"
-              href={`/projects/${encodeURIComponent(scope.project)}/applications/${encodeURIComponent(row.application)}`}
+              to="/projects/$projectSlug/applications/$appSlug"
+              params={{ projectSlug: scope.project, appSlug: row.application }}
               onClick={(event) => event.stopPropagation()}
             >
               View {row.application} application
-            </a>
+            </Link>
           )}
         </TableCell>
         <TableCell className="p-3 break-words">
           {scope.kind === 'connector' ? (
             assignedProject ? (
-              <a
+              <Link
                 className="hover:underline"
-                href={`/projects/${encodeURIComponent(assignedProject.slug)}/compute/containers`}
+                to="/projects/$projectSlug/compute/containers"
+                params={{ projectSlug: assignedProject.slug }}
                 onClick={(event) => event.stopPropagation()}
               >
                 {assignedProject.name}
-              </a>
+              </Link>
             ) : (
               (row.project ?? 'Unassigned')
             )

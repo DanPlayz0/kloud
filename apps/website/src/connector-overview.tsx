@@ -1,7 +1,8 @@
+import { useNavigate } from '@tanstack/react-router'
 import { ServerAddressDetails } from './server-addresses'
 import { useState } from 'react'
 import { api, hasServer, type Connector, type Project, type User } from './api'
-import { Shell, usePolling, ErrorMessage } from './components'
+import { usePolling, ErrorMessage } from './components'
 import { Card } from './components/ui/card'
 import { StatusBadge } from './components/ui/status-badge'
 import { ConnectorControls } from './components/connector-controls'
@@ -15,6 +16,7 @@ export function ConnectorOverview({
   projects: Project[]
   connector: Connector
 }) {
+  const navigate = useNavigate()
   const [revision, setRevision] = useState(0)
   const [message, setMessage] = useState('')
   const [actionError, setActionError] = useState('')
@@ -31,7 +33,10 @@ export function ConnectorOverview({
     try {
       await api(path, method, body)
       if ((body as { revoked?: boolean }).revoked) {
-        location.assign('/admin/connectors')
+        await navigate({
+          to: '/admin/$section',
+          params: { section: 'connectors' },
+        })
         return true
       }
       setMessage('Changes saved.')
@@ -43,13 +48,7 @@ export function ConnectorOverview({
     }
   }
   return (
-    <Shell
-      user={user}
-      projects={projects}
-      connector={current}
-      active="overview"
-      title="Overview"
-    >
+    <>
       <section className="compute-content flex flex-col gap-4">
         <div className="page-heading">
           <div>
@@ -107,6 +106,6 @@ export function ConnectorOverview({
           )}
         </Card>
       </section>
-    </Shell>
+    </>
   )
 }

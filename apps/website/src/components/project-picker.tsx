@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
@@ -65,6 +66,7 @@ export function ProjectPicker({
   connectorError?: string
   showConnectors?: boolean
 }) {
+  const routerNavigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [query, setQuery] = useState('')
@@ -95,7 +97,10 @@ export function ProjectPicker({
       .includes(query.toLowerCase().trim()),
   )
   const navigate = (slug: string) =>
-    location.assign(`/projects/${encodeURIComponent(slug)}/services`)
+    routerNavigate({
+      to: '/projects/$projectSlug/services',
+      params: { projectSlug: slug },
+    })
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -107,7 +112,7 @@ export function ProjectPicker({
     try {
       await api('/admin/projects', 'POST', values)
       setCreating(false)
-      navigate(values.slug)
+      await navigate(values.slug)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to create project')
     } finally {
@@ -203,7 +208,8 @@ export function ProjectPicker({
                     aria-current={p.slug === project ? 'true' : undefined}
                     onSelect={() => {
                       setOpen(false)
-                      navigate(p.slug)
+                      setQuery('')
+                      void navigate(p.slug)
                     }}
                   >
                     <ProjectMark project={p} compact />
@@ -237,11 +243,11 @@ export function ProjectPicker({
                       aria-current={c.id === connector?.id ? 'true' : undefined}
                       onSelect={() => {
                         setOpen(false)
-                        location.assign(
-                          '/connectors/' +
-                            encodeURIComponent(c.id) +
-                            '/compute/containers',
-                        )
+                        setQuery('')
+                        void routerNavigate({
+                          to: '/connectors/$connectorId/compute/containers',
+                          params: { connectorId: c.id },
+                        })
                       }}
                     >
                       <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">

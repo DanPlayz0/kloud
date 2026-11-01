@@ -2,8 +2,12 @@ import { createFileRoute } from '@tanstack/react-router'
 import { projectSession } from '../api'
 import { Compute } from '../compute'
 export const Route = createFileRoute(
-  '/projects/$projectSlug/compute/containers',
+  '/_app/projects/$projectSlug/compute/containers',
 )({
+  remountDeps: ({ params }) => params,
+  staticData: {
+    shell: { title: 'Compute / Containers', active: 'containers' },
+  },
   loader: ({ params }) => projectSession(params.projectSlug),
   component: Page,
 })

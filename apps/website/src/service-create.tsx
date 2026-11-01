@@ -1,3 +1,4 @@
+import { Link, useNavigate } from '@tanstack/react-router'
 import { Separator } from '@/components/ui/separator'
 import { markFieldInvalid } from '@/components/ui/field-control'
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -26,7 +27,7 @@ import {
   type PlatformConfig,
 } from '@kloud/protocol/platform'
 import { api, type Project, type User } from './api'
-import { Shell, usePolling, ErrorMessage } from './components'
+import { usePolling, ErrorMessage } from './components'
 import {
   newConfig,
   SourceFields,
@@ -142,6 +143,7 @@ export function ServiceCreatePage({
   canCreate: boolean
   canDeploy: boolean
 }) {
+  const navigate = useNavigate()
   const [selected, setSelected] = useState<SourceKey | null>(null),
     [name, setName] = useState(''),
     [customSlug, setCustomSlug] = useState<string>(),
@@ -233,9 +235,11 @@ export function ServiceCreatePage({
             description: '',
           })
         setCreated(true)
-        location.assign(
-          `/projects/${project}/applications/${slug}?setup=repository`,
-        )
+        await navigate({
+          to: '/projects/$projectSlug/applications/$appSlug',
+          params: { projectSlug: project, appSlug: slug },
+          search: { setup: 'repository' },
+        })
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Unable to create service')
       } finally {
@@ -397,7 +401,10 @@ export function ServiceCreatePage({
           })
         }
       }
-      location.assign(`/projects/${project}/applications/${slug}`)
+      await navigate({
+        to: '/projects/$projectSlug/applications/$appSlug',
+        params: { projectSlug: project, appSlug: slug },
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to create service')
     } finally {
@@ -406,19 +413,16 @@ export function ServiceCreatePage({
     }
   }
   return (
-    <Shell
-      user={user}
-      projects={projects}
-      project={project}
-      active="services"
-      title="Services / Create service"
-    >
+    <>
       <section className="admin-content min-w-0 flex flex-col gap-7">
         <Button asChild className="px-0" variant="ghost">
-          <a href={`/projects/${project}/services`}>
+          <Link
+            to="/projects/$projectSlug/services"
+            params={{ projectSlug: project }}
+          >
             <ArrowLeft data-icon="inline-start" />
             Services
-          </a>
+          </Link>
         </Button>
         <div>
           <p className="eyebrow">NEW SERVICE</p>
@@ -740,10 +744,13 @@ export function ServiceCreatePage({
               <ErrorMessage message={error || fieldError} />
               {created && error && (
                 <Button asChild>
-                  <a href={`/projects/${project}/applications/${slug}`}>
+                  <Link
+                    to="/projects/$projectSlug/applications/$appSlug"
+                    params={{ projectSlug: project, appSlug: slug }}
+                  >
                     Open created service
                     <ArrowRight data-icon="inline-start" />
-                  </a>
+                  </Link>
                 </Button>
               )}
               {canDeploy &&
@@ -837,6 +844,6 @@ export function ServiceCreatePage({
           </Form>
         )}
       </section>
-    </Shell>
+    </>
   )
 }

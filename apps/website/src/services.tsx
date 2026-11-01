@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty'
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
 import { Form } from '@/components/ui/form'
@@ -11,7 +12,7 @@ import {
   type Service,
   type ServiceList,
 } from './api'
-import { Shell, ErrorMessage, usePolling, bytes } from './components'
+import { ErrorMessage, usePolling, bytes } from './components'
 import type { ContainerRow } from './api'
 import { Button, Input } from './components/ui/controls'
 import { Card } from './components/ui/card'
@@ -89,13 +90,7 @@ export function ServicesPage({
     }
   }
   return (
-    <Shell
-      user={user}
-      projects={projects}
-      project={project}
-      active="services"
-      title="Project / Services"
-    >
+    <>
       <section className="admin-content flex flex-col gap-6">
         <div className="page-heading">
           <div>
@@ -107,10 +102,13 @@ export function ServicesPage({
           </div>
           {data?.can_create && (
             <Button variant="primary" asChild>
-              <a href={`/projects/${project}/services/new`}>
+              <Link
+                to="/projects/$projectSlug/services/new"
+                params={{ projectSlug: project }}
+              >
                 <Plus data-icon="inline-start" />
                 Create service
-              </a>
+              </Link>
             </Button>
           )}
         </div>
@@ -143,12 +141,13 @@ export function ServicesPage({
                   <Boxes size={20} />
                   <div className="min-w-0">
                     <CardTitle asChild>
-                      <a
+                      <Link
                         className="font-semibold break-all"
-                        href={`/projects/${project}/applications/${service.slug}`}
+                        to="/projects/$projectSlug/applications/$appSlug"
+                        params={{ projectSlug: project, appSlug: service.slug }}
                       >
                         {service.name}
-                      </a>
+                      </Link>
                     </CardTitle>
                     <CardDescription>
                       {service.type === 'compose'
@@ -223,11 +222,12 @@ export function ServicesPage({
                 </CardContent>
                 <CardFooter className="flex-wrap">
                   <Button asChild>
-                    <a
-                      href={`/projects/${project}/applications/${service.slug}`}
+                    <Link
+                      to="/projects/$projectSlug/applications/$appSlug"
+                      params={{ projectSlug: project, appSlug: service.slug }}
                     >
                       Open service
-                    </a>
+                    </Link>
                   </Button>
                   {service.can_update && (
                     <Button
@@ -345,6 +345,6 @@ export function ServicesPage({
           </div>
         </DialogContent>
       </Dialog>
-    </Shell>
+    </>
   )
 }

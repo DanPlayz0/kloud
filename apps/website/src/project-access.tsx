@@ -35,7 +35,7 @@ import {
   type User,
   type Project,
 } from './api'
-import { Shell, usePolling, ErrorMessage } from './components'
+import { usePolling, ErrorMessage } from './components'
 import { Button, Input, NativeSelect } from './components/ui/controls'
 import {
   CheckboxTree,
@@ -105,13 +105,7 @@ export function ProjectAccessPage({
     }
   }
   return (
-    <Shell
-      user={user}
-      projects={projects}
-      project={project}
-      active="access"
-      title="Project / Access"
-    >
+    <>
       <section className="admin-content flex flex-col gap-6">
         <div className="page-heading">
           <h1>Project access</h1>
@@ -276,7 +270,7 @@ export function ProjectAccessPage({
           </FieldSet>
         )}
       </section>
-    </Shell>
+    </>
   )
 }
 

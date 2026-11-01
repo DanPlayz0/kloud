@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { projectSession, api } from '../api'
-import { Shell } from '../components'
 import { ServiceDetail } from '../service-detail'
 export const Route = createFileRoute(
-  '/projects/$projectSlug/applications/$appSlug',
+  '/_app/projects/$projectSlug/applications/$appSlug',
 )({
+  remountDeps: ({ params }) => params,
+  staticData: { shell: { title: 'Services', active: 'services' } },
   loader: async ({ params }) => {
     const context = await projectSession(params.projectSlug)
     const service = await api<{
@@ -20,12 +21,7 @@ function Page() {
   const { projectSlug, appSlug } = Route.useParams()
   const context = Route.useLoaderData()
   return (
-    <Shell
-      {...context}
-      project={projectSlug}
-      active="services"
-      title={`Services / ${context.service.name ?? appSlug}`}
-    >
+    <>
       <ServiceDetail
         project={projectSlug}
         slug={appSlug}
@@ -33,6 +29,6 @@ function Page() {
         canDeploy={context.user.admin || !!context.service.can_deploy}
         type={context.service.type}
       />
-    </Shell>
+    </>
   )
 }

@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import {
   Table,
   TableHeader,
@@ -27,7 +28,7 @@ import {
   type Project,
   type User,
 } from './api'
-import { Shell, usePolling, ErrorMessage, Notice, bytes } from './components'
+import { usePolling, ErrorMessage, Notice, bytes } from './components'
 import { Button, Checkbox, NativeSelect } from './components/ui/controls'
 import {
   Dialog,
@@ -103,14 +104,7 @@ export function Pm2Page({
     revision,
   )
   return (
-    <Shell
-      user={user}
-      projects={projects}
-      project={project}
-      connector={connector}
-      title="Compute / PM2"
-      active={connector ? 'compute/pm2' : 'pm2'}
-    >
+    <>
       <section className="compute-content flex flex-col gap-4">
         <div className="page-heading">
           <div>
@@ -172,7 +166,7 @@ export function Pm2Page({
           </TableCard>
         )}
       </section>
-    </Shell>
+    </>
   )
 }
 
@@ -219,17 +213,14 @@ function Pm2Row({
           {scope.kind === 'connector' ? (
             app.project_slug &&
             projects.some((p) => p.slug === app.project_slug) ? (
-              <a
+              <Link
                 onClick={(event) => event.stopPropagation()}
                 className="hover:underline"
-                href={
-                  '/projects/' +
-                  encodeURIComponent(app.project_slug) +
-                  '/compute/pm2'
-                }
+                to="/projects/$projectSlug/compute/pm2"
+                params={{ projectSlug: app.project_slug }}
               >
                 {projects.find((p) => p.slug === app.project_slug)?.name}
-              </a>
+              </Link>
             ) : (
               (app.project_slug ?? 'Unassigned')
             )

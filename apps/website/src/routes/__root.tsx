@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Button } from '../components/ui/controls'
 import { Alert, AlertTitle, AlertDescription } from '../components/ui/alert'
 import {
@@ -18,7 +19,7 @@ export const Route = createRootRoute({
       <AlertDescription>
         {error instanceof Error ? error.message : 'Unable to load this page'}
       </AlertDescription>
-      <Button onClick={reset}>Try again</Button> <a href="/">Go home</a>
+      <Button onClick={reset}>Try again</Button> <Link to="/">Go home</Link>
     </Alert>
   ),
   notFoundComponent: () => (
@@ -30,7 +31,7 @@ export const Route = createRootRoute({
       </EmptyHeader>
       <EmptyContent>
         <Button asChild>
-          <a href="/">Go home</a>
+          <Link to="/">Go home</Link>
         </Button>
       </EmptyContent>
     </Empty>

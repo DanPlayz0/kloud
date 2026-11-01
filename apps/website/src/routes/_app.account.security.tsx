@@ -11,7 +11,7 @@ import type {
   SecurityStatus,
 } from '@kloud/protocol/auth'
 import { api, ApiError, session, type Project } from '../api'
-import { Shell, ErrorMessage } from '../components'
+import { ErrorMessage } from '../components'
 import { Card } from '../components/ui/card'
 import { Button, Input } from '../components/ui/controls'
 import {
@@ -19,7 +19,9 @@ import {
   factorLabels,
 } from '../components/factor-verification'
 
-export const Route = createFileRoute('/account/security')({
+export const Route = createFileRoute('/_app/account/security')({
+  remountDeps: ({ params }) => params,
+  staticData: { shell: { title: 'Account security', active: 'security' } },
   loader: async () => ({
     user: await session(),
     projects: await api<Project[]>('/projects'),
@@ -135,12 +137,7 @@ function AccountSecurity() {
   }
   const disabled = busy || !unlocked
   return (
-    <Shell
-      user={user}
-      projects={projects}
-      title="Account security"
-      active="security"
-    >
+    <>
       <div className="mx-auto w-full max-w-3xl flex flex-col gap-6 p-6">
         <div>
           <h1 className="text-2xl font-semibold">Account security</h1>
@@ -499,6 +496,6 @@ function AccountSecurity() {
           </CardContent>
         </Card>
       </div>
-    </Shell>
+    </>
   )
 }

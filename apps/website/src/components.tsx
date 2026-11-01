@@ -1,3 +1,4 @@
+import { Link, useLocation } from '@tanstack/react-router'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -133,6 +134,11 @@ export function Shell({
   const [open, setOpen] = useState(false),
     [account, setAccount] = useState(false),
     [error, setError] = useState('')
+  const pathname = useLocation({ select: (location) => location.pathname })
+  useEffect(() => {
+    setOpen(false)
+    setAccount(false)
+  }, [pathname])
   return (
     <div className="app-shell bg-background text-foreground">
       <Button
@@ -178,22 +184,24 @@ export function Shell({
                     ]
                   : []),
               ].map(([label, path, icon]) => (
-                <a
+                <Link
                   key={path}
                   className={cn(
                     active === path ? 'nav-item active' : 'nav-item',
                   )}
                   aria-current={active === path ? 'page' : undefined}
-                  href={
-                    '/connectors/' +
-                    encodeURIComponent(currentConnector.id) +
-                    '/' +
-                    path
+                  to={
+                    path === 'overview'
+                      ? '/connectors/$connectorId/overview'
+                      : path === 'compute/pm2'
+                        ? '/connectors/$connectorId/compute/pm2'
+                        : '/connectors/$connectorId/compute/containers'
                   }
+                  params={{ connectorId: currentConnector.id }}
                 >
                   <Icon icon={icon as LucideIcon} />
                   {label}
-                </a>
+                </Link>
               ))}
             </div>
           )}
@@ -201,50 +209,50 @@ export function Shell({
             <>
               <div className="nav-group">
                 <p>COMPUTE</p>
-                <a
+                <Link
                   className={cn(
                     active === 'services' ? 'nav-item active' : 'nav-item',
                   )}
-                  href={`/projects/${project}/services`}
+                  to="/projects/$projectSlug/services"
+                  params={{ projectSlug: project }}
                   aria-current={active === 'services' ? 'page' : undefined}
                 >
                   <Icon icon={Server} />
                   Services
-                </a>
-                <a
+                </Link>
+                <Link
                   className={cn(
                     active === 'containers' ? 'nav-item active' : 'nav-item',
                   )}
-                  href={
-                    project ? `/projects/${project}/compute/containers` : '/'
-                  }
+                  to="/projects/$projectSlug/compute/containers"
+                  params={{ projectSlug: project }}
                   aria-current={active === 'containers' ? 'page' : undefined}
                 >
                   <Icon />
                   Containers
-                </a>
-                <a
+                </Link>
+                <Link
                   className={cn(
                     active === 'serverless' ? 'nav-item active' : 'nav-item',
                   )}
-                  href={
-                    project ? `/projects/${project}/compute/serverless` : '/'
-                  }
+                  to="/projects/$projectSlug/compute/serverless"
+                  params={{ projectSlug: project }}
                   aria-current={active === 'serverless' ? 'page' : undefined}
                 >
                   <Icon icon={Network} />
                   Serverless<span className="soon">Soon</span>
-                </a>
-                <a
+                </Link>
+                <Link
                   className={cn(
                     active === 'pm2' ? 'nav-item active' : 'nav-item',
                   )}
-                  href={`/projects/${project}/compute/pm2`}
+                  to="/projects/$projectSlug/compute/pm2"
+                  params={{ projectSlug: project }}
                   aria-current={active === 'pm2' ? 'page' : undefined}
                 >
                   <Icon icon={History} />
                   PM2
-                </a>
+                </Link>
               </div>
               {groups.map(([label, items]) => (
                 <div className="nav-group" key={label}>
@@ -259,7 +267,7 @@ export function Shell({
                     )
                     .map(([name, icon]) =>
                       name === 'Databases' || name === 'Cache' ? (
-                        <a
+                        <Link
                           key={name}
                           className={cn(
                             active ===
@@ -267,7 +275,12 @@ export function Shell({
                               ? 'nav-item active'
                               : 'nav-item',
                           )}
-                          href={`/projects/${project}/${name === 'Cache' ? 'cache' : 'databases'}`}
+                          to={
+                            name === 'Cache'
+                              ? '/projects/$projectSlug/cache'
+                              : '/projects/$projectSlug/databases'
+                          }
+                          params={{ projectSlug: project }}
                           aria-current={
                             active ===
                             (name === 'Cache' ? 'cache' : 'databases')
@@ -277,38 +290,40 @@ export function Shell({
                         >
                           <Icon icon={icon as LucideIcon} />
                           {name}
-                        </a>
+                        </Link>
                       ) : name === 'Cloud DNS' && project ? (
-                        <a
+                        <Link
                           key={name}
                           className={cn(
                             'nav-item',
                             active === 'dns' ? 'active' : '',
                           )}
-                          href={`/projects/${project}/dns`}
+                          to="/projects/$projectSlug/dns"
+                          params={{ projectSlug: project }}
                           aria-current={active === 'dns' ? 'page' : undefined}
                         >
                           <Icon icon={icon as LucideIcon} />
                           Cloud DNS
-                        </a>
+                        </Link>
                       ) : name === 'Access' &&
                         project &&
                         projects.find((p) => p.slug === project)
                           ?.can_manage_access ? (
-                        <a
+                        <Link
                           key={name}
                           className={cn(
                             'nav-item',
                             active === 'access' ? 'active' : '',
                           )}
-                          href={`/projects/${project}/access`}
+                          to="/projects/$projectSlug/access"
+                          params={{ projectSlug: project }}
                           aria-current={
                             active === 'access' ? 'page' : undefined
                           }
                         >
                           <Icon icon={icon as LucideIcon} />
                           Access
-                        </a>
+                        </Link>
                       ) : (
                         <QuickTip
                           key={name}
@@ -360,20 +375,21 @@ export function Shell({
                   hasServer(user, adminCapabilities[path!]!),
                 )
                 .map(([label, path, icon]) => (
-                  <a
+                  <Link
                     className={cn(
                       'nav-item',
                       active === `admin-${path}` ? 'active' : '',
                     )}
                     key={path}
-                    href={`/admin/${path}`}
+                    to="/admin/$section"
+                    params={{ section: path }}
                     aria-current={
                       active === `admin-${path}` ? 'page' : undefined
                     }
                   >
                     <Icon icon={icon as LucideIcon} />
                     {label}
-                  </a>
+                  </Link>
                 ))}
             </div>
           )}
@@ -412,7 +428,7 @@ export function Shell({
             >
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
-                  <a href="/account/security">Account security</a>
+                  <Link to="/account/security">Account security</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => {

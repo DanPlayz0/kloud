@@ -1,7 +1,9 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
 import { adminSession, api, type Project } from '../api'
 import { Admin } from '../admin'
-export const Route = createFileRoute('/admin/$section')({
+export const Route = createFileRoute('/_app/admin/$section')({
+  remountDeps: ({ params }) => params,
+  staticData: { shell: { title: 'Administration', active: 'admin' } },
   loader: async ({ params }) => {
     const user = await adminSession(params.section)
     if (

@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useState } from 'react'
@@ -41,16 +42,13 @@ export function ConnectorControls({
       <FieldGroup className="row-actions">
         {showOpen && (
           <Button asChild>
-            <a
-              href={
-                '/connectors/' +
-                encodeURIComponent(c.id) +
-                '/compute/containers'
-              }
+            <Link
+              to="/connectors/$connectorId/compute/containers"
+              params={{ connectorId: c.id }}
             >
               Open connector{' '}
               <ArrowRight data-icon="inline-start" aria-hidden="true" />
-            </a>
+            </Link>
           </Button>
         )}
         <Button

@@ -32,6 +32,10 @@ async function fixtures(page: Page) {
       '/api/auth/setup': { required: true },
       '/api/auth/me': owner,
       '/api/projects': [project],
+      [`/api/projects/${project.slug}/services`]: {
+        services: [],
+        can_create: true,
+      },
       '/api/connectors': [],
       [`/api/projects/${project.slug}/databases`]: {
         resources: [],
@@ -72,6 +76,90 @@ async function fixtures(page: Page) {
     return route.fulfill({ json: data[path] ?? { ok: true } })
   })
 }
+
+test('navigation keeps the document, sidebar and header mounted across pages and history', async ({
+  page,
+}) => {
+  await fixtures(page)
+  let documents = 0
+  page.on('request', (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+      documents++
+  })
+  await page.goto(`/projects/${project.slug}/compute/serverless`)
+  await expect(page.locator('.sidebar')).toBeVisible()
+  await page.evaluate(() => {
+    document.documentElement.dataset.navigationTest = 'original'
+    document
+      .querySelector('.sidebar')!
+      .setAttribute('data-navigation-test', 'original')
+    document
+      .querySelector('.topbar')!
+      .setAttribute('data-navigation-test', 'original')
+  })
+  const expectPersistentShell = async () => {
+    await expect(page.locator('html')).toHaveAttribute(
+      'data-navigation-test',
+      'original',
+    )
+    await expect(page.locator('.sidebar')).toHaveAttribute(
+      'data-navigation-test',
+      'original',
+    )
+    await expect(page.locator('.topbar')).toHaveAttribute(
+      'data-navigation-test',
+      'original',
+    )
+    expect(documents).toBe(1)
+  }
+  let release!: () => void
+  let started!: () => void
+  const pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const requested = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  await page.route('**/api/auth/me', async (route) => {
+    started()
+    await pending
+    await route.fulfill({ json: owner })
+  })
+  const navigation = page
+    .getByRole('link', { name: 'Databases', exact: true })
+    .click()
+  await requested
+  try {
+    // The existing layout survives while the next page's loader is waiting.
+    await expectPersistentShell()
+  } finally {
+    release()
+  }
+  await navigation
+  await expect(
+    page.getByRole('heading', { name: 'PostgreSQL', exact: true }),
+  ).toBeVisible()
+  await expectPersistentShell()
+  await page.getByRole('link', { name: 'Projects', exact: true }).click()
+  await expect(page).toHaveURL('/admin/projects')
+  await expect(page.locator('.topbar')).toContainText('AdministrationProjects')
+  await expectPersistentShell()
+  await page.goBack()
+  await expect(
+    page.getByRole('heading', { name: 'PostgreSQL', exact: true }),
+  ).toBeVisible()
+  await expectPersistentShell()
+  await page.goForward()
+  await expect(page).toHaveURL('/admin/projects')
+  await expectPersistentShell()
+  await page
+    .getByRole('button', { name: 'Project or connector', exact: true })
+    .click()
+  await page.getByRole('option', { name: new RegExp(project.name) }).click()
+  await expect(page).toHaveURL(`/projects/${project.slug}/services`)
+  await expect(page.locator('.topbar')).toContainText('ProjectServices')
+  await expectPersistentShell()
+})
 
 for (const width of [390, 1280]) {
   test(`databases retain project navigation under Storage at ${width}px`, async ({

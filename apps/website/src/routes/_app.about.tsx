@@ -1,7 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { session } from '../api'
 
-export const Route = createFileRoute('/about')({
+export const Route = createFileRoute('/_app/about')({
+  remountDeps: ({ params }) => params,
+  staticData: { shell: { title: 'About', active: '' } },
   beforeLoad: session,
   component: () => (
     <section>

@@ -1,8 +1,11 @@
+import { Link } from '@tanstack/react-router'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { api, session, hasServer, type Project } from '../api'
-import { Shell, Notice } from '../components'
+import { Notice } from '../components'
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute('/_app/')({
+  remountDeps: ({ params }) => params,
+  staticData: { shell: { title: 'Overview', active: 'services' } },
   loader: async () => {
     const user = await session(),
       projects = await api<Project[]>('/projects')
@@ -18,17 +21,19 @@ export const Route = createFileRoute('/')({
 function Home() {
   const { user, projects } = Route.useLoaderData()
   return (
-    <Shell user={user} projects={projects} title="Overview">
+    <>
       <Notice title="No projects yet">
         {hasServer(user, 'projects.create') &&
         hasServer(user, 'projects.manage') ? (
-          <a href="/admin/projects">Create your first project</a>
+          <Link to="/admin/$section" params={{ section: 'projects' }}>
+            Create your first project
+          </Link>
         ) : hasServer(user, 'projects.create') ? (
           'Use the project selector to create your first project.'
         ) : (
           'Ask an administrator to grant you project access.'
         )}
       </Notice>
-    </Shell>
+    </>
   )
 }

@@ -1,13 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { projectSession } from '../api'
-import { Pm2Page } from '../pm2'
-export const Route = createFileRoute('/projects/$projectSlug/compute/pm2')({
+import { ServicesPage } from '../services'
+
+export const Route = createFileRoute('/_app/projects/$projectSlug/services')({
+  remountDeps: ({ params }) => params,
+  staticData: { shell: { title: 'Project / Services', active: 'services' } },
   loader: ({ params }) => projectSession(params.projectSlug),
   component: Page,
 })
 function Page() {
   return (
-    <Pm2Page
+    <ServicesPage
       {...Route.useLoaderData()}
       project={Route.useParams().projectSlug}
     />
