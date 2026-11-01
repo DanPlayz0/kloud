@@ -753,13 +753,16 @@ small {
   margin: 0;
   min-width: 0;
 }
+.inline-form {
+  margin-bottom: 24px;
+}
 .inline-form > [data-slot='field-group'] {
   display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
   min-width: 0;
   align-items: end;
   gap: 16px;
-  margin-bottom: 24px;
 }
 .inline-form .ui-input:not([type='checkbox']) {
   min-width: 0;
@@ -828,6 +831,7 @@ small {
 }
 .row-actions {
   display: flex;
+  flex-direction: row;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;

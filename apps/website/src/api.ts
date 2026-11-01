@@ -190,6 +190,7 @@ export async function adminSession(section: string) {
 
 export interface Connector extends ServerAddresses {
   id: string
+  created_at?: string | null
   name: string
   host: string | null
   seen: string | null

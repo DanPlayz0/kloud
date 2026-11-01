@@ -306,6 +306,16 @@ export async function migrate() {
     await migrateRollouts(db)
     await migrateRecovery(db)
     await migrateForwarding(db)
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=27'))
+        .rowCount
+    ) {
+      await db.query(`
+        ALTER TABLE connectors ADD COLUMN created_at timestamptz;
+        ALTER TABLE connectors ALTER COLUMN created_at SET DEFAULT now();
+        INSERT INTO migrations(version) VALUES(27);
+      `)
+    }
   })
 }
 if (

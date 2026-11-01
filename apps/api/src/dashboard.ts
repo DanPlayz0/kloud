@@ -6,7 +6,7 @@ import { slug } from '@kloud/protocol'
 import { pool } from './db.js'
 import { requireUser, currentUser, type Env } from './auth.js'
 import { runtimeRequestSchema } from '@kloud/protocol/platform'
-import { connectorRpc } from './connector-rpc.js'
+import { connectorRpc, disconnectConnector } from './connector-rpc.js'
 import { digest, token, browserOrigin } from './security.js'
 import { clearFactors } from './auth-factors.js'
 import {
@@ -288,7 +288,7 @@ dashboard.get('/admin/connectors', async (c) =>
   c.json(
     (
       await pool.query(
-        `SELECT id,name,discovery,revoked,host,seen,capabilities,(seen IS NULL OR seen<now()-interval '20 seconds') AS stale FROM connectors WHERE NOT revoked ORDER BY name`,
+        `SELECT id,name,created_at,discovery,revoked,host,seen,capabilities,(seen IS NULL OR seen<now()-interval '20 seconds') AS stale FROM connectors WHERE NOT revoked ORDER BY created_at DESC NULLS LAST,name,id`,
       )
     ).rows,
   ),
@@ -351,6 +351,23 @@ dashboard.post('/admin/connectors', async (c) => {
   })
   return c.json({ id, token: secret }, 201)
 })
+dashboard.post('/admin/connectors/:id/rotate', async (c) => {
+  const id = uuid.parse(c.req.param('id'))
+  const secret = token()
+  await permissionTransaction(c.get('user'), async (db, actor) => {
+    demandServer(actor, 'connectors.manage')
+    const updated = await db.query(
+      `UPDATE connectors SET token=$2,seen=NULL,docker_seen=NULL,pm2_seen=NULL,
+       pm2_available=false,capabilities='{}' WHERE id=$1 AND NOT revoked RETURNING id`,
+      [id, digest(secret)],
+    )
+    if (!updated.rowCount)
+      throw new HTTPException(404, { message: 'Active connector not found' })
+  })
+  disconnectConnector(id)
+  return c.json({ id, token: secret })
+})
+
 dashboard.put('/admin/connectors/:id', async (c) => {
   const id = uuid.parse(c.req.param('id'))
   const body = z
@@ -367,6 +384,7 @@ dashboard.put('/admin/connectors/:id', async (c) => {
     },
   )
   if (!updated.rowCount) return c.json({ error: 'Connector not found' }, 404)
+  if (body.revoked) disconnectConnector(id)
   return c.json({ ok: true })
 })
 dashboard.get('/admin/containers', async (c) =>

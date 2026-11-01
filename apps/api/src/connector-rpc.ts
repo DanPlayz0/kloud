@@ -2,6 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { HTTPException } from 'hono/http-exception'
 import type { WebSocket } from 'ws'
 const connections = new Map<string, WebSocket>()
+export function disconnectConnector(connector: string) {
+  const socket = connections.get(connector)
+  connections.delete(connector)
+  socket?.terminate()
+}
 const pending = new Map<
   string,
   {

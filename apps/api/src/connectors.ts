@@ -102,8 +102,8 @@ export function attachConnectors(server: Server) {
               !alive ||
               !(
                 await pool.query(
-                  'SELECT 1 FROM connectors WHERE id=$1 AND NOT revoked',
-                  [connector.id],
+                  'SELECT 1 FROM connectors WHERE id=$1 AND token=$2 AND NOT revoked',
+                  [connector.id, digest(value!)],
                 )
               ).rowCount
             ) {
@@ -114,6 +114,16 @@ export function attachConnectors(server: Server) {
             ws.ping()
           })().catch(() => ws.terminate())
         }, 10000)
+        // Recheck after registration to cover rotation during the upgrade query.
+        void pool
+          .query(
+            'SELECT 1 FROM connectors WHERE id=$1 AND token=$2 AND NOT revoked',
+            [connector.id, digest(value!)],
+          )
+          .then((result) => {
+            if (!result.rowCount) ws.terminate()
+          })
+          .catch(() => ws.terminate())
         ws.on('close', () => {
           clearInterval(heartbeat)
           if (connections.get(connector.id) === ws)
@@ -169,8 +179,8 @@ export function attachConnectors(server: Server) {
             }
             void pool
               .query(
-                'UPDATE connectors SET capabilities=$2 WHERE id=$1 AND NOT revoked',
-                [connector.id, message.capabilities],
+                'UPDATE connectors SET capabilities=$2 WHERE id=$1 AND token=$3 AND NOT revoked',
+                [connector.id, message.capabilities, digest(value!)],
               )
               .catch(() => ws.terminate())
             return

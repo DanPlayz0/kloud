@@ -498,6 +498,12 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   )
   route(
     'post',
+    '/admin/connectors/{id}/rotate',
+    'Replace connector credential and disconnect host; token shown once (connectors.manage)',
+    z.object({ id: z.string().uuid(), token: z.string() }),
+  )
+  route(
+    'post',
     '/admin/connectors/{id}/terminal',
     'Operate host SSH terminal (connectors.manage; host-terminal capability required)',
     flexible,

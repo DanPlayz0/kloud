@@ -1,11 +1,20 @@
 import { Link, useRouter } from '@tanstack/react-router'
 import { X, ArrowRight } from 'lucide-react'
 import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
-import { Card, FormCard } from './components/ui/card'
+import {
+  Card,
+  FormCard,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter,
+  CardContent,
+} from './components/ui/card'
 import { StatusBadge } from './components/ui/status-badge'
 import { Container } from 'lucide-react'
 import { Alert, AlertDescription } from './components/ui/alert'
 import { ConnectorControls } from './components/connector-controls'
+import { ConnectorToken } from './components/connector-token'
 import { InventoryCard } from './components/inventory-card'
 import { ProjectFields, projectFormValues } from './components/project-fields'
 import { Button, Input, NativeSelect } from './components/ui/controls'
@@ -37,22 +46,37 @@ export function Admin({
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
   const [projectList, setProjectList] = useState(projects)
+  const [connectorToken, setConnectorToken] = useState<{
+    id: string
+    token: string
+    rotated: boolean
+  }>()
   useEffect(() => setProjectList(projects), [projects])
   async function action(path: string, method: string, body: unknown) {
     setError('')
     setMessage('')
     setBusy(true)
     try {
-      const result = await api<{ enrollmentUrl?: string; token?: string }>(
-        path,
-        method,
-        body,
-      )
+      const result = await api<{
+        id?: string
+        enrollmentUrl?: string
+        token?: string
+      }>(path, method, body)
+      if (result.token && result.id)
+        setConnectorToken({
+          id: result.id,
+          token: result.token,
+          rotated: path.endsWith('/rotate'),
+        })
+      if (method === 'PUT' && (body as { revoked?: boolean })?.revoked)
+        setConnectorToken((current) =>
+          path === '/admin/connectors/' + current?.id ? undefined : current,
+        )
       setMessage(
         result.enrollmentUrl
           ? `Enrollment link (valid for 24 hours): ${result.enrollmentUrl}`
           : result.token
-            ? `Connector token — copy now; it is shown only once: ${result.token}`
+            ? ''
             : 'Changes saved.',
       )
       setRevision((n) => n + 1)
@@ -120,7 +144,12 @@ export function Admin({
               projects={projectList}
             />
           ) : section === 'connectors' ? (
-            <Connectors revision={revision} action={action} />
+            <Connectors
+              revision={revision}
+              action={action}
+              revealedToken={connectorToken}
+              onDismissToken={() => setConnectorToken(undefined)}
+            />
           ) : (
             <>
               <Inventory
@@ -225,17 +254,28 @@ function Projects({
 function Connectors({
   revision,
   action,
+  revealedToken,
+  onDismissToken,
 }: {
   revision: number
   action: Action
+  revealedToken?: { id: string; token: string; rotated: boolean }
+  onDismissToken: () => void
 }) {
-  const { data, error } = usePolling<Connector[]>(
-    `/admin/connectors?revision=${revision}`,
+  const { data, error } = usePolling<Connector[]>('/admin/connectors', revision)
+  const [search, setSearch] = useState('')
+  const query = search.trim().toLowerCase()
+  const filtered = data?.filter((connector) =>
+    [connector.name, connector.host ?? ''].some((value) =>
+      value.toLowerCase().includes(query),
+    ),
   )
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     void action('/admin/connectors', 'POST', {
       name: new FormData(e.currentTarget).get('name'),
+    }).then((saved) => {
+      if (saved) setSearch('')
     })
   }
   return (
@@ -257,11 +297,22 @@ function Connectors({
         allows unassigned containers to appear in the admin inventory.
       </p>
       <ErrorMessage message={error} />
-      {data?.map((c) => (
+      <Field className="mb-4">
+        <FieldLabel>Search connectors</FieldLabel>
+        <Input
+          type="search"
+          placeholder="Search by name or host"
+          value={search}
+          onChange={(event) => setSearch(event.currentTarget.value)}
+        />
+      </Field>
+      {filtered?.map((c) => (
         <Card className="admin-row" key={c.id}>
-          <div>
-            <strong>{c.name}</strong>
-            <small>
+          <CardHeader>
+            <CardTitle asChild>
+              <strong>{c.name}</strong>
+            </CardTitle>
+            <CardDescription>
               {c.host ?? 'Not connected'} ·{' '}
               <StatusBadge>
                 {c.revoked
@@ -270,14 +321,34 @@ function Connectors({
                     ? 'Offline / stale'
                     : 'Connected'}
               </StatusBadge>
-            </small>
-          </div>
-          <ConnectorControls connector={c} action={action} showOpen />
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <ConnectorControls connector={c} action={action} showOpen />
+          </CardFooter>
+          {revealedToken?.id === c.id && (
+            <CardContent className="basis-full">
+              <ConnectorToken
+                key={revealedToken.token}
+                token={revealedToken.token}
+                rotated={revealedToken.rotated}
+                onDismiss={onDismissToken}
+              />
+            </CardContent>
+          )}
         </Card>
       ))}
       {data?.length === 0 && (
         <Notice title="Connect a Docker host">
           Create a token to get started.
+        </Notice>
+      )}
+      {!!data?.length && filtered?.length === 0 && (
+        <Notice title="No matching connectors">
+          Try a different name or host.
+          <Button type="button" variant="ghost" onClick={() => setSearch('')}>
+            Clear search
+          </Button>
         </Notice>
       )}
     </>

@@ -7,10 +7,12 @@ import {
   ScrollText,
   Settings2,
   X,
+  AlertTriangle,
 } from 'lucide-react'
 import { api, resourceBase, type ResourceScope, type ContainerRow } from './api'
 import { usePolling, ErrorMessage } from './components'
 import { Button } from './components/ui/controls'
+import { Alert, AlertTitle, AlertDescription } from './components/ui/alert'
 import {
   Dialog,
   DialogContent,
@@ -184,11 +186,15 @@ export function ContainerOperations({
               </Button>
             ))}
           </div>
-          {!permissions?.available && (
-            <p className="text-muted-foreground">
-              Host unavailable, runtime operations disabled, or operation
-              permission required.
-            </p>
+          {permissions?.available === false && (
+            <Alert variant="destructive">
+              <AlertTriangle aria-hidden="true" />
+              <AlertTitle>Container operations unavailable</AlertTitle>
+              <AlertDescription>
+                Host unavailable, runtime operations disabled, or operation
+                permission required.
+              </AlertDescription>
+            </Alert>
           )}
           <ErrorMessage message={error} />
           {mode === 'terminal' && permissions?.terminal ? (

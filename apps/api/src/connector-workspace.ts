@@ -22,7 +22,7 @@ export const connectorWorkspace = new Hono<Env>()
 connectorWorkspace.use('*', requireUser)
 const uuid = z.string().uuid()
 const containerId = z.string().regex(/^[a-f0-9]{64}$/)
-const metadataQuery = `SELECT id,name,host,seen,discovery,revoked,capabilities,public_addresses,dns_targets,private_addresses,
+const metadataQuery = `SELECT id,name,created_at,host,seen,discovery,revoked,capabilities,public_addresses,dns_targets,private_addresses,
   (seen IS NULL OR seen<now()-interval '20 seconds' OR revoked) AS stale
   FROM connectors`
 export function canBrowseConnector(user: User) {
@@ -52,8 +52,12 @@ async function actor(c: Context<Env>) {
 connectorWorkspace.get('/connectors', async (c) => {
   demandBrowse(c.get('user'))
   return c.json(
-    (await pool.query(metadataQuery + ' WHERE NOT revoked ORDER BY name,id'))
-      .rows,
+    (
+      await pool.query(
+        metadataQuery +
+          ' WHERE NOT revoked ORDER BY created_at DESC NULLS LAST,name,id',
+      )
+    ).rows,
   )
 })
 connectorWorkspace.get('/connectors/:connector', async (c) => {

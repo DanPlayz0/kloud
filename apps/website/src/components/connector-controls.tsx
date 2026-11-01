@@ -1,8 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
-import { useEffect, useState } from 'react'
-import { Terminal, ArrowRight } from 'lucide-react'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { useEffect, useRef, useState } from 'react'
+import { Terminal, ArrowRight, RotateCw } from 'lucide-react'
 import type { Connector } from '../api'
 import { Button, Checkbox } from './ui/controls'
 import {
@@ -31,6 +31,10 @@ export function ConnectorControls({
   const [busy, setBusy] = useState(false)
   const [terminal, setTerminal] = useState(false)
   const [error, setError] = useState('')
+  const [confirmation, setConfirmation] = useState<'revoke' | 'rotate'>()
+  const [mutationError, setMutationError] = useState('')
+  const cancel = useRef<HTMLButtonElement>(null)
+  const credentialTrigger = useRef<HTMLButtonElement | null>(null)
   useEffect(() => setPending(undefined), [c.discovery])
   const available =
     !c.revoked && !c.stale && c.capabilities?.includes('host-terminal')
@@ -39,7 +43,7 @@ export function ConnectorControls({
   }, [available])
   return (
     <>
-      <FieldGroup className="row-actions">
+      <div className="row-actions">
         {showOpen && (
           <Button asChild>
             <Link
@@ -69,7 +73,7 @@ export function ConnectorControls({
         <Field
           data-disabled={c.revoked || busy}
           orientation="horizontal"
-          className="checkbox"
+          className="checkbox w-auto"
         >
           <Checkbox
             checked={pending ?? c.discovery}
@@ -91,27 +95,108 @@ export function ConnectorControls({
           <FieldLabel>Discover unassigned containers</FieldLabel>
         </Field>
         <Button
+          disabled={c.revoked || busy}
+          onClick={(event) => {
+            credentialTrigger.current = event.currentTarget
+            setMutationError('')
+            setConfirmation('rotate')
+          }}
+        >
+          <RotateCw data-icon="inline-start" aria-hidden="true" />
+          Rotate token
+        </Button>
+        <Button
           variant="destructive"
           disabled={c.revoked || busy}
-          onClick={() => {
-            if (
-              confirm(
-                'Revoke ' +
-                  c.name +
-                  '? Its token will stop working permanently.',
-              )
-            ) {
-              setBusy(true)
-              void action('/admin/connectors/' + c.id, 'PUT', {
-                discovery: c.discovery,
-                revoked: true,
-              }).finally(() => setBusy(false))
-            }
+          onClick={(event) => {
+            credentialTrigger.current = event.currentTarget
+            setMutationError('')
+            setConfirmation('revoke')
           }}
         >
           Revoke token
         </Button>
-      </FieldGroup>
+      </div>
+      <Dialog
+        open={!!confirmation}
+        onOpenChange={(open) => {
+          if (!open && !busy) setConfirmation(undefined)
+        }}
+      >
+        <DialogContent
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            cancel.current?.focus()
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            credentialTrigger.current?.focus()
+          }}
+        >
+          <DialogTitle>
+            {confirmation === 'revoke' ? 'Revoke' : 'Rotate'} token for {c.name}
+            ?
+          </DialogTitle>
+          <DialogDescription className="mt-2">
+            {confirmation === 'revoke'
+              ? 'This permanently revokes the token and disconnects this host. This connector cannot reconnect or be restored.'
+              : 'This invalidates the current token and disconnects this host. Save the new token, update CONNECTOR_TOKEN on the host, and recreate the connector to reconnect.'}
+          </DialogDescription>
+          {mutationError && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription>{mutationError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="mt-6 flex flex-wrap justify-end gap-2">
+            <Button
+              ref={cancel}
+              disabled={busy}
+              onClick={() => setConfirmation(undefined)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={async () => {
+                if (busy) return
+                setBusy(true)
+                setMutationError('')
+                try {
+                  const ok =
+                    confirmation === 'revoke'
+                      ? await action('/admin/connectors/' + c.id, 'PUT', {
+                          discovery: c.discovery,
+                          revoked: true,
+                        })
+                      : await action(
+                          '/admin/connectors/' + c.id + '/rotate',
+                          'POST',
+                          undefined,
+                        )
+                  if (ok) setConfirmation(undefined)
+                  else
+                    setMutationError(
+                      'Unable to update the connector token. Try again.',
+                    )
+                } catch {
+                  setMutationError(
+                    'Unable to update the connector token. Try again.',
+                  )
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            >
+              {busy
+                ? 'Updating token…'
+                : confirmation === 'revoke'
+                  ? 'Revoke token'
+                  : 'Rotate token'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={terminal} onOpenChange={setTerminal}>
         <DialogContent className="max-w-5xl">
           <DialogTitle>Host terminal — {c.name}</DialogTitle>

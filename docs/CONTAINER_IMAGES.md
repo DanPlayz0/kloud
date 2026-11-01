@@ -87,6 +87,13 @@ non-secret setting without printing tokens, for example:
 docker compose -f compose.connector.yaml exec connector printenv RUNTIME_ENABLED
 ```
 
+To replace a connector credential, choose **Rotate token** on its card in
+**Administration > Connectors** (or its overview) and confirm. The old token is
+invalidated and the host is disconnected. Copy the new token shown beneath that
+connector's controls, update `CONNECTOR_TOKEN` in the host's `.env`, then run the
+recreate command above. The connector keeps its identity and resource assignments.
+**Revoke token** instead permanently disables the connector after confirmation.
+
 Feature flags do not add host mounts. For PM2, add `-f compose.connector.pm2.yaml`
 and configure `PM2_HOME`, `PM2_UID`, and `PM2_GID` as described in
 [PM2 setup](PM2.md). This override binds the host PM2 home read-only and uses the

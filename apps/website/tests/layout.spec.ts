@@ -77,6 +77,61 @@ async function fixtures(page: Page) {
   })
 }
 
+for (const width of [390, 1600]) {
+  test(`connector forms and actions preserve their responsive row layout at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    await fixtures(page)
+    await page.route(/\/api\/admin\/connectors(?:\?.*)?$/, (route) =>
+      route.fulfill({
+        json: [
+          {
+            id: 'host',
+            name: 'Production',
+            host: 'docker.example.test',
+            discovery: true,
+            revoked: false,
+            stale: false,
+            capabilities: ['host-terminal'],
+          },
+        ],
+      }),
+    )
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/admin/connectors')
+    const input = page.getByLabel('Connector name', { exact: true })
+    const create = page.getByRole('button', {
+      name: 'Create connector token',
+      exact: true,
+    })
+    const open = page.getByRole('link', { name: 'Open connector', exact: true })
+    const terminal = page.getByRole('button', {
+      name: 'Host terminal',
+      exact: true,
+    })
+    await expect(terminal).toBeEnabled()
+    await expectContained(page, '.inline-form,.admin-row')
+    const inputBox = (await input.boundingBox())!
+    const createBox = (await create.boundingBox())!
+    if (width > 720) {
+      expect(inputBox.x + inputBox.width).toBeLessThanOrEqual(createBox.x)
+      expect(
+        Math.abs(inputBox.y + inputBox.height - createBox.y - createBox.height),
+      ).toBeLessThan(2)
+      const openBox = (await open.boundingBox())!
+      const terminalBox = (await terminal.boundingBox())!
+      expect(Math.abs(openBox.y - terminalBox.y)).toBeLessThan(2)
+      expect(openBox.x + openBox.width).toBeLessThanOrEqual(terminalBox.x)
+    } else {
+      expect(createBox.y).toBeGreaterThanOrEqual(inputBox.y + inputBox.height)
+    }
+    await page.screenshot({
+      path: testInfo.outputPath('connectors.png'),
+      fullPage: true,
+    })
+  })
+}
+
 test('navigation keeps the document, sidebar and header mounted across pages and history', async ({
   page,
 }) => {

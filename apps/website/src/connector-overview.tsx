@@ -6,6 +6,7 @@ import { usePolling, ErrorMessage } from './components'
 import { Card } from './components/ui/card'
 import { StatusBadge } from './components/ui/status-badge'
 import { ConnectorControls } from './components/connector-controls'
+import { ConnectorToken } from './components/connector-token'
 
 export function ConnectorOverview({
   user,
@@ -20,6 +21,7 @@ export function ConnectorOverview({
   const [revision, setRevision] = useState(0)
   const [message, setMessage] = useState('')
   const [actionError, setActionError] = useState('')
+  const [rotatedToken, setRotatedToken] = useState('')
   const { data, error, now } = usePolling<Connector>(
     '/connectors/' + connector.id,
     revision,
@@ -31,15 +33,16 @@ export function ConnectorOverview({
     setActionError('')
     setMessage('')
     try {
-      await api(path, method, body)
-      if ((body as { revoked?: boolean }).revoked) {
+      const result = await api<{ token?: string }>(path, method, body)
+      if (result.token) setRotatedToken(result.token)
+      if ((body as { revoked?: boolean } | undefined)?.revoked) {
         await navigate({
           to: '/admin/$section',
           params: { section: 'connectors' },
         })
         return true
       }
-      setMessage('Changes saved.')
+      setMessage(result.token ? '' : 'Changes saved.')
       setRevision((v) => v + 1)
       return true
     } catch (e) {
@@ -102,6 +105,14 @@ export function ConnectorOverview({
             <ConnectorControls
               connector={{ ...current, stale: stale || !!error }}
               action={action}
+            />
+          )}
+          {rotatedToken && (
+            <ConnectorToken
+              key={rotatedToken}
+              token={rotatedToken}
+              rotated
+              onDismiss={() => setRotatedToken('')}
             />
           )}
         </Card>

@@ -37,6 +37,14 @@ test(
       })
     try {
       await migrate()
+      const legacy = randomUUID()
+      await pool.query(
+        "INSERT INTO connectors(id,name,token) VALUES($1,'legacy',$2)",
+        [legacy, digest(token())],
+      )
+      await pool.query(
+        'ALTER TABLE connectors DROP COLUMN created_at; DELETE FROM migrations WHERE version=27',
+      )
       await pool.query(
         "INSERT INTO users(id,username,capabilities) VALUES($1,'inventory',ARRAY['inventory.manage'])",
         [user],
@@ -48,6 +56,15 @@ test(
       )
       await migrate()
       await migrate()
+      assert.equal(
+        (
+          await pool.query('SELECT created_at FROM connectors WHERE id=$1', [
+            legacy,
+          ])
+        ).rows[0].created_at,
+        null,
+      )
+      await pool.query('DELETE FROM connectors WHERE id=$1', [legacy])
       assert.deepEqual(
         (await pool.query('SELECT capabilities FROM users WHERE id=$1', [user]))
           .rows[0].capabilities,
@@ -63,6 +80,26 @@ test(
       )
       await pool.query(
         "INSERT INTO projects(slug,name) VALUES('alpha','Alpha')",
+      )
+      assert.ok(
+        (
+          await pool.query('SELECT created_at FROM connectors WHERE id=$1', [
+            host,
+          ])
+        ).rows[0].created_at,
+      )
+      // Creation time, rather than name or the last heartbeat, controls ordering.
+      await pool.query(
+        `UPDATE connectors SET created_at=CASE WHEN id=$1 THEN now()-interval '1 day' ELSE now() END,
+         seen=CASE WHEN id=$1 THEN now() ELSE now()-interval '1 day' END WHERE id IN ($1,$2)`,
+        [host, other],
+      )
+      const ordered = (await (await request('/connectors')).json()) as {
+        id: string
+      }[]
+      assert.deepEqual(
+        ordered.map((row) => row.id),
+        [other, host],
       )
       await pool.query(
         'INSERT INTO inventory(connector_id,container_id,data) VALUES($1,$3,$4),($2,$3,$4)',
