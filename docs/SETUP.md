@@ -43,7 +43,7 @@ assignments. There is no public signup or demo-data fallback. See [Account secur
 2. Run `docker compose up --build -d`. PostgreSQL starts first, then the one-shot
    migration service, then the API and website.
 3. Open `http://localhost:8080`. With no accounts, the website prompts you to
-   create the Server Administrator with a username and a password of at least 12 characters.
+   create the Organization Administrator with a username and a password of at least 12 characters.
 4. Sign in using your password. Optionally enable second factors in Account security. Setup is unavailable once any account exists.
 5. In **Administration → Projects**, create a project. In **Connectors**, create
    a connector and copy its token immediately; it cannot be retrieved later.
@@ -105,7 +105,7 @@ Create the project in the dashboard first. Slugs contain lowercase letters,
 digits, and single separating hyphens. Both labels must be valid. Application
 slugs identify the future application page; no application-management UI is needed.
 
-For manual assignment, a Server Administrator enables **Discover unassigned containers**
+For manual assignment, a Organization Administrator enables **Discover unassigned containers**
 on the connector, opens **Inventory**, and chooses a project and application slug.
 Assignments are stored in PostgreSQL and do not change Docker labels. Valid label
 assignments take precedence. Disabling discovery hides unassigned inventory while
@@ -115,10 +115,10 @@ are excluded before transmission, even with discovery enabled.
 
 ## Users and recovery
 
-Server Administrators invite users, grant project memberships, disable accounts, and reset
+Organization Administrators invite users, grant project memberships, disable accounts, and reset
 enrollment in **Users**. Invitation links expire after 24 hours and are single-use.
 Share them manually. Resetting enrollment invalidates the user's current sessions
-and credentials. Ordinary users see only their assigned projects; Server Administrators
+and credentials. Ordinary users see only their assigned projects; Organization Administrators
 see all projects. Users cannot disable themselves through the UI.
 
 Recover an administrator's lost credentials or second factors using server access:

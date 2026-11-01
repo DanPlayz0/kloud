@@ -82,7 +82,7 @@ export function ServiceListeners({
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
         Optional host-local TCP/UDP forwarding is independent of HTTP domains
-        and VPN connectivity. The server administrator must enable forwarding
+        and VPN connectivity. The organization administrator must enable forwarding
         and approve bind addresses. PostgreSQL listeners stay blocked until
         native TLS and renewal are verified. Connections may end when a release
         is replaced.

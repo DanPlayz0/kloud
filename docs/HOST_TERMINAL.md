@@ -6,7 +6,7 @@ WebSocket; the connector opens an SSH shell on its configured host. No inbound
 dashboard connection to SSH is required. This works independently of Docker,
 PM2 and container runtime operations.
 
-Access requires Server Administrator or `connectors.manage`. Project and
+Access requires Organization Administrator or `connectors.manage`. Project and
 container terminal grants do not grant host shell access. Each session belongs
 to the dashboard user who opened it. Permissions and connector revocation are
 checked on every request, including before returning output. Sessions close

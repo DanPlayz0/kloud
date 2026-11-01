@@ -9,7 +9,7 @@ Normal editing is available with service deployment/configuration authority. Exi
 values appear masked; keeping a mask preserves its saved value, and removing a row
 removes the key only after the save review. Developer mode first loads complete
 plaintext and requires the separate **Reveal service secrets** permission. Project
-and server administrators can delegate that capability through service grants.
+and organization administrators can delegate that capability through service grants.
 Ordinary app deployment access does not grant reveal. Loading plaintext is explicit;
 responses are not cacheable. A literal `********` value in a complete developer
 submission remains literal and is not interpreted as a mask.

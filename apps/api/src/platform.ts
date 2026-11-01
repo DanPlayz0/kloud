@@ -775,7 +775,7 @@ platform.post(
       ? 'terminal'
       : body.action === 'logs'
         ? 'logs'
-        : body.action === 'inspect'
+        : ['inspect', 'update'].includes(body.action)
           ? 'configuration'
           : 'lifecycle'
     const connector = uuid.parse(c.req.param('connector')),
@@ -783,8 +783,10 @@ platform.post(
         .string()
         .regex(/^[a-f0-9]{64}$/)
         .parse(c.req.param('container'))
+    const actor = await currentUser(c)
+    if (!actor) throw new HTTPException(401)
     const row = await containerPermission(
-      c.get('user'),
+      actor,
       c.req.param('project'),
       connector,
       container,
@@ -806,16 +808,30 @@ platform.post(
       container,
       project: row.project,
       application: row.application,
-      owner: c.get('user').id,
+      owner: actor.id,
     })
     // Recheck grants after waiting for a host, before returning logs or terminal output.
-    await containerPermission(
-      c.get('user'),
-      c.req.param('project'),
-      connector,
-      container,
-      capability,
-    )
+    try {
+      const current = await currentUser(c)
+      if (!current) throw new HTTPException(401)
+      await containerPermission(
+        current,
+        c.req.param('project'),
+        connector,
+        container,
+        capability,
+      )
+    } catch (error) {
+      if (body.action === 'terminal-open' && result.session)
+        void connectorRpc(connector, {
+          kind: 'runtime',
+          action: 'terminal-close',
+          container,
+          owner: actor.id,
+          session: result.session,
+        }).catch(() => {})
+      throw error
+    }
     return c.json(result)
   },
 )

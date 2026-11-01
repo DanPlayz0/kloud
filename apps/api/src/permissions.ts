@@ -1,3 +1,4 @@
+import { accountsEnabled } from './global-accounts.js'
 import { z } from 'zod'
 import { HTTPException } from 'hono/http-exception'
 import type { PoolClient } from 'pg'
@@ -61,7 +62,9 @@ export const hasServer = (u: User, capability: ServerCapability) =>
   u.admin || u.capabilities.includes(capability)
 export function demandServer(u: User, capability: ServerCapability) {
   if (!hasServer(u, capability))
-    throw new HTTPException(403, { message: 'Server permission required' })
+    throw new HTTPException(403, {
+      message: 'Organization permission required',
+    })
 }
 export async function projectAccess(
   user: User,
@@ -115,7 +118,7 @@ export async function permissionTransaction<T>(
     await db.query('SELECT pg_advisory_xact_lock(842193)')
     const current = (
       await db.query<User>(
-        'SELECT id,username,admin,capabilities FROM users WHERE id=$1 AND NOT disabled',
+        `SELECT id,username,admin,capabilities FROM users WHERE id=$1 AND NOT disabled ${accountsEnabled() ? 'AND NOT invitation_pending' : ''}`,
         [actor.id],
       )
     ).rows[0]
@@ -135,7 +138,7 @@ export async function protectAdministrators(
     ).rowCount
   )
     throw new HTTPException(409, {
-      message: 'Cannot remove the last active Server Administrator',
+      message: 'Cannot remove the last active Organization Administrator',
     })
   for (const project of before.projects) {
     if (

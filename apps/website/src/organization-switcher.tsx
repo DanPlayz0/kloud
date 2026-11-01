@@ -1,14 +1,19 @@
 import { useId, useState, type FormEvent } from 'react'
-import { Building2 } from 'lucide-react'
+import { Building2, Check } from 'lucide-react'
 import {
   api,
   currentOrganization,
   switchOrganization,
-  validOrganizationSlug,
   type Organization,
 } from './api'
 import { ErrorMessage, usePolling } from './components'
-import { Button, Input } from './components/ui/controls'
+import {
+  Button,
+  Input,
+  Textarea,
+  Checkbox,
+  Label,
+} from './components/ui/controls'
 import {
   Dialog,
   DialogContent,
@@ -19,85 +24,225 @@ import {
 import { Field, FieldLabel } from './components/ui/field'
 import { Form } from './components/ui/form'
 
-/** Available before sign-in, because accounts and sessions belong to an organization. */
+export function organizationSlug(name: string) {
+  return name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63)
+    .replace(/-+$/g, '')
+}
+
+/** Only organizations associated with the signed-in account are offered. */
 export function OrganizationSelector() {
+  const { data, error } = usePolling<Organization[]>('/organizations')
+  const organizations = Array.isArray(data) ? data : []
+  return (
+    <div className="flex flex-col gap-2" aria-label="Your organizations">
+      {organizations.map((organization) => (
+        <Button
+          key={organization.slug}
+          type="button"
+          variant="outline"
+          className="w-full justify-between"
+          disabled={organization.slug === currentOrganization()}
+          onClick={() => switchOrganization(organization.slug)}
+        >
+          <span className="truncate">{organization.name}</span>
+          {organization.slug === currentOrganization() && (
+            <Check aria-label="Current organization" className="size-4" />
+          )}
+        </Button>
+      ))}
+      {!organizations.length && !error && (
+        <p className="text-sm text-muted-foreground">
+          Loading your organizations…
+        </p>
+      )}
+      <ErrorMessage message={error} />
+    </div>
+  )
+}
+
+type Metadata = {
+  name: string
+  slug?: string
+  description: string
+  website: string
+}
+function OrganizationFields({
+  organization,
+  busy,
+  onSubmit,
+}: {
+  organization?: Organization
+  busy: boolean
+  onSubmit: (body: Metadata) => Promise<void>
+}) {
   const id = useId()
-  const [slug, setSlug] = useState(currentOrganization)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  const [name, setName] = useState(organization?.name ?? '')
+  const [slug, setSlug] = useState(organization?.slug ?? '')
+  const [editedSlug, setEditedSlug] = useState(false)
+  const [description, setDescription] = useState(
+    organization?.description ?? '',
+  )
+  const [website, setWebsite] = useState(organization?.website ?? '')
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
-    setBusy(true)
-    try {
-      if (!validOrganizationSlug(slug))
-        throw new Error(
-          'Use lowercase letters, numbers, and single hyphens for the organization slug.',
-        )
-      const organization = await api<Organization>(
-        '/organizations/lookup/' + encodeURIComponent(slug),
-      )
-      switchOrganization(organization.slug)
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : 'Unable to switch organizations',
-      )
-      setBusy(false)
-    }
+    void onSubmit({
+      name,
+      description,
+      website,
+      ...(!organization && editedSlug ? { slug } : {}),
+    })
   }
   return (
-    <Form onSubmit={(event) => void submit(event)}>
+    <Form onSubmit={submit}>
       <Field>
-        <FieldLabel htmlFor={id}>Organization slug</FieldLabel>
+        <FieldLabel htmlFor={id + '-name'}>Organization name</FieldLabel>
         <Input
-          id={id}
-          value={slug}
-          onChange={(event) => setSlug(event.target.value)}
+          id={id + '-name'}
+          name="name"
           required
-          pattern="[a-z0-9]+(-[a-z0-9]+)*"
-          maxLength={63}
-          autoComplete="off"
+          maxLength={100}
           disabled={busy}
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value)
+            if (!organization && !editedSlug)
+              setSlug(organizationSlug(event.target.value))
+          }}
         />
       </Field>
-      <ErrorMessage message={error} />
-      <Button
-        type="submit"
-        variant="outline"
-        disabled={busy || slug === currentOrganization()}
-      >
-        {busy ? 'Opening…' : 'Switch organization'}
+      <Field>
+        <FieldLabel htmlFor={id + '-slug'}>Organization slug</FieldLabel>
+        <Input
+          id={id + '-slug'}
+          name="slug"
+          pattern="[a-z0-9]+(-[a-z0-9]+)*"
+          maxLength={63}
+          disabled={busy}
+          readOnly={!!organization}
+          value={slug}
+          onChange={(event) => {
+            setEditedSlug(true)
+            setSlug(event.target.value)
+          }}
+        />
+        <p className="text-sm text-muted-foreground">
+          {organization
+            ? 'The slug remains unchanged so connector and callback URLs keep working.'
+            : 'Generated from the name. You can change it; a number is added automatically if the generated slug is already used.'}
+        </p>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={id + '-description'}>Description</FieldLabel>
+        <Textarea
+          id={id + '-description'}
+          name="description"
+          maxLength={1000}
+          disabled={busy}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={id + '-website'}>Website</FieldLabel>
+        <Input
+          id={id + '-website'}
+          name="website"
+          type="url"
+          maxLength={2048}
+          disabled={busy}
+          placeholder="https://example.com"
+          value={website}
+          onChange={(event) => setWebsite(event.target.value)}
+        />
+      </Field>
+      {!organization && (
+        <p className="text-sm text-muted-foreground">
+          Your current account becomes the new organization’s administrator.
+        </p>
+      )}
+      <Button disabled={busy} type="submit">
+        {busy
+          ? 'Saving…'
+          : organization
+            ? 'Save organization'
+            : 'Create organization'}
       </Button>
     </Form>
   )
 }
 
 export function OrganizationSwitcher({ admin = false }: { admin?: boolean }) {
-  const { data } = usePolling<Organization>('/organizations/current')
-  const [create, setCreate] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const { data } = usePolling<Organization>(
+    '/organizations/current',
+    refreshKey,
+  )
+  const [view, setView] = useState<'overview' | 'create' | 'edit' | 'invite'>(
+    'overview',
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [invitationUrl, setInvitationUrl] = useState('')
+  const [inviteAdmin, setInviteAdmin] = useState(false)
   const id = useId()
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const fields = new FormData(event.currentTarget)
+  async function save(body: Metadata) {
     setError('')
     setBusy(true)
+    setMessage('')
     try {
       const result = await api<Organization>(
-        '/organizations',
-        'POST',
-        Object.fromEntries(fields),
+        view === 'create' ? '/organizations' : '/organizations/current',
+        view === 'create' ? 'POST' : 'PATCH',
+        body,
       )
-      switchOrganization(result.slug)
+      if (view === 'create') switchOrganization(result.slug)
+      else {
+        setView('overview')
+        setMessage('Organization details saved.')
+        setRefreshKey((value) => value + 1)
+      }
     } catch (error) {
       setError(
-        error instanceof Error
-          ? error.message
-          : 'Unable to create organization',
+        error instanceof Error ? error.message : 'Unable to save organization',
       )
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function invite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setBusy(true)
+    setMessage('')
+    setInvitationUrl('')
+    const fields = new FormData(event.currentTarget)
+    try {
+      const result = await api<{
+        invitationUrl: string
+        email: string
+        sent: boolean
+      }>('/organizations/invitations', 'POST', {
+        email: fields.get('email'),
+        admin: inviteAdmin,
+      })
+      setInvitationUrl(result.invitationUrl)
+      setMessage(
+        result.sent
+          ? `Invitation sent to ${result.email}.`
+          : `Invitation created for ${result.email}. Share the invitation link with them.`,
+      )
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Unable to invite member',
+      )
+    } finally {
       setBusy(false)
     }
   }
@@ -105,8 +250,11 @@ export function OrganizationSwitcher({ admin = false }: { admin?: boolean }) {
     <div className="border-b border-sidebar-border px-3 py-3">
       <Dialog
         onOpenChange={() => {
-          setCreate(false)
+          setView('overview')
           setError('')
+          setMessage('')
+          setInvitationUrl('')
+          setInviteAdmin(false)
         }}
       >
         <DialogTrigger asChild>
@@ -121,95 +269,91 @@ export function OrganizationSwitcher({ admin = false }: { admin?: boolean }) {
             </span>
           </Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogTitle>
-            {create ? 'Create organization' : 'Organization'}
+            {view === 'create'
+              ? 'Create organization'
+              : view === 'edit'
+                ? 'Edit organization'
+                : view === 'invite'
+                  ? 'Invite by email'
+                  : 'Organization'}
           </DialogTitle>
           <DialogDescription>
-            Organizations have separate accounts, servers, projects, and saved
-            connections. Sign in separately after switching.
+            Use one account across your organizations. Projects, servers,
+            credentials, and permissions stay scoped to the selected
+            organization.
           </DialogDescription>
           <div className="mt-4 flex flex-col gap-4">
-            {create ? (
-              <Form onSubmit={(event) => void submit(event)}>
+            {view === 'create' || view === 'edit' ? (
+              <OrganizationFields
+                key={view}
+                organization={view === 'edit' ? data : undefined}
+                busy={busy}
+                onSubmit={save}
+              />
+            ) : view === 'invite' ? (
+              <Form onSubmit={(event) => void invite(event)}>
                 <Field>
-                  <FieldLabel htmlFor={id + '-name'}>
-                    Organization name
-                  </FieldLabel>
+                  <FieldLabel htmlFor={id + '-email'}>Email address</FieldLabel>
                   <Input
-                    id={id + '-name'}
-                    name="name"
+                    id={id + '-email'}
+                    type="email"
+                    name="email"
                     required
-                    maxLength={100}
+                    maxLength={254}
+                    autoComplete="email"
                     disabled={busy}
                   />
                 </Field>
-                <Field>
-                  <FieldLabel htmlFor={id + '-slug'}>
-                    Organization slug
-                  </FieldLabel>
-                  <Input
-                    id={id + '-slug'}
-                    name="slug"
-                    required
-                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                    maxLength={63}
+                <Label className="flex items-center gap-2">
+                  <Checkbox
+                    checked={inviteAdmin}
+                    onCheckedChange={(value) => setInviteAdmin(value === true)}
                     disabled={busy}
                   />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={id + '-username'}>
-                    Administrator username
-                  </FieldLabel>
-                  <Input
-                    id={id + '-username'}
-                    name="username"
-                    required
-                    autoComplete="off"
-                    pattern="[a-zA-Z0-9_.@\-]+"
-                    maxLength={100}
-                    disabled={busy}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor={id + '-password'}>
-                    Administrator password
-                  </FieldLabel>
-                  <Input
-                    id={id + '-password'}
-                    name="password"
-                    type="password"
-                    required
-                    minLength={12}
-                    maxLength={256}
-                    autoComplete="new-password"
-                    disabled={busy}
-                  />
-                </Field>
+                  Organization administrator
+                </Label>
                 <p className="text-sm text-muted-foreground">
-                  Use at least 12 characters. Save these credentials to sign in
-                  to the new organization.
+                  The recipient can accept using their existing account or
+                  create an account. An organization invitation does not grant
+                  project access.
                 </p>
-                <ErrorMessage message={error} />
                 <Button disabled={busy} type="submit">
-                  {busy ? 'Creating…' : 'Create organization'}
+                  {busy ? 'Inviting…' : 'Create invitation'}
                 </Button>
-                <Button
-                  disabled={busy}
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setCreate(false)}
-                >
-                  Back
-                </Button>
+                {invitationUrl && (
+                  <Field>
+                    <FieldLabel htmlFor={id + '-invitation'}>
+                      Invitation link
+                    </FieldLabel>
+                    <Input
+                      id={id + '-invitation'}
+                      value={invitationUrl}
+                      readOnly
+                      onFocus={(event) => event.currentTarget.select()}
+                    />
+                  </Field>
+                )}
               </Form>
             ) : (
               <>
-                <p className="text-sm text-muted-foreground">
-                  Current organization: {data?.name ?? currentOrganization()} (
-                  {currentOrganization()})
-                </p>
                 <OrganizationSelector />
+                {data?.description && (
+                  <p className="text-sm text-muted-foreground">
+                    {data.description}
+                  </p>
+                )}
+                {data?.website && (
+                  <a
+                    href={data.website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm underline"
+                  >
+                    {data.website}
+                  </a>
+                )}
                 {data?.api_url && (
                   <Field>
                     <FieldLabel htmlFor={id + '-api'}>
@@ -219,15 +363,48 @@ export function OrganizationSwitcher({ admin = false }: { admin?: boolean }) {
                   </Field>
                 )}
                 {admin && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setCreate(true)}
-                  >
-                    Create organization
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setView('edit')}
+                    >
+                      Edit organization
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setView('invite')}
+                    >
+                      Invite by email
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setView('create')}
+                    >
+                      Create organization
+                    </Button>
+                  </div>
                 )}
               </>
+            )}
+            <ErrorMessage message={error} />
+            {message && <p role="status">{message}</p>}
+            {view !== 'overview' && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setView('overview')
+                  setError('')
+                  setMessage('')
+                  setInvitationUrl('')
+                }}
+              >
+                Back
+              </Button>
             )}
           </div>
         </DialogContent>

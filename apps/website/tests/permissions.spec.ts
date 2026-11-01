@@ -175,7 +175,7 @@ test('project administrator configures matching, mixed grants, invitations and m
   ).toBe(404)
 })
 
-test('server administrator delegates capability and delegated navigation stays scoped', async ({
+test('organization administrator delegates capability and delegated navigation stays scoped', async ({
   page,
   context,
 }) => {
@@ -214,10 +214,10 @@ test('server administrator delegates capability and delegated navigation stays s
   expect((await page.request.get('/api/admin/projects')).status()).toBe(403)
   await page.getByRole('link', { name: 'Users', exact: true }).click()
   await expect(
-    page.getByLabel('Server Administrator', { exact: true }),
+    page.getByLabel('Organization Administrator', { exact: true }),
   ).toHaveCount(0)
   const server = page
     .locator('.user-row')
     .filter({ has: page.getByText(`server-${suffix}`, { exact: true }) })
-  await expect(server.getByText('Server Administrator required')).toBeVisible()
+  await expect(server.getByText('Organization Administrator required')).toBeVisible()
 })

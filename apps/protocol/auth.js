@@ -5,6 +5,7 @@ export const credentialsSchema = z.object({
   password: z.string().min(1).max(256),
 })
 export const setupSchema = z.object({
+  email: z.email().max(254).optional(),
   username: z.string().regex(/^[a-zA-Z0-9_.@-]{1,100}$/),
   password: z.string().min(12).max(256),
 })

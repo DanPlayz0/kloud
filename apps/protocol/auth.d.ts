@@ -23,7 +23,11 @@ export const credentialsSchema: z.ZodType<{
   username: string
   password: string
 }>
-export const setupSchema: typeof credentialsSchema
+export const setupSchema: z.ZodType<{
+  username: string
+  password: string
+  email?: string
+}>
 export const enrollmentSchema: z.ZodType<{ token: string; password: string }>
 export const factorRequestSchema: z.ZodObject<{
   method: z.ZodEnum<{ email: 'email'; totp: 'totp'; passkey: 'passkey' }>

@@ -41,6 +41,8 @@ function AccountSecurity() {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('')
+  const [savedEmail, setSavedEmail] = useState(user.email ?? '')
+  const [profileEmail, setProfileEmail] = useState(user.email ?? '')
   const [email, setEmail] = useState(initial.email ?? ''),
     [name, setName] = useState(''),
     [code, setCode] = useState('')
@@ -147,6 +149,68 @@ function AccountSecurity() {
           </p>
         </div>
         <ErrorMessage message={error} />
+        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+          <CardHeader>
+            <CardTitle asChild>
+              <h2 className="text-lg font-semibold">Shared account</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4 text-muted-foreground">
+              Your account and security settings follow you across
+              organizations. Use this email address for organization
+              invitations.
+            </p>
+            <Form
+              className="flex flex-col gap-3"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const form = event.currentTarget
+                const password = new FormData(form).get('password')
+                void run(async () => {
+                  await api('/auth/profile', 'PATCH', {
+                    email: profileEmail,
+                    password,
+                  })
+                  setSavedEmail(profileEmail)
+                  form.reset()
+                  setNotice(
+                    'Account email updated. Your organization memberships are unchanged.',
+                  )
+                })
+              }}
+            >
+              <Field>
+                <FieldLabel>Account email address</FieldLabel>
+                <Input
+                  type="email"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  value={profileEmail}
+                  onChange={(event) => setProfileEmail(event.target.value)}
+                  disabled={busy}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Current password for account email</FieldLabel>
+                <Input
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  maxLength={256}
+                  disabled={busy}
+                />
+              </Field>
+              <Button
+                disabled={busy || !profileEmail || profileEmail === savedEmail}
+              >
+                Save account email
+              </Button>
+            </Form>
+          </CardContent>
+        </Card>
         {notice && <p role="status">{notice}</p>}
         {codes && (
           <Card className="flex flex-col gap-3 border-border bg-card p-5">

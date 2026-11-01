@@ -1,4 +1,9 @@
-import { organizationBrowserQuery } from './organization-context.js'
+import { accountsEnabled } from './global-accounts.js'
+import { inviteAccount, accountTable } from './account-invitations.js'
+import {
+  organizationBrowserQuery,
+  currentOrganization,
+} from './organization-context.js'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { randomUUID } from 'node:crypto'
@@ -45,7 +50,9 @@ export const projectInviteBody = memberBody.extend({
   username: z
     .string()
     .regex(/^[a-zA-Z0-9_.@-]{1,100}$/)
-    .transform((s) => s.toLowerCase()),
+    .transform((s) => s.toLowerCase())
+    .optional(),
+  email: z.email().max(254).optional(),
 })
 export const settingsBody = z
   .object({ grant_mode: z.enum(['id', 'name']) })
@@ -115,13 +122,13 @@ projectPermissions.get('/projects/:project/access', async (c) => {
   const settings = await demandProjectAdmin(c.get('user'), project)
   const members = (
     await pool.query(
-      `SELECT u.id,u.username,u.disabled,m.role,
+      `SELECT u.id,${accountsEnabled() ? 'g.username,g.account_email AS email' : 'u.username,u.email'},u.disabled,m.role,
     COALESCE((SELECT json_agg(json_build_object('capability',g.capability,'app',g.app) ORDER BY g.capability,g.app) FROM pm2_grants g WHERE g.user_id=u.id AND g.project_slug=m.project_slug),'[]') AS pm2_grants,
     COALESCE((SELECT json_agg(dg.rule) FROM dns_member_grants dg WHERE dg.user_id=u.id AND dg.project_slug=m.project_slug),'[]') AS dns_grants,
     COALESCE((SELECT json_agg(json_build_object('capability',sg.capability,'service',sg.service) ORDER BY sg.capability,sg.service) FROM service_grants sg WHERE sg.user_id=u.id AND sg.project_slug=m.project_slug),'[]') AS service_grants,
     COALESCE((SELECT json_agg(json_build_object('capability',g.capability,'kind',g.kind,'connector_id',g.connector_id,'target',g.target) ORDER BY g.capability,g.kind,g.target)
       FROM container_grants g WHERE g.user_id=u.id AND g.project_slug=m.project_slug),'[]') AS grants
-    FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.project_slug=$1 ORDER BY u.username`,
+    FROM memberships m JOIN users u ON u.id=m.user_id ${accountsEnabled() ? `JOIN ${accountTable('users')} g ON g.id=u.id` : ''} WHERE m.project_slug=$1 ORDER BY u.username`,
       [project],
     )
   ).rows
@@ -144,6 +151,47 @@ projectPermissions.put('/projects/:project/access/settings', async (c) => {
 projectPermissions.post('/projects/:project/access/members', async (c) => {
   const project = c.req.param('project'),
     body = projectInviteBody.parse(await c.req.json())
+  if (accountsEnabled()) {
+    if (!body.email)
+      throw new HTTPException(400, { message: 'Email is required' })
+    const invite = await permissionTransaction(
+      c.get('user'),
+      async (db, actor) => {
+        await demandProjectAdmin(actor, project, db)
+        return inviteAccount(
+          db,
+          actor,
+          currentOrganization()?.slug ?? 'default',
+          {
+            email: body.email!,
+            username: body.username,
+            project,
+            project_role: body.role,
+            project_grants: {
+              role: body.role,
+              pm2_grants: body.pm2_grants,
+              dns_grants: body.dns_grants,
+              grants: normalizeGrants(body.grants),
+              service_grants: normalizeServiceGrants(body.service_grants ?? []),
+            },
+          },
+        )
+      },
+    )
+    const { sendInvitation } = await import('./invitation-email.js')
+    const sent = await sendInvitation(invite.email, invite.invitationUrl)
+    return c.json(
+      {
+        ok: true,
+        enrollmentUrl: invite.invitationUrl,
+        email: invite.email,
+        sent,
+      },
+      201,
+    )
+  }
+  if (!body.username)
+    throw new HTTPException(400, { message: 'Username is required' })
   const result = await permissionTransaction(
     c.get('user'),
     async (db, actor) => {
@@ -171,7 +219,7 @@ projectPermissions.post('/projects/:project/access/members', async (c) => {
       }
       if (user.disabled)
         throw new HTTPException(409, {
-          message: 'Account unavailable; contact a Server Administrator',
+          message: 'Account unavailable; contact a Organization Administrator',
         })
       if (
         (
@@ -277,3 +325,16 @@ projectPermissions.delete('/admin/projects/:project', async (c) => {
   })
   return c.json({ ok: true })
 })
+
+export async function applyInvitedMemberGrants(
+  db: PoolClient,
+  actor: import('./auth.js').User,
+  user: string,
+  project: string,
+  body: z.infer<typeof memberBody>,
+) {
+  await saveGrants(db, user, project, body.grants)
+  await savePm2Grants(db, user, project, body.pm2_grants)
+  await saveServiceGrants(db, user, project, body.service_grants)
+  await saveDnsGrants(db, actor, user, project, body.dns_grants)
+}

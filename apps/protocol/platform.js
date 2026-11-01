@@ -229,10 +229,33 @@ export const platformConfigSchema = z
         message: 'Source host must match deployment host',
       })
   })
+export const containerSettingsSchema = z
+  .object({
+    cpus: z.number().min(0).max(1024),
+    memory_mib: z
+      .number()
+      .int()
+      .min(0)
+      .max(1048576)
+      .refine(
+        (value) => value === 0 || value >= 6,
+        'Memory must be unlimited or at least 6 MiB',
+      ),
+    restart_policy: z.enum(['no', 'always', 'unless-stopped', 'on-failure']),
+    retry_count: z.number().int().min(0).max(100),
+  })
+  .strict()
+  .refine(
+    (settings) =>
+      settings.restart_policy === 'on-failure' || settings.retry_count === 0,
+    'Retries apply only to the on-failure restart policy',
+  )
+
 export const runtimeRequestSchema = z
   .object({
     action: z.enum([
       'inspect',
+      'update',
       'logs',
       'start',
       'stop',
@@ -247,8 +270,17 @@ export const runtimeRequestSchema = z
     input: z.string().max(8192).optional(),
     rows: z.number().int().min(1).max(500).optional(),
     cols: z.number().int().min(1).max(500).optional(),
+    settings: containerSettingsSchema.optional(),
   })
   .strict()
+  .superRefine((request, ctx) => {
+    if ((request.action === 'update') !== (request.settings !== undefined))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['settings'],
+        message: 'Settings are required only for container updates',
+      })
+  })
 export const domainSchema = z
   .object({
     hostname: z

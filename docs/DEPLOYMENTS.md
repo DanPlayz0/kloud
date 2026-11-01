@@ -103,7 +103,7 @@ import. Retained Compose source directories support runtime bind mounts.
    written to the checkout or supplied to build containers. Host Git credential
    helpers are not inherited.
 
-Server Administrators,
+Organization Administrators,
 project administrators, and users with the relevant service deploy permission
 can configure deployments; service read access exposes history and build output.
 Treat service deploy grants as trusted host access. Container

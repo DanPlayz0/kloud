@@ -5,6 +5,9 @@ export interface Organization {
   slug: string
   name: string
   api_url?: string
+  description?: string | null
+  website?: string | null
+  admin?: boolean
 }
 const organizationSlug = /^[a-z0-9]+(-[a-z0-9]+)*$/
 export function validOrganizationSlug(value: string) {
@@ -58,11 +61,13 @@ export function switchOrganization(slug: string) {
   } catch {
     /* URL routing still works. */
   }
-  window.location.assign('/login?organization=' + encodeURIComponent(slug))
+  window.location.assign('/?organization=' + encodeURIComponent(slug))
 }
 export interface User {
+  organization_member?: boolean
   id: string
   username: string
+  email?: string | null
   admin: boolean
   capabilities?: ServerCapability[]
 }
@@ -114,6 +119,7 @@ export interface Grant {
   target: string | null
 }
 export interface ProjectMember {
+  email?: string | null
   pm2_grants?: import('@kloud/protocol/pm2').Pm2Grant[]
   dns_grants?: import('@kloud/protocol/dns').DnsGrant[]
   id: string
@@ -234,7 +240,16 @@ export async function api<T = unknown>(
 }
 export async function session() {
   try {
-    return await api<User>('/auth/me')
+    const user = await api<User>('/auth/me')
+    if (user.organization_member === false) {
+      const memberships = await api<Organization[]>('/organizations')
+      if (memberships[0])
+        throw redirect({
+          href: '/?organization=' + encodeURIComponent(memberships[0].slug),
+          reloadDocument: true,
+        })
+    }
+    return user
   } catch (error) {
     if (error instanceof ApiError && error.status === 401)
       throw redirect({ to: '/login', search: { next: location.pathname } })
@@ -254,7 +269,7 @@ export async function adminSession(section: string) {
     !adminCapabilities[section] ||
     !hasServer(user, adminCapabilities[section])
   )
-    throw new Error('Server permission required')
+    throw new Error('Organization permission required')
   return user
 }
 

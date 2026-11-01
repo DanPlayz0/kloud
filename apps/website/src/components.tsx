@@ -409,9 +409,9 @@ export function Shell({
                   <strong>{user.username}</strong>
                   <small>
                     {user.admin
-                      ? 'Server Administrator'
+                      ? 'Organization Administrator'
                       : user.capabilities?.length
-                        ? 'Server permissions'
+                        ? 'Organization permissions'
                         : projects.find((p) => p.slug === project)?.role ===
                             'admin'
                           ? 'Project Administrator'

@@ -759,7 +759,7 @@ gitConnections.get(`${path}/legacy/authorizations`, async (c) => {
   const service = z.string().min(1).max(100).parse(c.req.query('service'))
   if (!c.get('user').admin)
     throw new HTTPException(403, {
-      message: 'Server administrator permission required.',
+      message: 'Organization administrator permission required.',
     })
   await projectAccess(c.get('user'), c.req.param('project'))
   return c.json(

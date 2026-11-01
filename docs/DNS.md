@@ -25,9 +25,9 @@ Tokens are encrypted with AES-256-GCM and are never returned by any API.
 ## Delegation and member access
 
 The `dns.manage` server capability manages shared providers and project
-delegations. Server Administrators have this capability automatically. Private
+delegations. Organization Administrators have this capability automatically. Private
 connections are managed by project administrators (including existing
-`projects.manage` authority); only Server Administrators have all authority
+`projects.manage` authority); only Organization Administrators have all authority
 automatically. Private connections cannot be shared to other projects.
 
 Each project delegation selects a zone, allowed types/actions, and one scope:

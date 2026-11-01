@@ -30,12 +30,12 @@ test.afterAll(async () => {
   await db.query('DELETE FROM projects WHERE slug=$1', [project])
   await db.query('DELETE FROM users WHERE id=$1 OR username=$2', [
     id,
-    `member-${id.slice(0, 8)}`,
+    `member-${id.slice(0, 8)}@example.test`,
   ])
   await db.end()
 })
 for (const creatorOnly of [false, true]) {
-  test(`sidebar creates a project as ${creatorOnly ? 'a project creator' : 'a server administrator'} and opens its Services page`, async ({
+  test(`sidebar creates a project as ${creatorOnly ? 'a project creator' : 'a organization administrator'} and opens its Services page`, async ({
     page,
     context,
   }) => {
@@ -302,8 +302,8 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
     await page.getByRole('link', { name: 'Users', exact: true }).click()
     await page.getByRole('button', { name: 'Invite user', exact: true }).click()
     await page
-      .getByLabel('Username', { exact: true })
-      .fill(`member-${id.slice(0, 8)}`)
+      .getByLabel('Email address', { exact: true })
+      .fill(`member-${id.slice(0, 8)}@example.test`)
     await page
       .getByRole('dialog')
       .getByRole('button', { name: 'Invite user' })
@@ -311,7 +311,7 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
     await expect(page.getByRole('status')).toContainText('/enroll#')
     await page
       .getByRole('button', {
-        name: `Edit member-${id.slice(0, 8)}`,
+        name: `Edit member-${id.slice(0, 8)}@example.test`,
         exact: true,
       })
       .click()

@@ -15,9 +15,11 @@ limited to 64 KiB, apart from the separately bounded WebSocket protocol.
 
 ## Organization scope
 
-Existing paths select the default organization. For another organization, prefix any path with `/organizations/<slug>` (after `/api` in browser URLs), or send `X-Kloud-Organization: <slug>`. A conflicting prefix/header is rejected. This applies to authentication, worker endpoints, SSE logs, WebSockets, provider callbacks, and the protected OpenAPI document. Accounts, sessions, permissions, resources and saved connections are isolated per organization. See [organization setup](ORGANIZATIONS.md).
+Existing paths select the default organization. For another organization, prefix any path with `/organizations/<slug>` (after `/api` in browser URLs), or send `X-Kloud-Organization: <slug>`. A conflicting prefix/header is rejected. This applies to authentication, worker endpoints, SSE logs, WebSockets, provider callbacks, and the protected OpenAPI document. Accounts, credentials, authentication factors, and sessions are shared across organizations; organization roles, permissions, resources, and saved infrastructure connections remain isolated. See [organization setup](ORGANIZATIONS.md).
 
-`GET /organizations/current` returns `{ slug, name, api_url }`. `GET /organizations/lookup/<slug>` resolves a known slug without returning resources. An authenticated organization administrator can `POST /organizations` with `{ slug, name, username, password }` to atomically create an organization and its initial administrator. Sign in separately in the new organization.
+`GET /organizations` lists the current account’s available organizations. `GET /organizations/current` returns `{ slug, name, description, website, api_url }`; an Organization Administrator can `PATCH` its name, description, or website, including the default organization. `POST /organizations` accepts `{ name, slug?, description?, website? }`, generates a unique slug when omitted, and adds the current account as administrator. Switching organizations retains the account session. Slugs remain stable.
+
+`POST /organizations/invitations` accepts `{ email, admin? }` and returns `{ email, invitationUrl, sent }`. `GET /auth/invitation?token=...` returns recipient and organization metadata. Existing accounts accept using authenticated `POST /auth/invitations/accept { token }`; new recipients use `/auth/enroll`. Every acceptance requires the unexpired one-time secret and links the stable user ID. `PATCH /auth/profile { email, password }` updates the global account contact email after password confirmation; verified MFA delivery settings remain separate. Invitation links are bearer credentials; share fallback links only with the intended recipient.
 
 Connector management adds `PUT /connectors/:connector/updates` with `{ enabled: boolean }` and `POST /connectors/:connector/updates/check` with `{}`. Both require connector management authority; enabling/checking requires a trusted updater already configured on the host. Connector metadata includes `agent_status` (running version, revision, start time, updater status) and `auto_update` policy. See [connector updates](CONNECTOR_UPDATES.md).
 
@@ -26,7 +28,7 @@ Connector management adds `PUT /connectors/:connector/updates` with `{ enabled: 
 | Method/path                          | Input                                                | Result                                                                                                                                                                        |
 | ------------------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /auth/setup`                    | None                                                 | `{ required: boolean }`                                                                                                                                                       |
-| `POST /auth/setup`                   | `{ username, password }`                             | Creates the first administrator atomically; password 12–256 characters                                                                                                        |
+| `POST /auth/setup`                   | `{ username, email, password }`                      | Creates the first administrator atomically; password 12–256 characters                                                                                                        |
 | `POST /auth/enroll`                  | `{ token, password }`                                | Consumes an invitation and sets a password; sign in afterward                                                                                                                 |
 | `POST /auth/password`                | `{ username, password }`                             | `{ status: 'authenticated' }` and session, or `{ status: 'second_factor_required', methods, emailAvailable, totpAvailable, passkeyAvailable }` and five-minute pending cookie |
 | `POST /auth/factor/challenge`        | `{ method: 'email'                                   | 'totp'                                                                                                                                                                        | 'passkey' }`        | Sends email or returns `{ options }` for a passkey assertion        |
@@ -39,7 +41,7 @@ Connector management adds `PUT /connectors/:connector/updates` with `{ enabled: 
 | `POST /auth/security/remove`         | Session + grant, `{ method: 'email'                  | 'totp'                                                                                                                                                                        | 'passkey'           | 'all', credentialId? }`                                             | Removes factor(s) and rotates session |
 | `POST /auth/security/recovery-codes` | Session + grant                                      | Replaces recovery codes, returns ten plaintext codes once, rotates session                                                                                                    |
 | `POST /auth/logout`                  | None                                                 | Deletes session and clears authentication cookies                                                                                                                             |
-| `GET /auth/me`                       | Session                                              | `{ id, username, admin, capabilities }`                                                                                                                                       |
+| `GET /auth/me`                       | Session                                              | `{ id, username, email, admin, capabilities, organization_member? }`                                                                                                                                       |
 
 The former mandatory-passkey setup/enrollment endpoints are removed. Deploy API and
 website together. Users without enabled factors receive an eight-hour session after
@@ -78,15 +80,15 @@ unavailable metrics are `null`. The website hides all stale metrics.
 
 ## Administration
 
-Server Administrators (`admin: true`, formerly super-admin) can use every route.
-Other accounts need the matching server capability: `projects.create` for creating
-projects, `projects.manage` for server-wide project administration, `users.manage` for account administration, `connectors.manage` for
+Organization Administrators (`admin: true`, formerly super-admin) can use every route.
+Other accounts need the matching organization capability: `projects.create` for creating
+projects, `projects.manage` for organization-wide project administration, `users.manage` for account administration, `connectors.manage` for
 connector administration, and `inventory.manage` for inventory and assignments.
-Git connections use `git.create` for creation and `git.manage` for server-wide connection administration. These permissions are independent; non-administrators are denied creation unless explicitly granted it. Existing authorized connections remain usable with service deployment permission. Preparing connections before a service exists requires both Git permissions.
+Git connections use `git.create` for creation and `git.manage` for organization-wide connection administration. These permissions are independent; non-administrators are denied creation unless explicitly granted it. Existing authorized connections remain usable with service deployment permission. Preparing connections before a service exists requires both Git permissions.
 Project managers also have full access to all projects' members and containers.
 Creation and management are independent permissions. A creator without global
 project management receives Project Administrator membership in the new project,
-without access to other projects. The other server capabilities do not grant project access.
+without access to other projects. The other organization capabilities do not grant project access.
 Migration 4 grants `projects.create` to existing `projects.manage` accounts to
 preserve their creation access; subsequent grants are independent.
 
@@ -95,9 +97,9 @@ preserve their creation access; subsequent grants are independent.
 | `GET /admin/projects`                           | Lists all projects                                                                           |
 | `POST /admin/projects`                          | `{ slug, name }`                                                                             |
 | `GET /admin/users`                              | Users with disabled/enrolled status and project slugs                                        |
-| `POST /admin/users`                             | `{ username, admin?: boolean, capabilities?: string[] }`; returns `{ enrollmentUrl }`        |
+| `POST /admin/users`                             | `{ email, username?: string, admin?: boolean, capabilities?: string[] }`; returns `{ enrollmentUrl }`        |
 | `PUT /admin/users/{id}`                         | `{ disabled, projects?: string[], admin?: boolean, capabilities?: string[] }`                |
-| `POST /admin/users/{id}/enrollment`             | Resets credentials and returns `{ enrollmentUrl }`; self-reset uses CLI                      |
+| `POST /admin/users/{id}/enrollment`             | Legacy only; shared credentials cannot be reset by an organization administrator                      |
 | `GET /admin/connectors`                         | Non-revoked connectors: names, host, discovery status and last-seen time; never tokens       |
 | `POST /admin/connectors`                        | `{ name }`; returns `{ id, token }` once                                                     |
 | `PUT /admin/connectors/{id}`                    | `{ discovery, revoked }`; revocation is permanent                                            |
@@ -115,7 +117,7 @@ return 201. Container assignment requires discovery enabled and cannot override 
 valid label assignment. Project and application slugs match
 `^[a-z0-9]+(?:-[a-z0-9]+)*$` and are at most 100 characters.
 
-Only Server Administrators may assign server capabilities or change Server
+Only Organization Administrators may assign server capabilities or change Organization
 Administrator status. Delegated user managers cannot modify or reset privileged
 accounts. Optional `projects` replaces the user's membership list and additionally
 requires `projects.manage`; retained memberships keep their roles and grants, and
@@ -143,14 +145,17 @@ The following routes require Project Administrator or `projects.manage`:
 Invitations create ordinary accounts or add an existing account to the project.
 Only newly created accounts receive an enrollment link (valid for 24 hours).
 Existing credentials and memberships elsewhere are untouched; disabled accounts
-must be handled by a Server Administrator. Existing memberships return 409.
+must be handled by a Organization Administrator. Existing memberships return 409.
 
 A grant has `{ capability, kind, connector_id, target }`:
 
 - `capability`: `view`, `logs`, `lifecycle`, `terminal`, or `configuration`.
-  **Only View is implemented.** The other four are stored permissions for planned
-  features and do not enable Docker operations today. Each operational grant
-  automatically includes View for its same target.
+  All five capabilities are implemented. View permits inventory visibility;
+  Logs permits bounded live log streaming; Lifecycle permits start, stop and
+  restart; Terminal permits an interactive shell; Configuration permits runtime
+  inspection and live CPU/memory limit and restart-policy updates. Each
+  operational grant automatically includes View for its same target. Connector
+  runtime operations must be enabled on the host.
 - `kind: "all"`: `connector_id` and `target` are null; covers current and future
   containers assigned to the project.
 - `kind: "id"`: connector UUID plus a 64-character container ID. Recreation needs
@@ -161,7 +166,7 @@ A grant has `{ capability, kind, connector_id, target }`:
 Grants are additive, without deny rules. They are bound to the membership and
 effective project assignment. Snapshot replacement does not delete them, and they
 never grant access while the container belongs to another project. Project and
-Server Administrators implicitly have all container capabilities.
+Organization Administrators implicitly have all container capabilities.
 
 `grant_mode` defaults to `id` and only controls the editor's default for new grants.
 ID and name grants can coexist; changing this setting preserves all grants.
@@ -169,7 +174,7 @@ Migration 3 gives existing memberships a project-wide View grant, preserving
 visibility to current and future containers. New members start without grants.
 
 Permission changes are serialized and authority is rechecked after locking.
-Removing, demoting, or disabling the last active Server Administrator or the last
+Removing, demoting, or disabling the last active Organization Administrator or the last
 active Project Administrator returns 409. Project deletion through server project
 management is allowed. Permission changes apply to existing sessions immediately
 on their next request.
@@ -310,3 +315,23 @@ and typed `content`/`data` fields; structured URI priority lives in `data` in th
 dashboard contract. Complete schemas are in authenticated `/openapi.json`.
 Hidden resources return 404; forbidden actions on visible records return 403.
 Provider errors are sanitized. After an uncertain write, refresh before retrying.
+
+## Container operations
+
+Project operations use `/projects/{project}/containers/{connector}/{container}`.
+`GET /permissions` reports effective `logs`, `lifecycle`, `terminal`, and
+`configuration` availability. `GET /logs` streams bounded logs as SSE; permission,
+account, inventory and connector state are rechecked before and after every host
+response. `POST /operation` accepts the matching action: `logs`, `start`, `stop`,
+`restart`, `inspect`, `update`, or `terminal-open/read/write/resize/close`.
+Terminal sessions belong to the exact user and container. Newly opened sessions
+are closed if authorization is lost while the host responds.
+
+`update` requires Configuration permission and
+`settings: { cpus, memory_mib, restart_policy, retry_count }`. CPU and memory limits
+use zero for unlimited; nonzero memory must be at least 6 MiB. Restart policy is
+`no`, `always`, `unless-stopped`, or `on-failure`; retry count applies only to
+`on-failure`. These live settings do not recreate the container or expose its
+environment, Docker socket, or arbitrary host configuration. They may be replaced
+by saved deployment configuration on the next deployment. Docker can reject
+limits incompatible with the host or the existing memory/swap configuration.

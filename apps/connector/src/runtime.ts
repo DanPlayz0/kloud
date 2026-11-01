@@ -29,6 +29,7 @@ export function runtimeOperations(config: ConnectorConfig) {
   cleanup.unref()
   return {
     close() {
+      clearInterval(cleanup)
       for (const session of sessions.values()) session.terminal.close()
       sessions.clear()
     },
@@ -39,6 +40,7 @@ export function runtimeOperations(config: ConnectorConfig) {
         input: raw.input,
         rows: raw.rows,
         cols: raw.cols,
+        settings: raw.settings,
       })
       if (
         !/^[a-f0-9]{64}$/.test(raw.container) ||
@@ -62,7 +64,43 @@ export function runtimeOperations(config: ConnectorConfig) {
           ports: container.NetworkSettings.Ports,
           mounts: container.Mounts,
           networks: Object.keys(container.NetworkSettings.Networks ?? {}),
+          settings: {
+            cpus: container.HostConfig?.NanoCpus
+              ? container.HostConfig.NanoCpus / 1e9
+              : container.HostConfig?.CpuQuota > 0
+                ? container.HostConfig.CpuQuota /
+                  (container.HostConfig.CpuPeriod || 100000)
+                : 0,
+            memory_mib: Math.ceil(
+              (container.HostConfig?.Memory ?? 0) / 1048576,
+            ),
+            restart_policy: container.HostConfig?.RestartPolicy?.Name || 'no',
+            retry_count:
+              container.HostConfig?.RestartPolicy?.MaximumRetryCount ?? 0,
+          },
         }
+      if (request.action === 'update') {
+        const settings = request.settings!
+        const result = await engine(
+          config.dockerSocket,
+          'POST',
+          `/containers/${raw.container}/update`,
+          {
+            NanoCpus: Math.round(settings.cpus * 1e9),
+            CpuPeriod: 0,
+            CpuQuota: 0,
+            Memory: settings.memory_mib * 1048576,
+            RestartPolicy: {
+              Name: settings.restart_policy,
+              MaximumRetryCount: settings.retry_count,
+            },
+          },
+        )
+        return {
+          ok: true,
+          warnings: Array.isArray(result?.Warnings) ? result.Warnings : [],
+        }
+      }
       if (request.action === 'logs') {
         let text = ''
         await runCommand(

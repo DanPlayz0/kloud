@@ -1,4 +1,9 @@
-import { organizationBrowserQuery } from './organization-context.js'
+import { accountsEnabled, withAccounts } from './global-accounts.js'
+import { accountTable, inviteAccount } from './account-invitations.js'
+import {
+  organizationBrowserQuery,
+  currentOrganization,
+} from './organization-context.js'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { randomUUID } from 'node:crypto'
@@ -150,7 +155,7 @@ dashboard.get('/admin/users', async (c) =>
   c.json(
     (
       await pool.query(
-        `SELECT u.id,u.username,u.admin,u.capabilities,u.disabled, (u.password_hash IS NOT NULL) AS enrolled, COALESCE((SELECT json_agg(project_slug ORDER BY project_slug) FROM memberships WHERE user_id=u.id),'[]') AS projects FROM users u ORDER BY username`,
+        `SELECT u.id,${accountsEnabled() ? 'g.username,g.account_email AS email' : 'u.username,u.email'},u.admin,u.capabilities,u.disabled, (${accountsEnabled() ? 'g' : 'u'}.password_hash IS NOT NULL) AS enrolled, COALESCE((SELECT json_agg(project_slug ORDER BY project_slug) FROM memberships WHERE user_id=u.id),'[]') AS projects FROM users u ${accountsEnabled() ? `JOIN ${accountTable('users')} g ON g.id=u.id` : ''} ORDER BY username`,
       )
     ).rows,
   ),
@@ -158,18 +163,46 @@ dashboard.get('/admin/users', async (c) =>
 dashboard.post('/admin/users', async (c) => {
   const body = z
     .object({
-      username,
+      username: username.optional(),
+      email: z.email().max(254).optional(),
       admin: z.boolean().default(false),
       capabilities: capabilitySchema.default([]),
     })
     .strict()
     .parse(await c.req.json())
+  if (accountsEnabled()) {
+    if (!body.email)
+      throw new HTTPException(400, { message: 'Email is required' })
+    const result = await permissionTransaction(
+      c.get('user'),
+      async (db, actor) => {
+        demandServer(actor, 'users.manage')
+        if (!actor.admin && (body.admin || body.capabilities.length))
+          throw new HTTPException(403)
+        return inviteAccount(
+          db,
+          actor,
+          currentOrganization()?.slug ?? 'default',
+          { ...body, email: body.email! },
+        )
+      },
+    )
+    const { sendInvitation } = await import('./invitation-email.js')
+    const sent = await sendInvitation(result.email, result.invitationUrl)
+    return c.json(
+      { enrollmentUrl: result.invitationUrl, email: result.email, sent },
+      201,
+    )
+  }
+  if (!body.username)
+    throw new HTTPException(400, { message: 'Username is required' })
   const invitation = token()
   await permissionTransaction(c.get('user'), async (db, actor) => {
     demandServer(actor, 'users.manage')
     if (!actor.admin && (body.admin || body.capabilities.length))
       throw new HTTPException(403, {
-        message: 'Only Server Administrators can grant server permissions',
+        message:
+          'Only Organization Administrators can grant organization permissions',
       })
     const id = randomUUID()
     await db.query(
@@ -205,11 +238,16 @@ dashboard.put('/admin/users/:id', async (c) => {
     demandServer(actor, 'users.manage')
     const target = (
       await db.query(
-        'SELECT admin,capabilities FROM users WHERE id=$1 FOR UPDATE',
+        `SELECT admin,capabilities${accountsEnabled() ? ',invitation_pending' : ''} FROM users WHERE id=$1 FOR UPDATE`,
         [id],
       )
     ).rows[0]
     if (!target) throw new HTTPException(404, { message: 'User not found' })
+    if (accountsEnabled() && target.invitation_pending && !body.disabled)
+      throw new HTTPException(409, {
+        message:
+          'Invitation must be accepted before enabling organization membership',
+      })
     if (
       !actor.admin &&
       (target.admin ||
@@ -219,7 +257,7 @@ dashboard.put('/admin/users/:id', async (c) => {
     )
       throw new HTTPException(403, {
         message:
-          'Only Server Administrators can modify server privileges or privileged accounts',
+          'Only Organization Administrators can modify organization privileges or privileged accounts',
       })
     if (body.projects !== undefined) demandServer(actor, 'projects.manage')
     const before = await administratorState(db)
@@ -245,6 +283,11 @@ dashboard.put('/admin/users/:id', async (c) => {
     }
     await protectAdministrators(db, before)
     if (body.disabled) {
+      if (accountsEnabled())
+        await db.query(
+          `DELETE FROM ${accountTable('organization_invitations')} WHERE user_id=$1 AND organization=$2 AND accepted IS NULL`,
+          [id, currentOrganization()?.slug ?? 'default'],
+        )
       await db.query(
         'UPDATE users SET security_version=security_version+1 WHERE id=$1',
         [id],
@@ -265,6 +308,11 @@ dashboard.post('/admin/users/:id/enrollment', async (c) => {
       { error: 'Use the recovery CLI to reset your own enrollment' },
       400,
     )
+  if (accountsEnabled())
+    throw new HTTPException(409, {
+      message:
+        'Shared account recovery must be performed by the account owner or the recovery CLI; invite by email instead',
+    })
   await permissionTransaction(c.get('user'), async (db, actor) => {
     demandServer(actor, 'users.manage')
     const user = (

@@ -57,7 +57,8 @@ export function Users({
     data?.filter((user) =>
       [
         user.username,
-        user.admin ? 'Server Administrator' : 'Member',
+        user.email ?? '',
+        user.admin ? 'Organization Administrator' : 'Member',
         user.disabled ? 'Disabled' : user.enrolled ? 'Active' : 'Invited',
         ...user.projects,
         ...(user.capabilities ?? []),
@@ -66,7 +67,7 @@ export function Users({
   return (
     <div className="min-w-0 flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        Manage who can access your server and projects.
+        Manage who can access this organization and its projects.
       </p>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div className="relative w-80 max-w-full">
@@ -115,6 +116,11 @@ export function Users({
                     </span>
                     <div>
                       <p className="break-all font-medium">{user.username}</p>
+                      {user.email && (
+                        <p className="break-all text-xs text-muted-foreground">
+                          {user.email}
+                        </p>
+                      )}
                       {user.id === current.id && (
                         <p className="text-xs text-muted-foreground">You</p>
                       )}
@@ -123,7 +129,7 @@ export function Users({
                 </TableCell>
                 <TableCell className="p-4 text-muted-foreground">
                   {user.admin
-                    ? 'Server Administrator'
+                    ? 'Organization Administrator'
                     : user.capabilities?.length
                       ? `${user.capabilities.length} permission${user.capabilities.length === 1 ? '' : 's'}`
                       : 'Member'}
@@ -145,7 +151,7 @@ export function Users({
                 <TableCell className="p-4">
                   {isProtected(user, current) ? (
                     <span className="cursor-not-allowed text-xs text-muted-foreground">
-                      Server Administrator required
+                      Organization Administrator required
                     </span>
                   ) : (
                     <div className="flex justify-end gap-2">
@@ -155,15 +161,15 @@ export function Users({
                         projects={projects}
                         action={action}
                       />
-                      {current.id !== user.id && (
-                        <QuickTip content="Reset enrollment">
+                      {current.id !== user.id && !user.enrolled && (
+                        <QuickTip content="Regenerate invitation">
                           <Button
                             type="button"
-                            aria-label={`Reset enrollment for ${user.username}`}
+                            aria-label={`Regenerate invitation for ${user.username}`}
                             onClick={() => {
                               if (
                                 confirm(
-                                  `Reset ${user.username}'s password and all second factors? Existing sessions will end.`,
+                                  `Replace ${user.username}'s pending invitation? The previous link will stop working.`,
                                 )
                               )
                                 void action(
@@ -256,7 +262,7 @@ function UserDialog(props: EditorProps) {
         <DialogDescription className="mt-2 text-sm text-muted-foreground">
           {props.user
             ? "Manage this user's permissions, project access, and account status."
-            : 'Create an invitation and choose the permissions this user needs.'}
+            : 'Invite an email address to this organization. Existing accounts keep their password and security settings.'}
         </DialogDescription>
         <UserForm
           {...props}
@@ -317,7 +323,7 @@ function UserForm({
           ...(current.admin ? { admin, capabilities } : {}),
         }
       : {
-          username: new FormData(event.currentTarget).get('username'),
+          email: new FormData(event.currentTarget).get('email'),
           ...(current.admin ? { admin, capabilities } : {}),
         }
     void action(
@@ -337,15 +343,25 @@ function UserForm({
       <FieldSet disabled={busy} className="min-w-0 flex flex-col gap-5">
         {!user && (
           <Field>
-            <FieldLabel>Username</FieldLabel>
+            <FieldLabel>Email address</FieldLabel>
             <Input
-              name="username"
+              name="email"
+              type="email"
               required
-              maxLength={100}
-              pattern="[a-zA-Z0-9_.@\-]+"
-              autoComplete="off"
-              placeholder="Enter a username"
+              maxLength={254}
+              autoComplete="email"
+              placeholder="person@example.com"
             />
+          </Field>
+        )}
+        {user && (
+          <Field>
+            <FieldLabel>Account email</FieldLabel>
+            <Input value={user.email ?? 'Not set'} readOnly />
+            <p className="text-xs text-muted-foreground">
+              The account owner manages their email and password in account
+              security. Organization access changes apply only here.
+            </p>
           </Field>
         )}
         {current.admin && (
@@ -367,7 +383,7 @@ function UserForm({
             {allProjects && (
               <p className="text-sm text-muted-foreground">
                 {admin
-                  ? 'Server Administrators'
+                  ? 'Organization Administrators'
                   : 'Users with Manage all projects and project access'}{' '}
                 can access every project. Saved memberships are retained.
               </p>

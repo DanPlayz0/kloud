@@ -1,12 +1,26 @@
 # Organizations
 
-Organizations isolate accounts, sessions, connectors/servers, discovery inventory, projects, app permissions, saved Git and registry connections, DNS providers, deployments, databases, recovery schedules, and forwarding settings. An organization administrator manages only that organization's resources. Server capabilities apply within the current organization.
+Use one account to access multiple organizations. An account has a stable user ID, username, email address, password, and authentication factors. Each organization assigns its own administrator role, permissions, project memberships, and grants to that user ID. Switching organizations keeps the same signed-in account and applies the destination organization's permissions.
 
-Existing data remains in the **Default organization** (`default`). No existing projects, connector tokens, URLs, or login credentials need to change. Organizations use separate PostgreSQL schemas with tenant-only search paths; a missing table cannot fall back to the default organization's data. The API database role must be able to create schemas. Organization creation and initial account provisioning commit together.
+Organizations isolate connectors/servers, discovery inventory, projects, app permissions, saved Git and registry connections, DNS providers, deployments, databases, recovery schedules, and forwarding settings. Organization Administrators manage resources and access only within their organization. Saved connections can be shared across projects within an organization; they are not shared between organizations.
 
-Open **Organization settings** at the top of the sidebar to switch organizations or, as an administrator, create one. Choose its unique slug, display name, and initial administrator's username/password. Accounts are scoped to an organization: sign in separately after switching, and invite colleagues from that organization's access settings. The same username and project slug can exist independently in different organizations. Saved connections can be shared across projects within their organization; they cannot be shared across organizations.
+Existing infrastructure remains in the **Default organization** (`default`). Its name, description, and website can be edited like any other organization. Its slug remains stable so existing API URLs, connector configuration, callbacks, and webhook URLs keep working.
 
-The login page includes an organization selector. Invitations retain the organization in their URL. Browser requests carry the selected organization in their API URL and header. Sessions and authentication challenges use separate cookie names for each organization, so switching organizations does not grant access using another organization's session.
+## Create, edit, and switch
+
+Open **Organization settings** at the top of the sidebar. The organization list contains the organizations available to your account; choose one to switch immediately. You do not need to sign in again.
+
+Organization Administrators can choose **Create organization**. Enter its name; a slug is generated automatically, with a suffix if that generated slug is already taken. You may edit the suggested slug before creation. Your current account becomes the new organization's administrator; no duplicate credentials are created.
+
+Choose **Edit organization** to update its display name, description, or website, including for the default organization. Slugs are stable identifiers and cannot be changed through this form.
+
+## Invite by email
+
+From organization settings choose **Invite by email**, enter the recipient's email address, and choose whether they should become an Organization Administrator. When delivery is configured, Kloud sends the invitation; otherwise copy its one-time invitation link and share it with the intended recipient. Invitations expire and do not grant access until accepted.
+
+Existing account holders sign in and accept using their account; invitation acceptance adds organization membership by user ID. New recipients choose a password to activate the account reserved for their email address. Email matching is case insensitive. An email address is not used to silently merge existing accounts or transfer permissions. Organization membership alone does not grant project or container access; grant those separately through the organization's access settings.
+
+Accounts can set their contact email address in account security with their current password. This does not change a separately verified email used for MFA. Invitation links prove possession of the invitation; account contact emails are not separately attested. Authentication factors and account recovery belong to the shared account, while organization roles and project grants remain separate.
 
 ## Connecting servers
 
@@ -17,13 +31,15 @@ API_URL=https://dashboard.example.com/api/organizations/acme/
 CONNECTOR_TOKEN=the-token-created-in-acme
 ```
 
-Keep the trailing slash. HTTP workers and the connector WebSocket use this same base URL. Tokens authenticate only in that organization. Existing default-organization connectors may keep their current API URL. Create a new connector in the destination organization when moving a server; tokens and project assignments are not transferred between organizations.
+Keep the trailing slash. HTTP workers and the connector WebSocket use this base URL. Tokens authenticate only in that organization. Existing default-organization connectors may keep their current API URL. Create a new connector in the destination organization when moving a server; tokens and project assignments are not transferred between organizations.
 
-GitHub App manifest/installation callbacks and app deployment webhook URLs include `/api/organizations/<slug>/` for non-default organizations. Use the URLs generated by the current organization. Existing default URLs stay compatible. Separate organizations should create their own saved GitHub App installations/connections.
+GitHub App manifest/installation callbacks and app deployment webhook URLs include `/api/organizations/<slug>/` for non-default organizations. Use the URLs generated by the current organization. Default URLs stay compatible.
 
 ## Operations
 
-The normal API migration command upgrades the default schema and every registered organization. New organizations receive all current migrations before becoming available. Back up the database's organization registry and all organization schemas together. Existing migrations retain their original version history separately in each schema.
+Infrastructure data remains isolated in PostgreSQL schemas with tenant-only search paths. The normal API migration command upgrades every registered organization and the shared account structures. New organizations receive all current infrastructure migrations before becoming available. Back up the organization registry, shared account records, and all organization schemas together.
+
+Existing accounts are preserved by user ID during migration. Organizations with accounts that have the same username or email are not silently treated as the same identity; colliding usernames receive a stable ID suffix, and duplicate contact emails remain unset on the later identity while existing MFA delivery addresses are preserved. Set a unique contact email through account security before inviting that identity elsewhere.
 
 Recovery CLI commands accept an optional organization slug:
 
@@ -31,4 +47,6 @@ Recovery CLI commands accept an optional organization slug:
 pnpm --filter @kloud/api cli recover owner acme
 ```
 
-Omitting it selects the default organization. Account expiry cleanup runs separately in each organization. Organization deletion and cross-organization resource transfers are not exposed; remove or revoke resources through their organization's existing controls.
+The host recovery CLI resets the shared account across all organizations; organization administrators cannot reset another account’s global password or factors. Disabling a member applies only to that organization.
+
+Organization deletion and cross-organization infrastructure transfers are not exposed; remove or revoke resources through their organization's existing controls.

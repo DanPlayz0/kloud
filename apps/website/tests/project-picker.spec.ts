@@ -76,7 +76,7 @@ test('searches names and slugs, preserves order, navigates with keyboard and res
 })
 
 for (const [label, admin, capabilities, visible] of [
-  ['server administrator', true, [], true],
+  ['organization administrator', true, [], true],
   ['project creator', false, ['projects.create'], true],
   ['project manager', false, ['projects.manage'], false],
   ['project administrator', false, [], false],

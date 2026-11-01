@@ -26,6 +26,7 @@ import {
   DialogDescription,
 } from './components/ui/dialog'
 import { ContainerTerminal } from './components/container-terminal'
+import { ContainerConfiguration } from './components/container-configuration'
 
 export function ContainerOperations({
   scope,
@@ -60,7 +61,7 @@ export function ContainerOperations({
   useEffect(() => {
     if (
       !open ||
-      mode === 'terminal' ||
+      ['terminal', 'configuration'].includes(mode) ||
       !permissions ||
       !permissions[mode === 'logs' ? 'logs' : 'configuration']
     )
@@ -169,6 +170,13 @@ export function ContainerOperations({
               Details
             </Button>
             <Button
+              disabled={!permissions?.configuration}
+              onClick={() => setMode('configuration')}
+            >
+              <Settings2 data-icon="inline-start" />
+              Configuration
+            </Button>
+            <Button
               disabled={!permissions?.terminal}
               onClick={() => setMode('terminal')}
             >
@@ -203,7 +211,9 @@ export function ContainerOperations({
             </Alert>
           )}
           <ErrorMessage message={error} />
-          {mode === 'terminal' && permissions?.terminal ? (
+          {mode === 'configuration' && permissions?.configuration ? (
+            <ContainerConfiguration path={`${base}/operation`} />
+          ) : mode === 'terminal' && permissions?.terminal ? (
             <ContainerTerminal path={`${base}/operation`} onError={setError} />
           ) : (
             <pre

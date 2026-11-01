@@ -217,7 +217,7 @@ export function RepositoryOnboarding({
               />
             </Field>
             <p className="text-xs text-muted-foreground">
-              New or changed legacy repositories require a server administrator.
+              New or changed legacy repositories require a organization administrator.
               Existing approved repository/host pairs remain usable by app
               deployers. Selecting a scoped connection retires this app’s legacy
               source grants.
@@ -228,7 +228,7 @@ export function RepositoryOnboarding({
               onClick={() => {
                 if (
                   window.confirm(
-                    'Revoke this legacy repository/host authorization? Queued builds using it will be blocked. Server administrator permission is required.',
+                    'Revoke this legacy repository/host authorization? Queued builds using it will be blocked. Organization administrator permission is required.',
                   )
                 )
                   void run(async () => {

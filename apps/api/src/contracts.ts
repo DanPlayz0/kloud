@@ -37,6 +37,8 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     .object({
       id: z.string().uuid(),
       username: z.string(),
+      email: z.string().nullable().optional(),
+      organization_member: z.boolean().optional(),
       admin: z.boolean(),
       capabilities: z.array(z.enum(serverCapabilities)),
     })
@@ -90,7 +92,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     })
     .openapi('ContainerRow')
   function route(
-    method: 'get' | 'post' | 'put' | 'delete',
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete',
     path: string,
     summary: string,
     output: z.ZodType,
@@ -294,7 +296,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'post',
     '/auth/setup',
-    'Create first Server Administrator with a password',
+    'Create first Organization Administrator with a password',
     ok,
     setupSchema,
     false,
@@ -402,7 +404,92 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     undefined,
     false,
   )
-  route('get', '/auth/me', 'Read authenticated user', user)
+  route(
+    'get',
+    '/auth/me',
+    'Read shared identity and current organization role',
+    user,
+  )
+  const organization = z.object({
+    slug: z.string(),
+    name: z.string(),
+    description: z.string(),
+    website: z.string(),
+  })
+  const metadata = z.object({
+    name: z.string().min(1).max(100),
+    description: z.string().max(2000).optional(),
+    website: z.string().max(500).optional(),
+  })
+  route(
+    'get',
+    '/organizations',
+    'List organizations available to this account',
+    z.array(organization.extend({ admin: z.boolean() })),
+  )
+  route(
+    'get',
+    '/organizations/current',
+    'Read current organization metadata',
+    organization.extend({ api_url: z.string() }),
+    undefined,
+    false,
+  )
+  route(
+    'post',
+    '/organizations',
+    'Create organization using current account',
+    organization,
+    metadata.extend({ slug: z.string().optional() }),
+    true,
+    201,
+  )
+  route(
+    'patch',
+    '/organizations/current',
+    'Update current organization metadata (organization administrator)',
+    organization,
+    metadata.partial(),
+  )
+  route(
+    'post',
+    '/organizations/invitations',
+    'Invite account by email',
+    z.object({
+      email: z.string(),
+      invitationUrl: z.string(),
+      sent: z.boolean(),
+    }),
+    z.object({ email: z.string().email(), admin: z.boolean().optional() }),
+    true,
+    201,
+  )
+  route(
+    'get',
+    '/auth/invitation',
+    'Read one-time invitation metadata using token query parameter',
+    z.object({
+      email: z.string().nullable(),
+      existing_account: z.boolean(),
+      organization: z.object({ slug: z.string(), name: z.string() }),
+    }),
+    undefined,
+    false,
+  )
+  route(
+    'post',
+    '/auth/invitations/accept',
+    'Accept invitation with current shared account',
+    ok,
+    z.object({ token: z.string() }),
+  )
+  route(
+    'patch',
+    '/auth/profile',
+    'Update shared account contact email using current password',
+    z.object({ email: z.string() }),
+    z.object({ email: z.string().email(), password: z.string() }),
+  )
   route('get', '/projects', 'List accessible projects', z.array(project))
   route(
     'get',
@@ -446,10 +533,11 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'post',
     '/admin/users',
-    'Invite user (users.manage; server privileges require Server Administrator)',
+    'Invite user (users.manage; organization privileges require Organization Administrator)',
     enrollment,
     z.object({
-      username: z.string(),
+      email: z.string().email(),
+      username: z.string().optional(),
       admin: z.boolean().optional(),
       capabilities: z.array(z.enum(serverCapabilities)).optional(),
     }),
@@ -459,7 +547,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'put',
     '/admin/users/{id}',
-    'Update account (users.manage; memberships require projects.manage; server privileges require Server Administrator)',
+    'Update account (users.manage; memberships require projects.manage; organization privileges require Organization Administrator)',
     ok,
     z.object({
       disabled: z.boolean(),
@@ -471,7 +559,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'post',
     '/admin/users/{id}/enrollment',
-    'Reset ordinary account credentials (users.manage; privileged accounts require Server Administrator)',
+    'Legacy account recovery; shared account recovery requires account owner or host CLI',
     enrollment,
   )
   route(
@@ -644,13 +732,13 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'get',
     deploymentPath,
-    'Read deployment and latest build history (service read or Server Administrator)',
+    'Read deployment and latest build history (service read or Organization Administrator)',
     flexible.nullable(),
   )
   route(
     'put',
     deploymentPath,
-    'Save deployment; creation returns a one-time webhook secret (service deploy or Server Administrator)',
+    'Save deployment; creation returns a one-time webhook secret (service deploy or Organization Administrator)',
     z.object({
       id: z.string().uuid(),
       webhook_url: z.string(),
@@ -661,7 +749,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'post',
     deploymentPath,
-    'Queue a commit build with JSON body; rotate webhook secret with empty body (service deploy or Server Administrator)',
+    'Queue a commit build with JSON body; rotate webhook secret with empty body (service deploy or Organization Administrator)',
     z.union([
       z.object({ webhook_secret: z.string() }),
       z.object({ queued: z.literal(true) }),

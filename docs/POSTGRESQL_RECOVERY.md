@@ -22,7 +22,7 @@ database-creation authority. The separate bootstrap administrator password is
 never returned by the credential-reveal endpoint. Creation, import and restore
 never adopt an existing container or data volume.
 
-Project/server administrators can manage resources. Database grants separately
+Project/organization administrators can manage resources. Database grants separately
 control `read`, `manage`, `backup`, `restore`, `destinations`, and `reveal` and may
 be project-wide or resource-specific. Configuration/deployment access to an app
 does not grant these database rights. Administrators can delegate in **PostgreSQL → Database permissions**, or through

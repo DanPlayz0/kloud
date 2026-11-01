@@ -322,7 +322,7 @@ if (
 ) {
   try {
     const { migrateAllOrganizations } = await import('./organizations.js')
-    await migrateAllOrganizations(migrate)
+    await migrateAllOrganizations(migrate, migrateDatabase)
     console.log('Migrations complete')
   } finally {
     await pool.end()

@@ -49,7 +49,13 @@ const containerPermissionItems: CheckboxTreeItem[] = [
   ...containerCapabilities.map((value, index) => ({
     id: index + 2,
     parentId: 1,
-    name: value === 'view' ? 'View' : `${value} (planned)`,
+    name: {
+      view: 'View',
+      logs: 'Logs',
+      lifecycle: 'Start, stop and restart',
+      terminal: 'Interactive shell',
+      configuration: 'Configuration',
+    }[value],
     value,
     dependentIds: value === 'view' ? [] : [2],
   })),
@@ -80,6 +86,7 @@ export function ProjectAccessPage({
     data?.members.filter((member) =>
       [
         member.username,
+        member.email ?? '',
         member.role,
         member.disabled ? 'disabled' : 'active',
       ].some((value) => value.toLowerCase().includes(query)),
@@ -171,9 +178,9 @@ export function ProjectAccessPage({
             <h2>Members</h2>
             <p className="text-muted-foreground text-sm">
               Project Administrators manage access and see every container.
-              Members see only containers with View grants. Other capabilities
-              are planned and unavailable today, and include View for the same
-              target.
+              Members see only containers with View grants. Logs, lifecycle,
+              interactive shell, and configuration grants enable their matching
+              operations and include View for the same target.
             </p>
             <TableCard>
               <Table className="w-full text-left text-sm">
@@ -201,6 +208,11 @@ export function ProjectAccessPage({
                     >
                       <TableCell className="p-4 font-medium">
                         <span className="break-all">{member.username}</span>
+                        {member.email && (
+                          <p className="break-all text-xs font-normal text-muted-foreground">
+                            {member.email}
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell className="p-4 text-muted-foreground">
                         {member.role === 'admin'
@@ -330,7 +342,7 @@ function MemberDialog(props: MemberEditorProps) {
         <DialogDescription className="mt-2 text-sm text-muted-foreground">
           {props.member
             ? "Make changes to this member's role and container permissions."
-            : 'Invite someone to help manage this project.'}
+            : 'Invite an email address to this project. Existing accounts keep their password and can belong to multiple organizations.'}
         </DialogDescription>
         <MemberEditor
           {...props}
@@ -421,9 +433,7 @@ function MemberEditor({
         JSON.stringify(member?.dns_grants ?? []) || !member
         ? { dns_grants: dnsGrants }
         : {}),
-      ...(!member
-        ? { username: new FormData(e.currentTarget).get('username') }
-        : {}),
+      ...(!member ? { email: new FormData(e.currentTarget).get('email') } : {}),
     }
     setSaveError('')
     void onSave(body).then((success) => {
@@ -446,13 +456,14 @@ function MemberEditor({
             </strong>
           ) : (
             <Field>
-              <FieldLabel>Username</FieldLabel>
+              <FieldLabel>Email address</FieldLabel>
               <Input
-                name="username"
+                name="email"
+                type="email"
                 required
-                maxLength={100}
-                pattern="[a-zA-Z0-9_.@\-]+"
-                autoComplete="off"
+                maxLength={254}
+                autoComplete="email"
+                placeholder="person@example.com"
               />
             </Field>
           )}
@@ -500,8 +511,7 @@ function MemberEditor({
               className="flex flex-wrap items-center gap-2 text-sm"
             >
               <span className="break-all">
-                {g.capability}
-                {g.capability !== 'view' && ' (planned)'} ·{' '}
+                {g.capability}·{' '}
                 {g.kind === 'all'
                   ? 'All containers in this project'
                   : `${g.kind}: ${g.target} · ${containers.find((c) => c.connector_id === g.connector_id)?.connector_name ?? g.connector_id}`}

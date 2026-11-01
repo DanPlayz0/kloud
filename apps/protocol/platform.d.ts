@@ -63,9 +63,17 @@ export interface Domain {
   https: boolean
   redirect: boolean
 }
+export interface ContainerSettings {
+  cpus: number
+  memory_mib: number
+  restart_policy: 'no' | 'always' | 'unless-stopped' | 'on-failure'
+  retry_count: number
+}
+export const containerSettingsSchema: z.ZodType<ContainerSettings>
 export interface RuntimeRequest {
   action:
     | 'inspect'
+    | 'update'
     | 'logs'
     | 'start'
     | 'stop'
@@ -75,6 +83,7 @@ export interface RuntimeRequest {
     | 'terminal-write'
     | 'terminal-close'
     | 'terminal-resize'
+  settings?: ContainerSettings
   session?: string
   input?: string
   rows?: number

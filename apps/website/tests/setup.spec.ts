@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
 
-test('first Server Administrator can set a password and sign in', async ({
+test('first Organization Administrator can set a password and sign in', async ({
   page,
 }) => {
   const require = createRequire(
@@ -20,6 +20,9 @@ test('first Server Administrator can set a password and sign in', async ({
     await page.goto('/login')
     await page.getByLabel('Username', { exact: true }).fill(username)
     await page
+      .getByLabel('Email address', { exact: true })
+      .fill(`${username}@example.com`)
+    await page
       .getByLabel('Password', { exact: true })
       .fill('a strong first admin password')
     await page
@@ -27,11 +30,11 @@ test('first Server Administrator can set a password and sign in', async ({
       .fill('a strong first admin password')
     await page
       .getByRole('button', {
-        name: 'Create Server Administrator',
+        name: 'Create Organization Administrator',
       })
       .click()
     await expect(
-      page.getByText('Your Server Administrator account is ready.', {
+      page.getByText('Your Organization Administrator account is ready.', {
         exact: false,
       }),
     ).toBeVisible()
@@ -49,7 +52,7 @@ test('first Server Administrator can set a password and sign in', async ({
   }
 })
 
-test('empty installations prompt for Server Administrator setup and validate password confirmation', async ({
+test('empty installations prompt for Organization Administrator setup and validate password confirmation', async ({
   page,
 }) => {
   await page.route('**/api/auth/setup', (route) =>
@@ -58,17 +61,20 @@ test('empty installations prompt for Server Administrator setup and validate pas
   await page.goto('/login')
   await expect(
     page.getByRole('heading', {
-      name: 'Create your Server Administrator account',
+      name: 'Create your Organization Administrator account',
     }),
   ).toBeVisible()
   await page.getByLabel('Username', { exact: true }).fill('owner')
+  await page
+    .getByLabel('Email address', { exact: true })
+    .fill('owner@example.com')
   await page
     .getByLabel('Password', { exact: true })
     .fill('a strong first admin password')
   await page.getByLabel('Confirm password').fill('a different strong password')
   await page
     .getByRole('button', {
-      name: 'Create Server Administrator',
+      name: 'Create Organization Administrator',
     })
     .click()
   await expect(page.getByRole('alert')).toHaveText('Passwords must match')

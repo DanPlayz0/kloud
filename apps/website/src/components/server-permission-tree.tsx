@@ -14,7 +14,7 @@ const data: CheckboxTreeItem[] = [
   {
     id: 1,
     parentId: 0,
-    name: 'Server Administrator',
+    name: 'Organization Administrator',
     value: 'admin',
     aggregateChildren: false,
     lockChildrenWhenChecked: true,

@@ -120,7 +120,7 @@ test('users table searches, dialogs reset drafts, and failed saves preserve proj
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: 'Invite user', exact: true }).click()
   const invite = page.getByRole('dialog', { name: 'Invite user', exact: true })
-  await invite.getByLabel('Username').fill('new-user')
+  await invite.getByLabel('Email address').fill('new-user@example.com')
   await page.screenshot({
     path: testInfo.outputPath('users-invite-mobile.png'),
     fullPage: true,
@@ -134,7 +134,7 @@ test('users table searches, dialogs reset drafts, and failed saves preserve proj
   )
   await invite.getByRole('button', { name: 'Invite user', exact: true }).click()
   expect((await invitation).postDataJSON()).toEqual({
-    username: 'new-user',
+    email: 'new-user@example.com',
     admin: false,
     capabilities: [],
   })
@@ -223,12 +223,15 @@ test('delegated user management protects privileged users and omits administrato
     page.getByRole('button', { name: 'Edit owner', exact: true }),
   ).toHaveCount(0)
   await expect(
-    page.getByText('Server Administrator required', { exact: true }),
+    page.getByText('Organization Administrator required', { exact: true }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Edit basic', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await expect(
-    dialog.getByRole('checkbox', { name: 'Server Administrator', exact: true }),
+    dialog.getByRole('checkbox', {
+      name: 'Organization Administrator',
+      exact: true,
+    }),
   ).toHaveCount(0)
   await expect(
     dialog.getByRole('checkbox', { name: 'Demo', exact: true }),
@@ -253,7 +256,7 @@ test('server permission tree inherits, locks, saves, and keeps delegated capabil
   const ownerRow = page.getByRole('dialog', { name: 'Edit owner', exact: true })
   await expect(
     ownerRow.getByRole('checkbox', {
-      name: 'Server Administrator',
+      name: 'Organization Administrator',
       exact: true,
     }),
   ).toBeChecked()
@@ -280,7 +283,7 @@ test('server permission tree inherits, locks, saves, and keeps delegated capabil
   await page.getByRole('button', { name: 'Edit member', exact: true }).click()
   const member = page.getByRole('dialog', { name: 'Edit member', exact: true })
   const admin = member.getByRole('checkbox', {
-    name: 'Server Administrator',
+    name: 'Organization Administrator',
     exact: true,
   })
   await expect(admin).toHaveAttribute('aria-checked', 'mixed')
@@ -310,13 +313,13 @@ test('server permission tree inherits, locks, saves, and keeps delegated capabil
     has: page.getByRole('button', { name: 'Invite user', exact: true }),
   })
   await invite
-    .getByRole('checkbox', { name: 'Server Administrator', exact: true })
+    .getByRole('checkbox', { name: 'Organization Administrator', exact: true })
     .click()
   await expect(
     invite.getByRole('checkbox', { name: 'Manage users', exact: true }),
   ).toBeDisabled()
   await invite
-    .getByRole('checkbox', { name: 'Server Administrator', exact: true })
+    .getByRole('checkbox', { name: 'Organization Administrator', exact: true })
     .click()
   await expect(
     invite.getByRole('checkbox', { name: 'Manage users', exact: true }),

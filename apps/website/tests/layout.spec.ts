@@ -293,7 +293,7 @@ for (const width of [320, 390, 768, 1280]) {
     await page.goto('/login')
     await expect(
       page.getByRole('heading', {
-        name: 'Create your Server Administrator account',
+        name: 'Create your Organization Administrator account',
       }),
     ).toBeVisible()
     await page.screenshot({

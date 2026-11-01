@@ -9,7 +9,7 @@ test('invalid form controls expose field errors and clear them after editing', a
   await page.goto('/login')
   const username = page.getByLabel('Username', { exact: true })
   await page
-    .getByRole('button', { name: 'Create Server Administrator' })
+    .getByRole('button', { name: 'Create Organization Administrator' })
     .click()
   await expect(username).toHaveAttribute('aria-invalid', 'true')
   const errorId = await username.getAttribute('aria-describedby')
@@ -38,7 +38,7 @@ test('account menu supports keyboard dismissal and returns focus to its trigger'
   })
   await page.goto('/admin/projects')
   const trigger = page.getByRole('button', {
-    name: 'Owner Server Administrator',
+    name: 'Owner Organization Administrator',
   })
   await trigger.focus()
   await page.keyboard.press('Enter')

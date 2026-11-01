@@ -4,11 +4,11 @@ The sidebar picker contains Projects and Connectors. Select a connector to brows
 
 Connector tables show resources across projects and discovered unassigned resources. Project links appear only for projects the current user can access. Discovery retains its existing collection behavior; enabling a workspace does not discover additional resources automatically.
 
-## Server permissions
+## Organization permissions
 
 | Permission                                         | Connector workspace access                                                                |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Server Administrator                               | All browsing, resource operations, connector settings, and host SSH                       |
+| Organization Administrator                               | All browsing, resource operations, connector settings, and host SSH                       |
 | Manage connectors                                  | Metadata, discovery settings, token revocation, and host SSH                              |
 | Manage inventory assignments                       | Read connector metadata and resource inventory                                            |
 | Operate connector resources (`connectors.operate`) | Read metadata/inventory and operate containers and PM2 applications across all connectors |

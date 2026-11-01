@@ -133,7 +133,7 @@ export function RegistryConnectionsFields({
             <FieldLabel>Ownership</FieldLabel>
             <NativeSelect data-registry-scope>
               <option value="personal">Personal</option>
-              <option value="shared">Shared (server administrators)</option>
+              <option value="shared">Shared (organization administrators)</option>
             </NativeSelect>
           </Field>
           <Button

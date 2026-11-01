@@ -1,8 +1,11 @@
+import { initializeGlobalAccounts } from './global-accounts.js'
 import { cleanOrganizationExpirations } from './organizations.js'
 import { serve } from '@hono/node-server'
 import { app } from './app.js'
 import { attachConnectors } from './connectors.js'
 import { pool } from './db.js'
+
+await initializeGlobalAccounts()
 
 const port = Number(process.env.PORT ?? 3000)
 

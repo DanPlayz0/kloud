@@ -51,7 +51,7 @@ pnpm --filter @kloud/website dev
 The website runs at http://localhost:5173 and the API at http://localhost:3000.
 Vite proxies `/api/*` requests to the API during development (removing the `/api` prefix).
 Configure PostgreSQL and `apps/api/.env` first as described in the setup guide.
-On an empty installation, open the website to create your Server Administrator account
+On an empty installation, open the website to create your Organization Administrator account
 with a username and password. Optional second factors can be enabled in Account security. Setup closes as soon as an account exists.
 The API offers public `GET /health` and authenticated `GET /openapi.json`.
 Set the `PORT` environment variable to change the API port; update the Vite proxy target to match.
@@ -98,9 +98,9 @@ Git and Docker build contexts; do not edit the generated route tree manually.
 - `/projects/$projectSlug/services`: Dockerfile applications and Compose services.
 - `/projects/$projectSlug/applications/$appSlug`: deployment configuration and build history.
 - `/projects/$projectSlug/access`: project roles, invitations, service permissions, container grants, and matching defaults.
-- `/admin/$section`: server administration, authorized by individual capabilities.
+- `/admin/$section`: organization administration, authorized by individual capabilities.
 
-Server Administrators have unrestricted access. Server capabilities independently
+Organization Administrators have unrestricted access. Server capabilities independently
 delegate users, projects (including project access and visibility), connectors,
 and inventory management. Project Administrators manage members and container
 grants within their project. Members need View grants for selected container IDs,

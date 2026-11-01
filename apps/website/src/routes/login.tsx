@@ -15,8 +15,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import type { AuthenticationResult } from '@kloud/protocol/auth'
 import { FactorVerification } from '../components/factor-verification'
-import { api, ApiError, currentOrganization, organizationPath } from '../api'
-import { OrganizationSelector } from '../organization-switcher'
+import { api, ApiError, organizationPath } from '../api'
 import { ErrorMessage, Icon } from '../components'
 import { loginDestination } from '../navigation'
 export const Route = createFileRoute('/login')({
@@ -63,6 +62,7 @@ function Login() {
         setPhase('Creating account')
         await api('/auth/setup', 'POST', {
           username: data.get('username'),
+          email: data.get('email'),
           password: data.get('password'),
         })
         setCreated(true)
@@ -97,25 +97,19 @@ function Login() {
           <CardTitle asChild>
             <h1>
               {setup && !created
-                ? 'Create your Server Administrator account'
+                ? 'Create your Organization Administrator account'
                 : 'Welcome back'}
             </h1>
           </CardTitle>
           <CardDescription>
             {created
-              ? 'Your Server Administrator account is ready. Sign in with your password.'
+              ? 'Your Organization Administrator account is ready. Sign in with your password.'
               : setup
                 ? 'No accounts exist yet. Choose a username and password to get started. You can enable two-factor authentication in account security.'
-                : 'Sign in to your infrastructure.'}
+                : 'One account gives you access to all your organizations.'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-6 border-b border-border pb-4">
-            <p className="mb-3 text-sm text-muted-foreground">
-              Signing in to {currentOrganization()}
-            </p>
-            <OrganizationSelector />
-          </div>
           {challenge ? (
             <FactorVerification
               challenge={challenge}
@@ -141,6 +135,18 @@ function Login() {
                   pattern={setup && !created ? '[a-zA-Z0-9_.@\\-]+' : undefined}
                 />
               </Field>
+              {setup && !created && (
+                <Field>
+                  <FieldLabel>Email address</FieldLabel>
+                  <Input
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    maxLength={254}
+                  />
+                </Field>
+              )}
               <Field>
                 <FieldLabel>Password</FieldLabel>
                 <Input
@@ -178,7 +184,7 @@ function Login() {
                 {busy
                   ? phase + '…'
                   : setup && !created
-                    ? 'Create Server Administrator'
+                    ? 'Create Organization Administrator'
                     : 'Sign in'}
                 <Icon data-icon="inline-start" icon={ArrowRight} />
               </Button>

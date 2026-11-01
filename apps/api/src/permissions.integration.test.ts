@@ -465,6 +465,7 @@ test(
               {
                 id: actor,
                 username: actor === admin ? 'server-admin' : 'manager-creator',
+                email: null,
                 disabled: false,
                 role: 'admin',
                 grants: [],

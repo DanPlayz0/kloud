@@ -9,10 +9,16 @@ declare module '@tanstack/react-router' {
 }
 
 export const Route = createFileRoute('/_app')({
-  loader: async () => ({
-    user: await session(),
-    projects: await api<Project[]>('/projects'),
-  }),
+  loader: async () => {
+    const user = await session()
+    return {
+      user,
+      projects:
+        user.organization_member === false
+          ? []
+          : await api<Project[]>('/projects'),
+    }
+  },
   component: AppLayout,
 })
 

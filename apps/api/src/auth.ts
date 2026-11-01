@@ -1,3 +1,15 @@
+import {
+  accountsEnabled,
+  withAccounts,
+  getAccountSchema,
+  linkOrganizationAccount,
+} from './global-accounts.js'
+import { accountTable, invitationRecord } from './account-invitations.js'
+import {
+  organizationContext,
+  runWithOrganization,
+  type OrganizationContext,
+} from './organization-context.js'
 import { Hono, type Context } from 'hono'
 import { randomUUID } from 'node:crypto'
 import { getCookie as readCookie, setCookie as writeCookie } from 'hono/cookie'
@@ -50,11 +62,18 @@ import {
 export interface User {
   id: string
   username: string
+  email?: string | null
   admin: boolean
   capabilities: import('./permissions.js').ServerCapability[]
 }
-export type Env = { Variables: { user: User } }
+export type Env = {
+  Variables: { user: User; requestOrganization?: OrganizationContext }
+}
 export const auth = new Hono<Env>()
+auth.use('*', async (c, next) => {
+  c.set('requestOrganization', currentOrganization())
+  return withAccounts(next)
+})
 export const cookieOptions = (c: Context) => ({
   httpOnly: true,
   secure: secureCookies(c),
@@ -63,7 +82,7 @@ export const cookieOptions = (c: Context) => ({
 })
 const cookieName = (name: string) => {
   const organization = currentOrganization()
-  return organization && organization.slug !== 'default'
+  return !accountsEnabled() && organization && organization.slug !== 'default'
     ? `kloud_${organization.slug}_${name}`
     : name
 }
@@ -76,22 +95,56 @@ const setCookie = (
 ) => writeCookie(c, cookieName(name), value, options)
 const sessionHash = (c: Context) => digest(getCookie(c, 'session') ?? '')
 const pendingToken = (c: Context) => getCookie(c, 'pending') ?? ''
-export const currentUser = async (c: Context) => {
+export const currentIdentity = async (c: Context) => {
   const value = getCookie(c, 'session')
   if (!value) return undefined
-  return (
+  return withAccounts(
+    async () =>
+      (
+        await pool.query<User>(
+          `SELECT u.id,u.username,u.admin,u.capabilities,${accountsEnabled() ? 'u.account_email' : 'u.email'} AS email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=$1 AND s.expires>now() AND NOT u.disabled`,
+          [digest(value)],
+        )
+      ).rows[0],
+  )
+}
+export const currentUser = async (c: Context) => {
+  const identity = await currentIdentity(c)
+  if (
+    !identity ||
+    !accountsEnabled() ||
+    currentOrganization()?.schema === getAccountSchema()
+  )
+    return identity
+  const member = (
     await pool.query<User>(
-      'SELECT u.id,u.username,u.admin,u.capabilities FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=$1 AND s.expires>now() AND NOT u.disabled',
-      [digest(value)],
+      'SELECT id,username,admin,capabilities FROM users WHERE id=$1 AND NOT disabled AND NOT invitation_pending',
+      [identity.id],
     )
   ).rows[0]
+  return member
+    ? { ...identity, admin: member.admin, capabilities: member.capabilities }
+    : undefined
+}
+export const requireIdentity = async (
+  c: Context<Env>,
+  next: () => Promise<void>,
+) => {
+  const identity = await currentIdentity(c)
+  if (!identity) return c.json({ error: 'Authentication required' }, 401)
+  c.set('user', identity)
+  await next()
 }
 export const requireUser = async (
   c: Context<Env>,
   next: () => Promise<void>,
 ) => {
   const user = await currentUser(c)
-  if (!user) return c.json({ error: 'Authentication required' }, 401)
+  if (!user) {
+    if (accountsEnabled() && (await currentIdentity(c)))
+      return c.json({ error: 'Organization access required' }, 403)
+    return c.json({ error: 'Authentication required' }, 401)
+  }
   c.set('user', user)
   await next()
 }
@@ -253,6 +306,14 @@ auth.post('/setup', async (c) => {
     return c.json({ error: 'Setup is complete. Sign in to your account.' }, 409)
   const body = setupSchema.parse(await c.req.json()),
     hashed = await hashPassword(body.password)
+  if (accountsEnabled() && !body.email)
+    throw new HTTPException(400, { message: 'Email is required' })
+  const id = randomUUID()
+  const initialOrganization = accountsEnabled()
+    ? await (
+        await import('./organizations.js')
+      ).findOrganization(c.get('requestOrganization')?.slug ?? 'default')
+    : undefined
   await transaction(async (db) => {
     await db.query('SELECT pg_advisory_xact_lock(842192)')
     await db.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE')
@@ -260,16 +321,37 @@ auth.post('/setup', async (c) => {
       throw new HTTPException(409, {
         message: 'Setup is complete. Sign in to your account.',
       })
-    await db.query(
-      'INSERT INTO users(id,username,password_hash,admin) VALUES($1,$2,$3,true)',
-      [randomUUID(), body.username.toLowerCase(), hashed],
-    )
+    if (accountsEnabled()) {
+      await db.query(
+        'INSERT INTO users(id,username,password_hash,account_email) VALUES($1,$2,$3,$4)',
+        [id, body.username.toLowerCase(), hashed, body.email!.toLowerCase()],
+      )
+      await db.query(
+        `INSERT INTO "${initialOrganization!.schema}".users(id,username,account_email,password_hash,admin) VALUES($1,$2,$3,'global-account',true)`,
+        [id, body.username.toLowerCase(), body.email!.toLowerCase()],
+      )
+    } else
+      await db.query(
+        'INSERT INTO users(id,username,password_hash,admin) VALUES($1,$2,$3,true)',
+        [id, body.username.toLowerCase(), hashed],
+      )
   })
   return c.json({ ok: true })
 })
 auth.post('/enroll', async (c) => {
   const body = enrollmentSchema.parse(await c.req.json()),
     hashed = await hashPassword(body.password)
+  if (accountsEnabled()) {
+    const invite = await invitationRecord(pool, body.token)
+    if (invite) {
+      if (invite.existing_account)
+        throw new HTTPException(409, {
+          message: 'Sign in to your existing account to accept this invitation',
+        })
+      await acceptInvitation(c, body.token, undefined, hashed)
+      return c.json({ ok: true })
+    }
+  }
   const success = await transaction(async (db) => {
     const ref = (
       await db.query('SELECT user_id FROM invitations WHERE token=$1', [
@@ -311,7 +393,9 @@ auth.post('/password', async (c) => {
   const outcome = await transaction(async (db) => {
     const user = (
       await db.query(
-        'SELECT * FROM users WHERE lower(username)=$1 FOR UPDATE',
+        accountsEnabled()
+          ? 'SELECT * FROM users WHERE id=COALESCE((SELECT id FROM users WHERE lower(account_email)=$1),(SELECT id FROM users WHERE lower(username)=$1)) FOR UPDATE'
+          : 'SELECT * FROM users WHERE lower(username)=$1 FOR UPDATE',
         [body.username.toLowerCase()],
       )
     ).rows[0]
@@ -887,4 +971,192 @@ auth.post('/logout', async (c) => {
     setCookie(c, name, '', { ...cookieOptions(c), maxAge: 0 })
   return c.json({ ok: true })
 })
-auth.get('/me', requireUser, (c) => c.json(c.get('user')))
+auth.get('/me', requireIdentity, async (c) => {
+  const identity = c.get('user')
+  if (!accountsEnabled()) return c.json(identity)
+  const org = c.get('requestOrganization')
+  const query = () =>
+    pool.query(
+      'SELECT admin,capabilities FROM users WHERE id=$1 AND NOT disabled AND NOT invitation_pending',
+      [identity.id],
+    )
+  const member = (
+    org
+      ? await runWithOrganization(org, query)
+      : await organizationContext.exit(query)
+  ).rows[0]
+  return c.json({
+    ...identity,
+    organization_member: !!member,
+    admin: member?.admin ?? false,
+    capabilities: member?.capabilities ?? [],
+  })
+})
+
+auth.get('/invitation', async (c) => {
+  const secret = z.string().min(32).max(100).parse(c.req.query('token'))
+  if (accountsEnabled()) {
+    const invite = await invitationRecord(pool, secret)
+    if (invite) {
+      const { findOrganization } = await import('./organizations.js')
+      const org = await findOrganization(invite.organization)
+      return c.json({
+        email: invite.email,
+        existing_account: invite.existing_account,
+        organization: { slug: org.slug, name: org.name },
+      })
+    }
+  }
+  const legacy = (
+    await pool.query(
+      'SELECT u.email,u.username FROM invitations i JOIN users u ON u.id=i.user_id WHERE i.token=$1 AND i.expires>now()',
+      [digest(secret)],
+    )
+  ).rows[0]
+  if (!legacy)
+    throw new HTTPException(404, {
+      message: 'Invitation expired or unavailable',
+    })
+  return c.json({
+    email: legacy.email,
+    existing_account: false,
+    organization: {
+      slug: c.get('requestOrganization')?.slug ?? 'default',
+      name: 'Organization',
+    },
+  })
+})
+auth.post('/invitations/accept', requireIdentity, async (c) => {
+  const body = z
+    .object({ token: z.string().min(32).max(100) })
+    .strict()
+    .parse(await c.req.json())
+  await acceptInvitation(c, body.token, c.get('user'))
+  return c.json({ ok: true })
+})
+auth.patch('/profile', requireIdentity, async (c) => {
+  const body = z
+    .object({ email: z.email().max(254), password: z.string().min(1).max(256) })
+    .strict()
+    .parse(await c.req.json())
+  if (!accountsEnabled())
+    throw new HTTPException(503, { message: 'Run account migrations first' })
+  await rateLimit(digest('profile:' + c.get('user').id), 10)
+  await transaction(async (db) => {
+    const user = (
+      await db.query('SELECT password_hash FROM users WHERE id=$1 FOR UPDATE', [
+        c.get('user').id,
+      ])
+    ).rows[0]
+    if (!user || !(await verifyPassword(body.password, user.password_hash)))
+      throw new HTTPException(403, { message: 'Current password is incorrect' })
+    await db.query('UPDATE users SET account_email=$2 WHERE id=$1', [
+      c.get('user').id,
+      body.email.toLowerCase(),
+    ])
+  })
+  return c.json({ email: body.email.toLowerCase() })
+})
+async function acceptInvitation(
+  c: Context<Env>,
+  secret: string,
+  identity?: User,
+  passwordHash?: string,
+) {
+  const { findOrganization } = await import('./organizations.js')
+  await transaction(async (db) => {
+    await db.query('SELECT pg_advisory_xact_lock(842193)')
+    const invite = await invitationRecord(db, secret, true)
+    if (!invite)
+      throw new HTTPException(409, {
+        message: 'Invitation expired or already accepted',
+      })
+    if (identity && identity.id !== invite.user_id)
+      throw new HTTPException(403, {
+        message: 'Sign in with the account invited to this organization',
+      })
+    if (!identity && (invite.existing_account || !passwordHash))
+      throw new HTTPException(409, {
+        message: 'Sign in to accept this invitation',
+      })
+    const org = await findOrganization(invite.organization)
+    const target = `"${org.schema}"`
+    const creator = (
+      await db.query(
+        `SELECT id,username,admin,capabilities FROM ${target}.users WHERE id=$1 AND NOT disabled`,
+        [invite.created_by],
+      )
+    ).rows[0]
+    if (
+      !creator ||
+      (!creator.admin &&
+        !creator.capabilities.includes('users.manage') &&
+        !invite.project)
+    )
+      throw new HTTPException(403, {
+        message: 'Invitation issuer no longer has permission',
+      })
+    if ((invite.admin || invite.capabilities.length) && !creator.admin)
+      throw new HTTPException(403, {
+        message: 'Invitation issuer no longer has administrator permission',
+      })
+    if (invite.project) {
+      const { demandProjectAdmin } = await import('./permissions.js')
+      await runWithOrganization(org, () =>
+        demandProjectAdmin(creator, invite.project),
+      )
+    }
+    if (passwordHash)
+      await db.query(
+        'UPDATE users SET password_hash=$2,security_version=security_version+1 WHERE id=$1',
+        [invite.user_id, passwordHash],
+      )
+    const account = (
+      await db.query(
+        'SELECT id,username,account_email AS email,password_hash FROM users WHERE id=$1',
+        [invite.user_id],
+      )
+    ).rows[0]
+    await db.query(
+      `UPDATE ${target}.users SET username=$2,email=$3,account_email=$3,disabled=false,invitation_pending=false,admin=CASE WHEN disabled THEN $4 ELSE admin END,capabilities=CASE WHEN disabled THEN $5 ELSE capabilities END,password_hash='global-account' WHERE id=$1`,
+      [
+        account.id,
+        account.username,
+        account.email,
+        invite.admin,
+        invite.capabilities,
+      ],
+    )
+    if (invite.project) {
+      await db.query("SELECT set_config('search_path',$1,true)", [org.schema])
+      if (
+        (
+          await db.query(
+            'SELECT 1 FROM memberships WHERE user_id=$1 AND project_slug=$2',
+            [account.id, invite.project],
+          )
+        ).rowCount
+      )
+        throw new HTTPException(409, {
+          message: 'Account is already a project member',
+        })
+      await db.query(
+        'INSERT INTO memberships(user_id,project_slug,role) VALUES($1,$2,$3)',
+        [account.id, invite.project, invite.project_role],
+      )
+      const { applyInvitedMemberGrants, memberBody } =
+        await import('./project-permissions.js')
+      await applyInvitedMemberGrants(
+        db,
+        creator,
+        account.id,
+        invite.project,
+        memberBody.parse(invite.project_grants),
+      )
+    }
+    await db.query(
+      `UPDATE ${accountTable('organization_invitations')} SET accepted=now() WHERE token=$1`,
+      [digest(secret)],
+    )
+  })
+}

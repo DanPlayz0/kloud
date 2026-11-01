@@ -8,7 +8,10 @@ export const Route = createFileRoute('/_app/')({
   staticData: { shell: { title: 'Overview', active: 'services' } },
   loader: async () => {
     const user = await session(),
-      projects = await api<Project[]>('/projects')
+      projects =
+        user.organization_member === false
+          ? []
+          : await api<Project[]>('/projects')
     if (projects[0])
       throw redirect({
         to: '/projects/$projectSlug/services',

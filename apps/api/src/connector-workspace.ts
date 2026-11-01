@@ -36,7 +36,7 @@ export function canBrowseResources(user: User) {
 }
 function demandBrowse(user: User, resources = false) {
   if (!(resources ? canBrowseResources(user) : canBrowseConnector(user)))
-    throw new HTTPException(403, { message: 'Server permission required' })
+    throw new HTTPException(403, { message: 'Organization permission required' })
 }
 async function host(id: string) {
   const row = (
