@@ -1,3 +1,14 @@
+import { Separator } from '@/components/ui/separator'
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from '@/components/ui/table'
+import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { TableCard } from './ui/card'
 import { useRef, useState, type FormEvent } from 'react'
 import { KeyRound, Search, UserPen, UserPlus } from 'lucide-react'
@@ -8,7 +19,7 @@ import {
   type User,
 } from '../api'
 import { ErrorMessage, usePolling } from '../components'
-import { Button, Checkbox, Input, Label } from './ui/controls'
+import { Button, Checkbox, Input } from './ui/controls'
 import {
   Dialog,
   DialogContent,
@@ -53,7 +64,7 @@ export function Users({
       ].some((value) => value.toLowerCase().includes(query)),
     ) ?? []
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
         Manage who can access your server and projects.
       </p>
@@ -75,26 +86,26 @@ export function Users({
       </div>
       <ErrorMessage message={error} />
       <TableCard>
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-border bg-background text-muted-foreground">
-            <tr>
+        <Table className="w-full text-left text-sm">
+          <TableHeader className="border-b border-border bg-background text-muted-foreground">
+            <TableRow>
               {['User', 'Permissions', 'Projects', 'Status'].map((title) => (
-                <th key={title} scope="col" className="p-4 font-medium">
+                <TableHead key={title} scope="col" className="p-4 font-medium">
                   {title}
-                </th>
+                </TableHead>
               ))}
-              <th scope="col" className="p-4">
+              <TableHead scope="col" className="p-4">
                 <span className="sr-only">Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {users.map((user) => (
-              <tr
+              <TableRow
                 key={user.id}
                 className="user-row border-b border-border last:border-0"
               >
-                <td className="p-4">
+                <TableCell className="p-4">
                   <div className="flex items-center gap-3">
                     <span
                       className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary font-medium text-muted-foreground"
@@ -109,20 +120,20 @@ export function Users({
                       )}
                     </div>
                   </div>
-                </td>
-                <td className="p-4 text-muted-foreground">
+                </TableCell>
+                <TableCell className="p-4 text-muted-foreground">
                   {user.admin
                     ? 'Server Administrator'
                     : user.capabilities?.length
                       ? `${user.capabilities.length} permission${user.capabilities.length === 1 ? '' : 's'}`
                       : 'Member'}
-                </td>
-                <td className="p-4 text-muted-foreground">
+                </TableCell>
+                <TableCell className="p-4 text-muted-foreground">
                   {hasServer(user, 'projects.manage')
                     ? 'All projects'
                     : `${user.projects.length} project${user.projects.length === 1 ? '' : 's'}`}
-                </td>
-                <td className="p-4">
+                </TableCell>
+                <TableCell className="p-4">
                   <span className="whitespace-nowrap rounded-sm bg-secondary px-2 py-1 text-xs text-muted-foreground">
                     {user.disabled
                       ? 'Disabled'
@@ -130,8 +141,8 @@ export function Users({
                         ? 'Active'
                         : 'Invited'}
                   </span>
-                </td>
-                <td className="p-4">
+                </TableCell>
+                <TableCell className="p-4">
                   {isProtected(user, current) ? (
                     <span className="cursor-not-allowed text-xs text-muted-foreground">
                       Server Administrator required
@@ -162,18 +173,22 @@ export function Users({
                                 )
                             }}
                           >
-                            <KeyRound className="size-4" aria-hidden="true" />
+                            <KeyRound
+                              data-icon="inline-start"
+
+                              aria-hidden="true"
+                            />
                           </Button>
                         </QuickTip>
                       )}
                     </div>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
             {!users.length && (
-              <tr>
-                <td
+              <TableRow>
+                <TableCell
                   colSpan={5}
                   className="h-28 p-4 text-center text-muted-foreground"
                 >
@@ -184,11 +199,11 @@ export function Users({
                     : query
                       ? 'No users match your search.'
                       : 'No users yet. Invite someone to get started.'}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </TableCard>
     </div>
   )
@@ -215,10 +230,15 @@ function UserDialog(props: EditorProps) {
           onClick={() => setOpen(true)}
         >
           {props.user ? (
-            <UserPen className="size-4" aria-hidden="true" />
+            <UserPen data-icon="inline-start" aria-hidden="true" />
           ) : (
             <>
-              <UserPlus className="size-4" aria-hidden="true" /> Invite user
+              <UserPlus
+                data-icon="inline-start"
+
+                aria-hidden="true"
+              />{' '}
+              Invite user
             </>
           )}
         </Button>
@@ -309,11 +329,15 @@ function UserForm({
     })
   }
   return (
-    <form onSubmit={submit} className="mt-5 space-y-5" aria-busy={busy}>
-      <fieldset disabled={busy} className="min-w-0 space-y-5">
+    <Form
+      onSubmit={submit}
+      className="mt-5 flex flex-col gap-5"
+      aria-busy={busy}
+    >
+      <FieldSet disabled={busy} className="min-w-0 flex flex-col gap-5">
         {!user && (
-          <Label>
-            Username
+          <Field>
+            <FieldLabel>Username</FieldLabel>
             <Input
               name="username"
               required
@@ -322,10 +346,10 @@ function UserForm({
               autoComplete="off"
               placeholder="Enter a username"
             />
-          </Label>
+          </Field>
         )}
         {current.admin && (
-          <section className="space-y-2">
+          <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Permissions</h3>
             <ServerPermissionTree
               admin={admin}
@@ -338,7 +362,7 @@ function UserForm({
           </section>
         )}
         {user && hasServer(current, 'projects.manage') && (
-          <section className="space-y-2">
+          <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Project access</h3>
             {allProjects && (
               <p className="text-sm text-muted-foreground">
@@ -349,7 +373,9 @@ function UserForm({
               </p>
             )}
             {projects.map((project) => (
-              <Label
+              <Field
+                data-disabled={allProjects}
+                orientation="horizontal"
                 className="checkbox flex items-center gap-2"
                 key={project.slug}
               >
@@ -364,8 +390,8 @@ function UserForm({
                     )
                   }
                 />
-                {project.name}
-              </Label>
+                <FieldLabel>{project.name}</FieldLabel>
+              </Field>
             ))}
             {!projects.length && (
               <p className="text-sm text-muted-foreground">
@@ -375,16 +401,20 @@ function UserForm({
           </section>
         )}
         {user && (
-          <section className="space-y-2">
+          <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium">Account status</h3>
-            <Label className="checkbox flex items-center gap-2">
+            <Field
+              data-disabled={current.id === user.id}
+              orientation="horizontal"
+              className="checkbox flex items-center gap-2"
+            >
               <Checkbox
                 checked={disabled}
                 disabled={current.id === user.id}
                 onCheckedChange={(checked) => setDisabled(checked === true)}
               />
-              Disabled
-            </Label>
+              <FieldLabel>Disabled</FieldLabel>
+            </Field>
             {current.id === user.id && (
               <p className="text-xs text-muted-foreground">
                 You cannot disable your own account.
@@ -392,9 +422,10 @@ function UserForm({
             )}
           </section>
         )}
-      </fieldset>
+      </FieldSet>
       <ErrorMessage message={error} />
-      <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+      <div className="flex flex-wrap justify-end gap-2   pt-4">
+        <Separator className="basis-full" />
         <Button type="button" disabled={busy} onClick={onCancel}>
           Cancel
         </Button>
@@ -402,6 +433,6 @@ function UserForm({
           {busy ? 'Saving…' : user ? 'Save access' : 'Invite user'}
         </Button>
       </div>
-    </form>
+    </Form>
   )
 }

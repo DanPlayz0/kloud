@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils'
 import { useId, useState, type ReactNode } from 'react'
 import { Lock } from 'lucide-react'
 import { Checkbox, Label } from './controls'
@@ -60,9 +61,11 @@ export function CheckboxTree({
     if (!items.length) return null
     return (
       <ul
-        className={
-          parentId ? 'ml-2 space-y-1 border-l border-border pl-4' : 'space-y-1'
-        }
+        className={cn(
+          parentId
+            ? 'ml-2 flex flex-col gap-1 border-l border-border pl-4'
+            : 'flex flex-col gap-1',
+        )}
       >
         {items.map((item) => {
           const state = itemStates.find((state) => state.id === item.id)!

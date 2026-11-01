@@ -1,5 +1,6 @@
+import { Field, FieldLabel } from '@/components/ui/field'
 import { useState } from 'react'
-import { Input, Label } from './ui/controls'
+import { Input } from './ui/controls'
 
 export function ProjectFields() {
   const [name, setName] = useState('')
@@ -16,8 +17,8 @@ export function ProjectFields() {
 
   return (
     <>
-      <Label>
-        Project name
+      <Field>
+        <FieldLabel>Project name</FieldLabel>
         <Input
           name="name"
           required
@@ -26,9 +27,9 @@ export function ProjectFields() {
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
-      </Label>
-      <Label>
-        Project slug
+      </Field>
+      <Field>
+        <FieldLabel>Project slug</FieldLabel>
         <Input
           name="slug"
           required
@@ -38,7 +39,7 @@ export function ProjectFields() {
           value={customSlug ?? generatedSlug}
           onChange={(event) => setCustomSlug(event.target.value || undefined)}
         />
-      </Label>
+      </Field>
     </>
   )
 }

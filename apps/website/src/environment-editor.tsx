@@ -1,3 +1,4 @@
+import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useState } from 'react'
 import {
   parseEnvironment,
@@ -5,7 +6,8 @@ import {
 } from '@kloud/protocol/environment'
 import { api } from './api'
 import { ErrorMessage } from './components'
-import { Button, Input, Label, Textarea } from './components/ui/controls'
+import { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group'
+import { Button, Input, Textarea } from './components/ui/controls'
 
 export function EnvironmentEditor({
   value,
@@ -86,33 +88,36 @@ export function EnvironmentEditor({
     }
   }
   return (
-    <div className="space-y-3">
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          disabled={mode === 'normal'}
-          onClick={() => {
-            try {
-              const next = parseEnvironment(text)
-              onChange(next)
-              setRows(Object.entries(next))
-              setError('')
-              setMode('normal')
-            } catch (e) {
-              setError(e instanceof Error ? e.message : 'Invalid document')
-            }
-          }}
-        >
+    <div className="flex flex-col gap-3">
+      <ToggleGroup
+        type="single"
+        value={mode}
+        spacing={2}
+        aria-label="Environment editor mode"
+        onValueChange={(value) => {
+          if (!value || value === mode) return
+          if (value === 'developer') {
+            void developer()
+            return
+          }
+          try {
+            const next = parseEnvironment(text)
+            onChange(next)
+            setRows(Object.entries(next))
+            setError('')
+            setMode('normal')
+          } catch (e) {
+            setError(e instanceof Error ? e.message : 'Invalid document')
+          }
+        }}
+      >
+        <ToggleGroupItem value="normal" disabled={busy}>
           Normal
-        </Button>
-        <Button
-          type="button"
-          disabled={busy || mode === 'developer' || !revealUrl}
-          onClick={() => void developer()}
-        >
+        </ToggleGroupItem>
+        <ToggleGroupItem value="developer" disabled={busy || !revealUrl}>
           Developer .env
-        </Button>
-      </div>
+        </ToggleGroupItem>
+      </ToggleGroup>
       {!revealUrl && (
         <p className="text-xs text-muted-foreground">
           Full developer mode requires a saved draft and the separate Reveal
@@ -121,9 +126,10 @@ export function EnvironmentEditor({
       )}
       <ErrorMessage message={error} />
       {mode === 'developer' ? (
-        <Label>
-          Complete .env document
+        <Field>
+          <FieldLabel>Complete .env document</FieldLabel>
           <Textarea
+            validationMessage={error}
             rows={16}
             value={text}
             spellCheck={false}
@@ -142,25 +148,17 @@ export function EnvironmentEditor({
             Double quotes support escaped newlines, tabs, quotes and
             backslashes; quoted values may span lines.
           </span>
-          {error && (
-            <Input
-              className="sr-only"
-              required
-              value=""
-              onChange={() => {}}
-              aria-label="Fix environment syntax before saving"
-            />
-          )}
-        </Label>
+        </Field>
       ) : (
         <>
           {rows.map(([key, v], index) => (
-            <div key={index} className="flex items-end gap-2">
-              <Label className="min-w-0 flex-1">
-                Variable name
+            <FieldGroup key={index} className="flex items-end gap-2 flex-row">
+              <Field className="min-w-0 flex-1">
+                <FieldLabel>Variable name</FieldLabel>
                 <Input
                   required
                   pattern="[A-Za-z_][A-Za-z0-9_]*"
+                  validationMessage={error}
                   value={key}
                   onChange={(e) =>
                     update(
@@ -170,9 +168,9 @@ export function EnvironmentEditor({
                     )
                   }
                 />
-              </Label>
-              <Label className="min-w-0 flex-1">
-                Value
+              </Field>
+              <Field className="min-w-0 flex-1">
+                <FieldLabel>Value</FieldLabel>
                 <Input
                   type="password"
                   autoComplete="new-password"
@@ -185,27 +183,18 @@ export function EnvironmentEditor({
                     )
                   }
                 />
-              </Label>
+              </Field>
               <Button
                 type="button"
                 onClick={() => update(rows.filter((_, i) => i !== index))}
               >
                 Remove
               </Button>
-            </div>
+            </FieldGroup>
           ))}
           <Button type="button" onClick={() => setRows([...rows, ['', '']])}>
             Add variable
           </Button>
-          {error && (
-            <Input
-              className="sr-only"
-              required
-              value=""
-              onChange={() => {}}
-              aria-label="Fix variable errors before saving"
-            />
-          )}
         </>
       )}
     </div>

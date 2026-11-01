@@ -50,7 +50,7 @@ export function ConnectorOverview({
       active="overview"
       title="Overview"
     >
-      <section className="compute-content space-y-4">
+      <section className="compute-content flex flex-col gap-4">
         <div className="page-heading">
           <div>
             <p className="eyebrow">CONNECTOR</p>
@@ -66,7 +66,7 @@ export function ConnectorOverview({
         </div>
         <ErrorMessage message={error || actionError} />
         {message && <p role="status">{message}</p>}
-        <Card className="space-y-4 p-5">
+        <Card className="flex flex-col gap-4 p-5">
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
               <dt className="text-sm text-muted-foreground">Host</dt>

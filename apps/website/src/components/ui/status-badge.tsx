@@ -1,4 +1,5 @@
-import { clsx } from 'clsx'
+import { Badge } from './badge'
+import { cn } from '@/lib/utils'
 
 function statusTone(status: string, deployment: boolean) {
   const value = status.toLowerCase()
@@ -52,12 +53,13 @@ export function StatusBadge({
   className?: string
 }) {
   return (
-    <span
-      className={clsx('status-badge', className)}
+    <Badge
+      variant="outline"
+      className={cn('status-badge', className)}
       data-tone={statusTone(children, deployment)}
     >
       <span className="status-dot" aria-hidden="true" />
       {children}
-    </span>
+    </Badge>
   )
 }

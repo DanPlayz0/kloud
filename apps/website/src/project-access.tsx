@@ -1,3 +1,15 @@
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from '@/components/ui/table'
+import { FieldGroup, FieldSet, Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { TableCard, FormCard } from './components/ui/card'
 import { useRef, useState, type FormEvent } from 'react'
 import { ServiceGrantsEditor } from './service-grants'
@@ -24,7 +36,7 @@ import {
   type Project,
 } from './api'
 import { Shell, usePolling, ErrorMessage } from './components'
-import { Button, Input, Label, NativeSelect } from './components/ui/controls'
+import { Button, Input, NativeSelect } from './components/ui/controls'
 import {
   CheckboxTree,
   CheckboxTreeCheckboxState,
@@ -100,7 +112,7 @@ export function ProjectAccessPage({
       active="access"
       title="Project / Access"
     >
-      <section className="admin-content space-y-6">
+      <section className="admin-content flex flex-col gap-6">
         <div className="page-heading">
           <h1>Project access</h1>
         </div>
@@ -113,7 +125,7 @@ export function ProjectAccessPage({
           </p>
         )}
         {data && (
-          <fieldset disabled={busy} className="space-y-6 min-w-0">
+          <FieldSet disabled={busy} className="flex flex-col gap-6 min-w-0">
             <FormCard
               key={`settings:${revision}`}
               onSubmit={(e) => {
@@ -123,8 +135,8 @@ export function ProjectAccessPage({
                 })
               }}
             >
-              <Label>
-                Default matching mode
+              <Field>
+                <FieldLabel>Default matching mode</FieldLabel>
                 <NativeSelect
                   aria-label="Default matching mode"
                   name="grant_mode"
@@ -133,7 +145,7 @@ export function ProjectAccessPage({
                   <option value="id">Container IDs</option>
                   <option value="name">Exact container names</option>
                 </NativeSelect>
-              </Label>
+              </Field>
               <Button>Save default</Button>
               <p className="text-muted-foreground text-sm">
                 Existing grants stay unchanged. Names follow recreated
@@ -170,41 +182,41 @@ export function ProjectAccessPage({
               target.
             </p>
             <TableCard>
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-border bg-background text-muted-foreground">
-                  <tr>
-                    <th scope="col" className="p-4 font-medium">
+              <Table className="w-full text-left text-sm">
+                <TableHeader className="border-b border-border bg-background text-muted-foreground">
+                  <TableRow>
+                    <TableHead scope="col" className="p-4 font-medium">
                       Member
-                    </th>
-                    <th scope="col" className="p-4 font-medium">
+                    </TableHead>
+                    <TableHead scope="col" className="p-4 font-medium">
                       Permissions
-                    </th>
-                    <th scope="col" className="p-4 font-medium">
+                    </TableHead>
+                    <TableHead scope="col" className="p-4 font-medium">
                       Status
-                    </th>
-                    <th scope="col" className="p-4">
+                    </TableHead>
+                    <TableHead scope="col" className="p-4">
                       <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {members.map((member) => (
-                    <tr
+                    <TableRow
                       key={member.id}
                       className="border-b border-border last:border-0"
                     >
-                      <td className="p-4 font-medium">
+                      <TableCell className="p-4 font-medium">
                         <span className="break-all">{member.username}</span>
-                      </td>
-                      <td className="p-4 text-muted-foreground">
+                      </TableCell>
+                      <TableCell className="p-4 text-muted-foreground">
                         {member.role === 'admin'
                           ? 'Project Administrator'
                           : `${member.grants.length} container grants · ${member.service_grants?.length ?? 0} service grants · ${member.pm2_grants?.length ?? 0} PM2 grants`}
-                      </td>
-                      <td className="p-4 text-muted-foreground">
+                      </TableCell>
+                      <TableCell className="p-4 text-muted-foreground">
                         {member.disabled ? 'Disabled' : 'Active'}
-                      </td>
-                      <td className="p-4">
+                      </TableCell>
+                      <TableCell className="p-4">
                         <div className="flex justify-end gap-2">
                           <MemberDialog
                             project={project}
@@ -236,28 +248,32 @@ export function ProjectAccessPage({
                                 )
                             }}
                           >
-                            <UserX className="size-4" aria-hidden="true" />
+                            <UserX
+                              data-icon="inline-start"
+
+                              aria-hidden="true"
+                            />
                           </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
                   {!members.length && (
-                    <tr>
-                      <td
+                    <TableRow>
+                      <TableCell
                         colSpan={4}
                         className="h-28 p-4 text-center text-muted-foreground"
                       >
                         {query
                           ? 'No members match your search.'
                           : 'No project members yet.'}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </TableCard>
-          </fieldset>
+          </FieldSet>
         )}
       </section>
     </Shell>
@@ -293,11 +309,15 @@ function MemberDialog(props: MemberEditorProps) {
         onClick={() => setOpen(true)}
       >
         {props.member ? (
-          <UserPen className="size-4" aria-hidden="true" />
+          <UserPen data-icon="inline-start" aria-hidden="true" />
         ) : (
           <>
-            <UserPlus className="size-4" aria-hidden="true" /> Invite or add
-            member
+            <UserPlus
+              data-icon="inline-start"
+
+              aria-hidden="true"
+            />{' '}
+            Invite or add member
           </>
         )}
       </Button>
@@ -418,21 +438,21 @@ function MemberEditor({
     })
   }
   return (
-    <form
-      className="mt-5 space-y-4 min-w-0"
+    <Form
+      className="mt-5 flex flex-col gap-4 min-w-0"
       aria-busy={saving}
       onSubmit={submit}
     >
-      <fieldset disabled={saving} className="min-w-0 space-y-4">
-        <div className="flex flex-wrap items-end gap-4">
+      <FieldSet disabled={saving} className="min-w-0 flex flex-col gap-4">
+        <FieldGroup className="flex flex-wrap items-end gap-4 flex-row">
           {member ? (
             <strong className="break-all">
               {member.username}
               {member.disabled && ' (disabled)'}
             </strong>
           ) : (
-            <Label>
-              Username
+            <Field>
+              <FieldLabel>Username</FieldLabel>
               <Input
                 name="username"
                 required
@@ -440,10 +460,10 @@ function MemberEditor({
                 pattern="[a-zA-Z0-9_.@\-]+"
                 autoComplete="off"
               />
-            </Label>
+            </Field>
           )}
-          <Label>
-            Project role
+          <Field>
+            <FieldLabel>Project role</FieldLabel>
             <NativeSelect
               aria-label="Project role"
               value={role}
@@ -452,8 +472,8 @@ function MemberEditor({
               <option value="member">Project Member</option>
               <option value="admin">Project Administrator</option>
             </NativeSelect>
-          </Label>
-        </div>
+          </Field>
+        </FieldGroup>
         {role === 'admin' && (
           <p className="text-muted-foreground text-sm">
             This role grants all project container capabilities and access
@@ -478,7 +498,7 @@ function MemberEditor({
           onChange={setDnsGrants}
           disabled={role === 'admin'}
         />
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <h3>Container grants</h3>
           {grants.map((g, index) => (
             <div
@@ -522,9 +542,9 @@ function MemberEditor({
             </p>
           )}
         </div>
-        <div className="flex flex-wrap gap-4 items-end">
-          <Label>
-            Grant target
+        <FieldGroup className="flex flex-wrap gap-4 items-end flex-row">
+          <Field>
+            <FieldLabel>Grant target</FieldLabel>
             <NativeSelect
               aria-label="Grant target"
               value={kind}
@@ -534,10 +554,10 @@ function MemberEditor({
               <option value="id">Container ID</option>
               <option value="name">Exact container name</option>
             </NativeSelect>
-          </Label>
+          </Field>
           {kind !== 'all' && (
-            <Label>
-              Container
+            <Field>
+              <FieldLabel>Container</FieldLabel>
               <NativeSelect
                 aria-label="Container"
                 value={selected}
@@ -553,7 +573,7 @@ function MemberEditor({
                   </option>
                 ))}
               </NativeSelect>
-            </Label>
+            </Field>
           )}
           <Button
             type="button"
@@ -566,7 +586,7 @@ function MemberEditor({
           >
             Add grant
           </Button>
-        </div>
+        </FieldGroup>
         <CheckboxTree
           data={containerPermissionItems}
           value={getInitialCheckboxTreeValues(
@@ -586,13 +606,14 @@ function MemberEditor({
             )
           }
         />
-      </fieldset>
+      </FieldSet>
       {saveError && (
-        <p role="alert" className="error">
-          {saveError}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
       )}
-      <div className="flex flex-wrap justify-end gap-3 border-t border-border pt-4">
+      <div className="flex flex-wrap justify-end gap-3   pt-4">
+        <Separator className="basis-full" />
         <Button type="button" disabled={saving} onClick={onCancel}>
           Cancel
         </Button>
@@ -619,6 +640,6 @@ function MemberEditor({
               : 'Invite or add member'}
         </Button>
       </div>
-    </form>
+    </Form>
   )
 }

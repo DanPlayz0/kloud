@@ -1,13 +1,10 @@
+import { Separator } from '@/components/ui/separator'
+import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { useState, useEffect } from 'react'
 import { api } from './api'
 import { usePolling, ErrorMessage } from './components'
-import {
-  Button,
-  Input,
-  Label,
-  NativeSelect,
-  Checkbox,
-} from './components/ui/controls'
+import { Button, Input, NativeSelect, Checkbox } from './components/ui/controls'
 import { effectiveAddresses, type ServerAddresses } from './server-addresses'
 
 export function DomainDns({
@@ -53,7 +50,8 @@ export function DomainDns({
     )
   })
   return (
-    <div className="space-y-3 border-t border-border pt-3">
+    <div className="flex flex-col gap-3   pt-3">
+      <Separator className="basis-full" />
       <h3 className="font-medium">DNS records</h3>
       <p className="text-xs text-muted-foreground">
         Manual DNS: point A / AAAA records for {hostname} to this server.
@@ -82,8 +80,8 @@ export function DomainDns({
           propagation is separate)
         </p>
       ))}
-      <form
-        className="space-y-3"
+      <Form
+        className="flex flex-col gap-3"
         onSubmit={async (e) => {
           e.preventDefault()
           setBusy(true)
@@ -109,9 +107,9 @@ export function DomainDns({
           }
         }}
       >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Label>
-            A address
+        <FieldGroup className="grid gap-3 sm:grid-cols-2">
+          <Field>
+            <FieldLabel>A address</FieldLabel>
             <Input
               value={ipv4}
               onChange={(e) => {
@@ -120,9 +118,9 @@ export function DomainDns({
               }}
               placeholder="IPv4 unavailable; enter manually"
             />
-          </Label>
-          <Label>
-            AAAA address
+          </Field>
+          <Field>
+            <FieldLabel>AAAA address</FieldLabel>
             <Input
               value={ipv6}
               onChange={(e) => {
@@ -131,9 +129,9 @@ export function DomainDns({
               }}
               placeholder="Optional IPv6"
             />
-          </Label>
-        </div>
-        <Label className="flex items-center gap-2">
+          </Field>
+        </FieldGroup>
+        <Field orientation="horizontal" className="flex items-center gap-2">
           <Checkbox
             checked={useV6}
             onCheckedChange={(v) => {
@@ -141,8 +139,8 @@ export function DomainDns({
               setReviewed(false)
             }}
           />
-          Publish AAAA after verifying IPv6 ingress
-        </Label>
+          <FieldLabel>Publish AAAA after verifying IPv6 ingress</FieldLabel>
+        </Field>
         {stale && (
           <p className="text-xs text-muted-foreground">
             A detected address is stale or detection failed. Verify the target
@@ -156,8 +154,8 @@ export function DomainDns({
           </p>
         ) : (
           <>
-            <Label>
-              Cloudflare zone
+            <Field>
+              <FieldLabel>Cloudflare zone</FieldLabel>
               <NativeSelect
                 required
                 value={zone}
@@ -173,7 +171,7 @@ export function DomainDns({
                   </option>
                 ))}
               </NativeSelect>
-            </Label>
+            </Field>
             <div className="rounded border border-border bg-muted p-3 text-sm">
               {ipv4 && (
                 <p>
@@ -190,13 +188,16 @@ export function DomainDns({
                 update in Cloud DNS.
               </p>
             </div>
-            <Label className="flex items-center gap-2">
+            <Field orientation="horizontal" className="flex items-center gap-2">
               <Checkbox
                 checked={reviewed}
                 onCheckedChange={(v) => setReviewed(v === true)}
               />
-              I reviewed the exact DNS records and verified the target addresses
-            </Label>
+              <FieldLabel>
+                I reviewed the exact DNS records and verified the target
+                addresses
+              </FieldLabel>
+            </Field>
             <Button
               disabled={
                 busy || !reviewed || !zone || (!ipv4 && !(useV6 && ipv6))
@@ -207,7 +208,7 @@ export function DomainDns({
           </>
         )}
         <ErrorMessage message={error} />
-      </form>
+      </Form>
     </div>
   )
 }

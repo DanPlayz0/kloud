@@ -1,3 +1,11 @@
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from '@/components/ui/table'
 import { Fragment, useRef, useState } from 'react'
 import { TableCard } from './components/ui/card'
 import { Button } from './components/ui/controls'
@@ -43,7 +51,7 @@ export function Compute({
       title="Compute / Containers"
       active={connector ? 'compute/containers' : 'containers'}
     >
-      <section className="compute-content space-y-4">
+      <section className="compute-content flex flex-col gap-4">
         <div className="page-heading">
           <div>
             <p className="eyebrow">COMPUTE</p>
@@ -75,9 +83,9 @@ export function Compute({
         {data && data.length > 0 && (
           <>
             <TableCard>
-              <table className="w-full min-w-[640px] text-left text-sm">
-                <thead className="border-b border-border text-muted-foreground">
-                  <tr>
+              <Table className="w-full min-w-[640px] text-left text-sm">
+                <TableHeader className="border-b border-border text-muted-foreground">
+                  <TableRow>
                     {[
                       'Container',
                       connector ? 'Project' : 'Host',
@@ -85,13 +93,13 @@ export function Compute({
                       'CPU',
                       'Memory',
                     ].map((label) => (
-                      <th key={label} scope="col" className="p-3">
+                      <TableHead key={label} scope="col" className="p-3">
                         {label}
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.map((row) => (
                     <ContainerInventoryRow
                       key={`${row.connector_id}:${row.container_id}`}
@@ -101,8 +109,8 @@ export function Compute({
                       stale={isStale(row)}
                     />
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </TableCard>
             <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
               <span>
@@ -135,14 +143,15 @@ function ContainerInventoryRow({
   )
   return (
     <Fragment>
-      <tr
+      <TableRow
         className="cursor-pointer border-b border-border hover:bg-muted focus-within:bg-muted"
         onClick={() => setOpen(true)}
       >
-        <td className="min-w-48 p-3">
+        <TableCell className="min-w-48 p-3">
           <Button
             ref={trigger}
-            className="!border-0 !bg-transparent !p-0 text-left font-medium break-all hover:underline"
+            className="text-left  break-all"
+            variant="link"
             aria-label={`Manage ${row.data.name}`}
             aria-haspopup="dialog"
             onClick={() => setOpen(true)}
@@ -161,8 +170,8 @@ function ContainerInventoryRow({
               View {row.application} application
             </a>
           )}
-        </td>
-        <td className="p-3 break-words">
+        </TableCell>
+        <TableCell className="p-3 break-words">
           {scope.kind === 'connector' ? (
             assignedProject ? (
               <a
@@ -180,11 +189,11 @@ function ContainerInventoryRow({
               {row.host ?? row.connector_name}
             </QuickTip>
           )}
-        </td>
-        <td className="p-3 whitespace-nowrap">
+        </TableCell>
+        <TableCell className="p-3 whitespace-nowrap">
           <StatusBadge>{stale ? 'Stale' : row.data.state}</StatusBadge>
-        </td>
-        <td className="p-3">
+        </TableCell>
+        <TableCell className="p-3">
           <Meter
             value={stale ? null : row.data.cpu}
             label={
@@ -193,8 +202,8 @@ function ContainerInventoryRow({
                 : `${row.data.cpu.toFixed(1)}%`
             }
           />
-        </td>
-        <td className="p-3">
+        </TableCell>
+        <TableCell className="p-3">
           <Meter
             value={
               stale || row.data.memory === null || !row.data.memoryLimit
@@ -207,8 +216,8 @@ function ContainerInventoryRow({
                 : `${bytes(row.data.memory)}${row.data.memoryLimit ? ` / ${bytes(row.data.memoryLimit)}` : ''}`
             }
           />
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
       <ContainerOperations
         scope={scope}
         container={row}

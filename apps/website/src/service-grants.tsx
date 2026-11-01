@@ -1,7 +1,8 @@
+import { FieldLegend, Field, FieldLabel } from '@/components/ui/field'
 import { CardFieldset } from './components/ui/card'
 import { useState } from 'react'
 import { serviceCapabilities, type ServiceGrant, type Service } from './api'
-import { Button, Label, NativeSelect } from './components/ui/controls'
+import { Button, NativeSelect } from './components/ui/controls'
 import {
   CheckboxTree,
   CheckboxTreeCheckboxState,
@@ -70,7 +71,9 @@ export function ServiceGrantsEditor({
   }
   return (
     <CardFieldset disabled={disabled}>
-      <legend className="px-2 font-medium">Service permissions</legend>
+      <FieldLegend className="px-2 font-medium">
+        Service permissions
+      </FieldLegend>
       <p className="text-sm text-muted-foreground">
         Project administrators have all service permissions. Deployment access
         lets members run repository code on the selected host.
@@ -116,8 +119,8 @@ export function ServiceGrantsEditor({
           No member service permissions.
         </p>
       )}
-      <Label>
-        Service target
+      <Field data-disabled={disabled}>
+        <FieldLabel>Service target</FieldLabel>
         <NativeSelect
           aria-label="Service target"
           value={target}
@@ -131,7 +134,7 @@ export function ServiceGrantsEditor({
             </option>
           ))}
         </NativeSelect>
-      </Label>
+      </Field>
       <CheckboxTree
         data={items}
         disabled={disabled}

@@ -1,9 +1,12 @@
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { useState, type FormEvent } from 'react'
 import { startAuthentication } from '@simplewebauthn/browser'
 import type { AuthenticationResult, FactorMethod } from '@kloud/protocol/auth'
 import { api } from '../api'
-import { Button, Input, Label } from './ui/controls'
+import { Button, Input } from './ui/controls'
 import { ErrorMessage } from '../components'
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 
 export const factorLabels = {
   email: 'Email',
@@ -72,34 +75,42 @@ export function FactorVerification({
     }
   }
   return (
-    <section className="space-y-4" aria-label="Second-factor verification">
+    <section
+      className="flex flex-col gap-4"
+      aria-label="Second-factor verification"
+    >
       <p>Verify your identity with one of your enabled methods.</p>
-      <div className="flex flex-wrap gap-2">
+      <ToggleGroup
+        type="single"
+        value={method ?? ''}
+        spacing={2}
+        className="flex-wrap"
+        aria-label="Verification method"
+        onValueChange={(value) => {
+          if (value) void choose(value as FactorMethod | 'recovery')
+        }}
+      >
         {challenge.methods.map((value) => (
-          <Button
+          <ToggleGroupItem
             key={value}
-            type="button"
-            aria-pressed={method === value}
+            value={value}
+            onClick={() => {
+              if (method === value) void choose(value)
+            }}
             disabled={
               busy ||
               (value === 'email' && !challenge.emailAvailable) ||
               (value === 'passkey' && challenge.passkeyAvailable === false) ||
               (value === 'totp' && !challenge.totpAvailable)
             }
-            onClick={() => void choose(value)}
           >
             {factorLabels[value]}
-          </Button>
+          </ToggleGroupItem>
         ))}
-        <Button
-          type="button"
-          aria-pressed={method === 'recovery'}
-          disabled={busy}
-          onClick={() => void choose('recovery')}
-        >
+        <ToggleGroupItem value="recovery" disabled={busy}>
           Recovery code
-        </Button>
-      </div>
+        </ToggleGroupItem>
+      </ToggleGroup>
       {challenge.methods.includes('email') && !challenge.emailAvailable && (
         <p className="text-muted-foreground">
           Email verification is unavailable until email delivery is configured.
@@ -113,16 +124,18 @@ export function FactorVerification({
         </p>
       )}
       {method && method !== 'passkey' && (
-        <form onSubmit={(e) => void verify(e)} className="space-y-3">
+        <Form onSubmit={(e) => void verify(e)} className="flex flex-col gap-3">
           {method === 'email' && sentAt > 0 && (
             <p role="status">
               Code sent. Check your email. You can resend after 60 seconds.
             </p>
           )}
-          <Label>
-            {method === 'recovery'
-              ? 'Recovery code'
-              : `${factorLabels[method]} code`}
+          <Field>
+            <FieldLabel>
+              {method === 'recovery'
+                ? 'Recovery code'
+                : `${factorLabels[method]} code`}
+            </FieldLabel>
             <Input
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -131,7 +144,7 @@ export function FactorVerification({
               maxLength={method === 'recovery' ? 100 : 6}
               required
             />
-          </Label>
+          </Field>
           <Button disabled={busy || (method === 'email' && !sentAt)}>
             {busy ? 'Verifying…' : 'Verify code'}
           </Button>
@@ -144,7 +157,7 @@ export function FactorVerification({
               Resend email
             </Button>
           )}
-        </form>
+        </Form>
       )}
       {challenge.methods.includes('passkey') &&
         challenge.passkeyAvailable === false && (

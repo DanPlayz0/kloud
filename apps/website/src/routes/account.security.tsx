@@ -1,3 +1,6 @@
+import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, type FormEvent } from 'react'
 import { startRegistration } from '@simplewebauthn/browser'
@@ -10,7 +13,7 @@ import type {
 import { api, ApiError, session, type Project } from '../api'
 import { Shell, ErrorMessage } from '../components'
 import { Card } from '../components/ui/card'
-import { Button, Input, Label } from '../components/ui/controls'
+import { Button, Input } from '../components/ui/controls'
 import {
   FactorVerification,
   factorLabels,
@@ -138,7 +141,7 @@ function AccountSecurity() {
       title="Account security"
       active="security"
     >
-      <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
+      <div className="mx-auto w-full max-w-3xl flex flex-col gap-6 p-6">
         <div>
           <h1 className="text-2xl font-semibold">Account security</h1>
           <p className="text-muted-foreground">
@@ -149,297 +152,351 @@ function AccountSecurity() {
         <ErrorMessage message={error} />
         {notice && <p role="status">{notice}</p>}
         {codes && (
-          <Card className="space-y-3 border-border bg-card p-5">
-            <h2 className="text-lg font-semibold">Save your recovery codes</h2>
-            <p>
-              Each code can be used once after your password. These codes are
-              shown only now. Store them somewhere safe.
-            </p>
-            <ul className="grid gap-2 font-mono sm:grid-cols-2">
-              {codes.map((value) => (
-                <li key={value}>{value}</li>
-              ))}
-            </ul>
-            <Button
-              onClick={() => {
-                const url = URL.createObjectURL(
-                  new Blob([codes.join('\n')], { type: 'text/plain' }),
-                )
-                const link = document.createElement('a')
-                link.href = url
-                link.download = 'kloud-recovery-codes.txt'
-                link.click()
-                setTimeout(() => URL.revokeObjectURL(url), 1000)
-              }}
-            >
-              Download recovery codes
-            </Button>
-            <Button onClick={() => setCodes(undefined)}>
-              I have saved these codes
-            </Button>
+          <Card className="flex flex-col gap-3 border-border bg-card p-5">
+            <CardHeader>
+              <CardTitle asChild>
+                <h2 className="text-lg font-semibold">
+                  Save your recovery codes
+                </h2>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p>
+                Each code can be used once after your password. These codes are
+                shown only now. Store them somewhere safe.
+              </p>
+              <ul className="grid gap-2 font-mono sm:grid-cols-2">
+                {codes.map((value) => (
+                  <li key={value}>{value}</li>
+                ))}
+              </ul>
+              <Button
+                onClick={() => {
+                  const url = URL.createObjectURL(
+                    new Blob([codes.join('\n')], { type: 'text/plain' }),
+                  )
+                  const link = document.createElement('a')
+                  link.href = url
+                  link.download = 'kloud-recovery-codes.txt'
+                  link.click()
+                  setTimeout(() => URL.revokeObjectURL(url), 1000)
+                }}
+              >
+                Download recovery codes
+              </Button>
+              <Button onClick={() => setCodes(undefined)}>
+                I have saved these codes
+              </Button>
+            </CardContent>
           </Card>
         )}
-        <Card className="space-y-3 border-border bg-card p-5">
-          <h2 className="text-lg font-semibold">Confirm your identity</h2>
-          {unlocked ? (
-            <p role="status">
-              Security settings unlocked for up to five minutes. Confirm again
-              after each change.
-            </p>
-          ) : challenge ? (
-            <FactorVerification
-              challenge={challenge}
-              onComplete={() => {
-                setChallenge(undefined)
-                setUnlocked(true)
-              }}
-              onCancel={() => setChallenge(undefined)}
-            />
-          ) : (
-            <form onSubmit={(e) => void reauth(e)} className="space-y-3">
-              <Label>
-                Current password
-                <Input
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  maxLength={256}
-                />
-              </Label>
-              <Button disabled={busy}>Confirm identity</Button>
-            </form>
-          )}
-        </Card>
-        <Card className="space-y-3 border-border bg-card p-5">
-          <h2 className="text-lg font-semibold">
-            Email{' '}
-            {security.methods.includes('email') ? '— enabled' : '— disabled'}
-          </h2>
-          {security.email && <p>Verified address: {security.email}</p>}
-          {!security.emailAvailable && (
-            <p className="text-muted-foreground">
-              Email verification is unavailable until an administrator
-              configures SMTP delivery.
-            </p>
-          )}
-          <Label>
-            Email address
-            <Input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              maxLength={254}
-              disabled={disabled || !security.emailAvailable}
-            />
-          </Label>
-          <Button
-            disabled={disabled || !security.emailAvailable || !email}
-            onClick={() => void enroll('email')}
-          >
-            {enrollment?.method === 'email'
-              ? 'Resend verification email'
-              : security.methods.includes('email')
-                ? 'Change verified email'
-                : 'Enable Email'}
-          </Button>
-          {security.methods.includes('email') && (
-            <Button
-              disabled={disabled}
-              onClick={() =>
-                void run(async () =>
-                  finish(
-                    await api('/auth/security/remove', 'POST', {
-                      method: 'email',
-                    }),
-                  ),
-                )
-              }
-            >
-              Disable Email
-            </Button>
-          )}
-        </Card>
-        <Card className="space-y-3 border-border bg-card p-5">
-          <h2 className="text-lg font-semibold">
-            Authenticator app{' '}
-            {security.methods.includes('totp') ? '— enabled' : '— disabled'}
-          </h2>
-          <p className="text-muted-foreground">
-            Use a TOTP app to generate a new six-digit code every 30 seconds.
-          </p>
-          {!security.totpAvailable && (
-            <p className="text-muted-foreground">
-              An administrator must configure AUTH_ENCRYPTION_KEY before using
-              authenticator verification.
-            </p>
-          )}
-          <Button
-            disabled={disabled || !security.totpAvailable}
-            onClick={() => void enroll('totp')}
-          >
-            {security.methods.includes('totp')
-              ? 'Replace authenticator'
-              : 'Enable authenticator app'}
-          </Button>
-          {security.methods.includes('totp') && (
-            <Button
-              disabled={disabled}
-              onClick={() =>
-                void run(async () =>
-                  finish(
-                    await api('/auth/security/remove', 'POST', {
-                      method: 'totp',
-                    }),
-                  ),
-                )
-              }
-            >
-              Disable authenticator app
-            </Button>
-          )}
-        </Card>
-        {enrollment && (
-          <Card className="space-y-3 border-border bg-card p-5">
-            <h2 className="text-lg font-semibold">
-              Verify {factorLabels[enrollment.method]}
-            </h2>
-            {enrollment.qr && (
-              <img
-                src={enrollment.qr}
-                width={240}
-                height={240}
-                alt="Scan this QR code with your authenticator app"
+        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+          <CardHeader>
+            <CardTitle asChild>
+              <h2 className="text-lg font-semibold">Confirm your identity</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {unlocked ? (
+              <p role="status">
+                Security settings unlocked for up to five minutes. Confirm again
+                after each change.
+              </p>
+            ) : challenge ? (
+              <FactorVerification
+                challenge={challenge}
+                onComplete={() => {
+                  setChallenge(undefined)
+                  setUnlocked(true)
+                }}
+                onCancel={() => setChallenge(undefined)}
               />
+            ) : (
+              <Form
+                onSubmit={(e) => void reauth(e)}
+                className="flex flex-col gap-3"
+              >
+                <Field>
+                  <FieldLabel>Current password</FieldLabel>
+                  <Input
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    maxLength={256}
+                  />
+                </Field>
+                <Button disabled={busy}>Confirm identity</Button>
+              </Form>
             )}
-            {enrollment.secret && (
-              <p>
-                Manual setup key:{' '}
-                <code className="break-all">{enrollment.secret}</code>
+          </CardContent>
+        </Card>
+        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+          <CardHeader>
+            <CardTitle asChild>
+              <h2 className="text-lg font-semibold">
+                Email{' '}
+                {security.methods.includes('email')
+                  ? '— enabled'
+                  : '— disabled'}
+              </h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {security.email && <p>Verified address: {security.email}</p>}
+            {!security.emailAvailable && (
+              <p className="text-muted-foreground">
+                Email verification is unavailable until an administrator
+                configures SMTP delivery.
               </p>
             )}
-            <form onSubmit={(e) => void confirm(e)} className="space-y-3">
-              <Label>
-                Verification code
-                <Input
-                  autoComplete="one-time-code"
-                  inputMode="numeric"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                  maxLength={6}
-                />
-              </Label>
-              <Button disabled={disabled}>Verify and enable</Button>
+            <Field data-disabled={disabled || !security.emailAvailable}>
+              <FieldLabel>Email address</FieldLabel>
+              <Input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                maxLength={254}
+                disabled={disabled || !security.emailAvailable}
+              />
+            </Field>
+            <Button
+              disabled={disabled || !security.emailAvailable || !email}
+              onClick={() => void enroll('email')}
+            >
+              {enrollment?.method === 'email'
+                ? 'Resend verification email'
+                : security.methods.includes('email')
+                  ? 'Change verified email'
+                  : 'Enable Email'}
+            </Button>
+            {security.methods.includes('email') && (
               <Button
-                type="button"
-                disabled={busy}
-                onClick={() => setEnrollment(undefined)}
+                disabled={disabled}
+                onClick={() =>
+                  void run(async () =>
+                    finish(
+                      await api('/auth/security/remove', 'POST', {
+                        method: 'email',
+                      }),
+                    ),
+                  )
+                }
               >
-                Cancel enrollment
+                Disable Email
               </Button>
-            </form>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+          <CardHeader>
+            <CardTitle asChild>
+              <h2 className="text-lg font-semibold">
+                Authenticator app{' '}
+                {security.methods.includes('totp') ? '— enabled' : '— disabled'}
+              </h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Use a TOTP app to generate a new six-digit code every 30 seconds.
+            </p>
+            {!security.totpAvailable && (
+              <p className="text-muted-foreground">
+                An administrator must configure AUTH_ENCRYPTION_KEY before using
+                authenticator verification.
+              </p>
+            )}
+            <Button
+              disabled={disabled || !security.totpAvailable}
+              onClick={() => void enroll('totp')}
+            >
+              {security.methods.includes('totp')
+                ? 'Replace authenticator'
+                : 'Enable authenticator app'}
+            </Button>
+            {security.methods.includes('totp') && (
+              <Button
+                disabled={disabled}
+                onClick={() =>
+                  void run(async () =>
+                    finish(
+                      await api('/auth/security/remove', 'POST', {
+                        method: 'totp',
+                      }),
+                    ),
+                  )
+                }
+              >
+                Disable authenticator app
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+        {enrollment && (
+          <Card className="flex flex-col gap-3 border-border bg-card p-5">
+            <CardHeader>
+              <CardTitle asChild>
+                <h2 className="text-lg font-semibold">
+                  Verify {factorLabels[enrollment.method]}
+                </h2>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {enrollment.qr && (
+                <img
+                  src={enrollment.qr}
+                  width={240}
+                  height={240}
+                  alt="Scan this QR code with your authenticator app"
+                />
+              )}
+              {enrollment.secret && (
+                <p>
+                  Manual setup key:{' '}
+                  <code className="break-all">{enrollment.secret}</code>
+                </p>
+              )}
+              <Form
+                onSubmit={(e) => void confirm(e)}
+                className="flex flex-col gap-3"
+              >
+                <Field>
+                  <FieldLabel>Verification code</FieldLabel>
+                  <Input
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    required
+                    maxLength={6}
+                  />
+                </Field>
+                <Button disabled={disabled}>Verify and enable</Button>
+                <Button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setEnrollment(undefined)}
+                >
+                  Cancel enrollment
+                </Button>
+              </Form>
+            </CardContent>
           </Card>
         )}
-        <Card className="space-y-3 border-border bg-card p-5">
-          <h2 className="text-lg font-semibold">
-            Passkeys{' '}
-            {security.methods.includes('passkey') ? '— enabled' : '— disabled'}
-          </h2>
-          {security.passkeyAvailable === false && (
-            <p className="text-muted-foreground">
-              Passkeys require HTTPS on a domain name or localhost. Enable TOTP
-              or Email, or save recovery codes, for direct-IP access.
-            </p>
-          )}
-          <ul className="space-y-2">
-            {security.passkeys.map((key) => (
-              <li
-                key={key.id}
-                className="flex items-center justify-between gap-3"
-              >
-                <span>
-                  {key.name}
-                  {key.rpId && (
-                    <small className="ml-2 text-muted-foreground">
-                      {key.rpId}
-                    </small>
-                  )}
-                </span>
-                <Button
-                  disabled={disabled}
-                  onClick={() =>
-                    void run(async () =>
-                      finish(
-                        await api('/auth/security/remove', 'POST', {
-                          method: 'passkey',
-                          credentialId: key.id,
-                        }),
-                      ),
-                    )
-                  }
+        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+          <CardHeader>
+            <CardTitle asChild>
+              <h2 className="text-lg font-semibold">
+                Passkeys{' '}
+                {security.methods.includes('passkey')
+                  ? '— enabled'
+                  : '— disabled'}
+              </h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {security.passkeyAvailable === false && (
+              <p className="text-muted-foreground">
+                Passkeys require HTTPS on a domain name or localhost. Enable
+                TOTP or Email, or save recovery codes, for direct-IP access.
+              </p>
+            )}
+            <ul className="flex flex-col gap-2">
+              {security.passkeys.map((key) => (
+                <li
+                  key={key.id}
+                  className="flex items-center justify-between gap-3"
                 >
-                  Remove {key.name}
-                </Button>
-              </li>
-            ))}
-          </ul>
-          <Label>
-            Passkey name
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={100}
-              disabled={disabled}
-              placeholder="Personal device"
-            />
-          </Label>
-          <Button
-            disabled={disabled || security.passkeyAvailable === false}
-            onClick={() => void enroll('passkey')}
-          >
-            Add passkey
-          </Button>
+                  <span>
+                    {key.name}
+                    {key.rpId && (
+                      <small className="ml-2 text-muted-foreground">
+                        {key.rpId}
+                      </small>
+                    )}
+                  </span>
+                  <Button
+                    disabled={disabled}
+                    onClick={() =>
+                      void run(async () =>
+                        finish(
+                          await api('/auth/security/remove', 'POST', {
+                            method: 'passkey',
+                            credentialId: key.id,
+                          }),
+                        ),
+                      )
+                    }
+                  >
+                    Remove {key.name}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <Field data-disabled={disabled}>
+              <FieldLabel>Passkey name</FieldLabel>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={100}
+                disabled={disabled}
+                placeholder="Personal device"
+              />
+            </Field>
+            <Button
+              disabled={disabled || security.passkeyAvailable === false}
+              onClick={() => void enroll('passkey')}
+            >
+              Add passkey
+            </Button>
+          </CardContent>
         </Card>
-        <Card className="space-y-3 border-border bg-card p-5">
-          <h2 className="text-lg font-semibold">
-            Recovery and password-only login
-          </h2>
-          <p>{security.recoveryCodesRemaining} recovery codes remaining.</p>
-          <Button
-            disabled={disabled || !security.methods.length}
-            onClick={() =>
-              void run(async () =>
-                finish(await api('/auth/security/recovery-codes', 'POST')),
-              )
-            }
-          >
-            Generate new recovery codes
-          </Button>
-          <p className="text-muted-foreground">
-            Generating new codes invalidates your previous set. Disabling all
-            second factors allows login with your password alone.
-          </p>
-          <Button
-            disabled={disabled || !security.methods.length}
-            onClick={() => {
-              if (
-                window.confirm(
-                  'Disable all second factors and allow password-only login?',
-                )
-              )
+        <Card className="flex flex-col gap-3 border-border bg-card p-5">
+          <CardHeader>
+            <CardTitle asChild>
+              <h2 className="text-lg font-semibold">
+                Recovery and password-only login
+              </h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>{security.recoveryCodesRemaining} recovery codes remaining.</p>
+            <Button
+              disabled={disabled || !security.methods.length}
+              onClick={() =>
                 void run(async () =>
-                  finish(
-                    await api('/auth/security/remove', 'POST', {
-                      method: 'all',
-                    }),
-                  ),
+                  finish(await api('/auth/security/recovery-codes', 'POST')),
                 )
-            }}
-          >
-            Disable all second factors
-          </Button>
+              }
+            >
+              Generate new recovery codes
+            </Button>
+            <p className="text-muted-foreground">
+              Generating new codes invalidates your previous set. Disabling all
+              second factors allows login with your password alone.
+            </p>
+            <Button
+              disabled={disabled || !security.methods.length}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'Disable all second factors and allow password-only login?',
+                  )
+                )
+                  void run(async () =>
+                    finish(
+                      await api('/auth/security/remove', 'POST', {
+                        method: 'all',
+                      }),
+                    ),
+                  )
+              }}
+            >
+              Disable all second factors
+            </Button>
+          </CardContent>
         </Card>
       </div>
     </Shell>

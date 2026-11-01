@@ -1,3 +1,10 @@
+import { Separator } from '@/components/ui/separator'
+import { markFieldInvalid } from '@/components/ui/field-control'
+import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
+import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { EnvironmentEditor } from './environment-editor'
 import { ComposeWatchFields } from './compose-watch-fields'
 import { DeploymentPolicyFields } from './deployment-policy-fields'
@@ -26,7 +33,7 @@ import {
   RuntimeFields,
   type Host,
 } from './service-configuration'
-import { Button, Input, Label } from './components/ui/controls'
+import { Button, Input } from './components/ui/controls'
 import { Card } from './components/ui/card'
 import { CollapsibleSection } from './components/ui/collapsible'
 import {
@@ -206,6 +213,12 @@ export function ServiceCreatePage({
     if (selected === 'dockerfile' || selected === 'git-compose') {
       if (!name.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
         setFieldError('Enter a service name and valid slug.')
+        markFieldInvalid(
+          !name.trim()
+            ? nameField.current
+            : form.querySelector('[name="slug"]'),
+          'Enter a service name and valid slug.',
+        )
         return
       }
       submitting.current = true
@@ -250,6 +263,12 @@ export function ServiceCreatePage({
     if (!slug) {
       reveal('Advanced settings')
       setFieldError('Enter a slug using letters or numbers.')
+      requestAnimationFrame(() =>
+        markFieldInvalid(
+          form.querySelector('[name="slug"]'),
+          'Enter a slug using letters or numbers.',
+        ),
+      )
       requestAnimationFrame(() =>
         form.querySelector<HTMLInputElement>('[name="slug"]')?.focus(),
       )
@@ -319,6 +338,7 @@ export function ServiceCreatePage({
                     'button[aria-label^="Deploy to"]:not(:disabled)',
                   )
                 : form.querySelector<HTMLElement>('[data-source-input]'))
+          markFieldInvalid(target, issue.message)
           target?.focus()
         })
         return
@@ -333,6 +353,10 @@ export function ServiceCreatePage({
         !/^[a-f0-9]{40}$/.test(commit)
       ) {
         setFieldError('Enter a full 40-character commit SHA.')
+        markFieldInvalid(
+          commitField.current,
+          'Enter a full 40-character commit SHA.',
+        )
         commitField.current?.focus()
         return
       }
@@ -389,13 +413,10 @@ export function ServiceCreatePage({
       active="services"
       title="Services / Create service"
     >
-      <section className="admin-content min-w-0 space-y-7">
-        <Button
-          asChild
-          className="!border-0 !bg-transparent !px-0 text-muted-foreground"
-        >
+      <section className="admin-content min-w-0 flex flex-col gap-7">
+        <Button asChild className="px-0" variant="ghost">
           <a href={`/projects/${project}/services`}>
-            <ArrowLeft size={15} />
+            <ArrowLeft data-icon="inline-start" />
             Services
           </a>
         </Button>
@@ -419,7 +440,7 @@ export function ServiceCreatePage({
         ) : !selected ? (
           <div className="grid gap-6 md:grid-cols-2">
             {['From a repository', 'From Docker'].map((group) => (
-              <section key={group} className="min-w-0 space-y-3">
+              <section key={group} className="min-w-0 flex flex-col gap-3">
                 <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {group}
                 </h2>
@@ -431,7 +452,8 @@ export function ServiceCreatePage({
                       aria-label={item.title}
                       data-source-choice={item.key}
                       onClick={() => choose(item.key)}
-                      className="group !h-auto min-h-36 w-full !justify-start !rounded-xl !bg-card !p-6 text-left hover:!border-muted-foreground focus-visible:ring-2 focus-visible:ring-foreground"
+                      className="group  min-h-36 w-full     text-left"
+                      variant="choice"
                     >
                       <span className="flex w-full items-start gap-4">
                         <span className="rounded-lg border border-border bg-background p-3">
@@ -450,7 +472,8 @@ export function ServiceCreatePage({
                           </span>
                         </span>
                         <ArrowRight
-                          size={17}
+                          data-icon="inline-start"
+
                           className="mt-3 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1"
                           aria-hidden="true"
                         />
@@ -461,8 +484,8 @@ export function ServiceCreatePage({
             ))}
           </div>
         ) : (
-          <form onSubmit={submit} noValidate className="space-y-6">
-            <fieldset disabled={busy} className="min-w-0 space-y-6">
+          <Form onSubmit={submit} noValidate className="flex flex-col gap-6">
+            <FieldSet disabled={busy} className="min-w-0 flex flex-col gap-6">
               <Card
                 size="compact"
                 className="flex flex-wrap items-center gap-3"
@@ -477,9 +500,10 @@ export function ServiceCreatePage({
                       <Button
                         type="button"
                         aria-label={`About ${source.title}`}
-                        className="!border-0 !bg-transparent !p-2 text-muted-foreground"
+                        size="icon"
+                        variant="ghost"
                       >
-                        <Info size={16} aria-hidden="true" />
+                        <Info data-icon="inline-start" aria-hidden="true" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipPortal>
@@ -500,10 +524,10 @@ export function ServiceCreatePage({
                 </p>
               )}
               <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_17rem]">
-                <div className="min-w-0 space-y-4">
-                  <Card className="space-y-5">
-                    <Label>
-                      Service name
+                <div className="min-w-0 flex flex-col gap-4">
+                  <Card className="flex flex-col gap-5">
+                    <Field data-disabled={created}>
+                      <FieldLabel>Service name</FieldLabel>
                       <Input
                         ref={nameField}
                         required
@@ -513,7 +537,7 @@ export function ServiceCreatePage({
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                       />
-                    </Label>
+                    </Field>
                     {canDeploy &&
                     (selected === 'dockerfile' ||
                       selected === 'git-compose') ? (
@@ -537,7 +561,7 @@ export function ServiceCreatePage({
                     selected !== 'dockerfile' &&
                     selected !== 'git-compose' && (
                       <section
-                        className="space-y-3"
+                        className="flex flex-col gap-3"
                         aria-label="Deployment host"
                       >
                         <div className="flex items-center justify-between">
@@ -566,28 +590,33 @@ export function ServiceCreatePage({
                             services.
                           </Card>
                         )}
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <ToggleGroup
+                          type="single"
+                          value={config.connector_id}
+                          spacing={3}
+                          className="grid w-full gap-3 sm:grid-cols-2"
+                          aria-label="Deployment host"
+                          onValueChange={(connector_id) => {
+                            if (connector_id)
+                              setConfig({ ...config, connector_id })
+                          }}
+                        >
                           {hosts?.map((host) => {
                             const issue = hostIssue(host),
                               active = config.connector_id === host.id
                             return (
-                              <Button
+                              <ToggleGroupItem
                                 key={host.id}
-                                type="button"
+                                value={host.id}
                                 aria-label={`Deploy to ${host.name}`}
-                                aria-pressed={active}
                                 aria-describedby={`host-state-${host.id}`}
                                 disabled={!!issue}
-                                onClick={() =>
-                                  setConfig({
-                                    ...config,
-                                    connector_id: host.id,
-                                  })
-                                }
-                                className={`!h-auto !justify-start !p-4 text-left ${active ? '!border-foreground !bg-card' : '!bg-card'}`}
+                                variant="choice"
+                                className="h-auto w-full justify-start p-4 text-left"
                               >
                                 <Server
-                                  size={18}
+                                  data-icon="inline-start"
+
                                   className="shrink-0"
                                   aria-hidden="true"
                                 />
@@ -600,7 +629,12 @@ export function ServiceCreatePage({
                                     className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
                                   >
                                     <span
-                                      className={`size-1.5 rounded-full ${issue ? 'bg-muted-foreground' : 'bg-emerald-500'}`}
+                                      className={cn(
+                                        'size-1.5 rounded-full',
+                                        issue
+                                          ? 'bg-muted-foreground'
+                                          : 'bg-status-success',
+                                      )}
                                       aria-hidden="true"
                                     />
                                     {issue ?? 'Connected'}
@@ -608,23 +642,24 @@ export function ServiceCreatePage({
                                 </span>
                                 {active && !issue && (
                                   <Check
-                                    size={16}
+                                    data-icon="inline-start"
+
                                     className="shrink-0"
                                     aria-hidden="true"
                                   />
                                 )}
-                              </Button>
+                              </ToggleGroupItem>
                             )
                           })}
-                        </div>
+                        </ToggleGroup>
                       </section>
                     )}
                   <CollapsibleSection
                     title="Advanced settings"
                     count={customSlug !== undefined ? 1 : 0}
                   >
-                    <Label>
-                      Slug
+                    <Field data-disabled={created}>
+                      <FieldLabel>Slug</FieldLabel>
                       <Input
                         name="slug"
                         required
@@ -636,7 +671,7 @@ export function ServiceCreatePage({
                           setCustomSlug(e.target.value || undefined)
                         }
                       />
-                    </Label>
+                    </Field>
                   </CollapsibleSection>
                   {canDeploy && !compose && (
                     <RuntimeFields
@@ -646,41 +681,49 @@ export function ServiceCreatePage({
                     />
                   )}
                 </div>
-                <aside className="hidden min-w-0 space-y-4 xl:sticky xl:top-6 xl:block">
-                  <Card className="space-y-4">
-                    <h2 className="text-sm font-semibold">Your service</h2>
-                    <dl className="space-y-4 text-sm">
-                      <div>
-                        <dt className="text-xs text-muted-foreground">Name</dt>
-                        <dd className="mt-1 break-all">
-                          {name || 'Untitled service'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-muted-foreground">
-                          Source
-                        </dt>
-                        <dd className="mt-1">{source.title}</dd>
-                      </div>
-                      {canDeploy && (
+                <aside className="hidden min-w-0 flex flex-col gap-4 xl:sticky xl:top-6 xl:block">
+                  <Card className="flex flex-col gap-4">
+                    <CardHeader>
+                      <CardTitle asChild>
+                        <h2 className="text-sm font-semibold">Your service</h2>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <dl className="flex flex-col gap-4 text-sm">
                         <div>
                           <dt className="text-xs text-muted-foreground">
-                            Host
+                            Name
                           </dt>
                           <dd className="mt-1 break-all">
-                            {hosts?.find((h) => h.id === config.connector_id)
-                              ?.name ?? 'Not selected'}
+                            {name || 'Untitled service'}
                           </dd>
                         </div>
-                      )}
-                    </dl>
+                        <div>
+                          <dt className="text-xs text-muted-foreground">
+                            Source
+                          </dt>
+                          <dd className="mt-1">{source.title}</dd>
+                        </div>
+                        {canDeploy && (
+                          <div>
+                            <dt className="text-xs text-muted-foreground">
+                              Host
+                            </dt>
+                            <dd className="mt-1 break-all">
+                              {hosts?.find((h) => h.id === config.connector_id)
+                                ?.name ?? 'Not selected'}
+                            </dd>
+                          </div>
+                        )}
+                      </dl>
+                    </CardContent>
                   </Card>
                 </aside>
               </div>
               {deploying && config.source.type === 'github' && (
-                <Card className="space-y-3">
-                  <Label>
-                    Commit SHA
+                <Card className="flex flex-col gap-3">
+                  <Field>
+                    <FieldLabel>Commit SHA</FieldLabel>
                     <Input
                       ref={commitField}
                       maxLength={40}
@@ -688,7 +731,7 @@ export function ServiceCreatePage({
                       value={commit}
                       onChange={(e) => setCommit(e.target.value)}
                     />
-                  </Label>
+                  </Field>
                   <p className="text-xs text-muted-foreground">
                     Deploy this exact commit from your repository.
                   </p>
@@ -699,7 +742,7 @@ export function ServiceCreatePage({
                 <Button asChild>
                   <a href={`/projects/${project}/applications/${slug}`}>
                     Open created service
-                    <ArrowRight size={14} />
+                    <ArrowRight data-icon="inline-start" />
                   </a>
                 </Button>
               )}
@@ -714,17 +757,25 @@ export function ServiceCreatePage({
                   />
                 )}
               {canDeploy && selected === 'compose' && (
-                <Card className="space-y-3">
-                  <h2 className="font-semibold">Compose runtime variables</h2>
-                  <EnvironmentEditor
-                    value={config.runtime.environment}
-                    onChange={(environment) =>
-                      setConfig({
-                        ...config,
-                        runtime: { ...config.runtime, environment },
-                      })
-                    }
-                  />
+                <Card className="flex flex-col gap-3">
+                  <CardHeader>
+                    <CardTitle asChild>
+                      <h2 className="font-semibold">
+                        Compose runtime variables
+                      </h2>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <EnvironmentEditor
+                      value={config.runtime.environment}
+                      onChange={(environment) =>
+                        setConfig({
+                          ...config,
+                          runtime: { ...config.runtime, environment },
+                        })
+                      }
+                    />
+                  </CardContent>
                 </Card>
               )}
               {canDeploy && selected === 'compose' && config.deployment && (
@@ -735,7 +786,8 @@ export function ServiceCreatePage({
                   }
                 />
               )}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3   bg-background py-4">
+                <Separator className="basis-full" />
                 <span className="text-xs text-muted-foreground">
                   {deploying
                     ? 'Deploy after saving'
@@ -776,13 +828,13 @@ export function ServiceCreatePage({
                         }}
                       >
                         {deploying ? 'Deploy now' : 'Create and deploy'}
-                        <ArrowRight size={14} />
+                        <ArrowRight data-icon="inline-start" />
                       </Button>
                     )}
                 </div>
               </div>
-            </fieldset>
-          </form>
+            </FieldSet>
+          </Form>
         )}
       </section>
     </Shell>

@@ -6,6 +6,7 @@ export default defineConfig({
     'connector-workspace.spec.ts',
     'project-picker.spec.ts',
     'layout.spec.ts',
+    'shadcn.spec.ts',
   ],
   outputDir: '.cache/connector-workspace-e2e',
   workers: 1,

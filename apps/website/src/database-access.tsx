@@ -1,8 +1,10 @@
+import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useState } from 'react'
 import { api } from './api'
 import { ErrorMessage, usePolling } from './components'
 import { Card } from './components/ui/card'
-import { Button, Checkbox, Label, NativeSelect } from './components/ui/controls'
+import { Button, Checkbox, NativeSelect } from './components/ui/controls'
 const capabilities = [
   'read',
   'manage',
@@ -87,81 +89,91 @@ export function DatabaseAccess({
     }
   }
   return (
-    <Card className="space-y-3">
-      <h2 className="font-semibold">Database permissions</h2>
-      <p className="text-xs text-muted-foreground">
-        Project administrators have all database rights. Teammates receive only
-        explicit grants; ordinary app deployment access does not reveal database
-        credentials.
-      </p>
-      <ErrorMessage message={error || loadError} />
-      <fieldset disabled={busy} className="space-y-3">
-        <Label>
-          Project member
-          <NativeSelect
-            value={member}
-            onChange={(e) => {
-              setDirty(false)
-              setMember(e.target.value)
-            }}
-          >
-            <option value="">Select a member</option>
-            {access?.members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.username}
-              </option>
-            ))}
-          </NativeSelect>
-        </Label>
-        <Label>
-          Database scope
-          <NativeSelect
-            value={target}
-            onChange={(e) => {
-              setDirty(false)
-              setTarget(e.target.value)
-            }}
-          >
-            <option value="">All databases in this project</option>
-            {resources.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </Label>
-        {capabilities.map((capability) => (
-          <Label key={capability} className="flex items-center gap-2">
-            <Checkbox
-              checked={checked.includes(capability)}
-              onCheckedChange={(v) => {
-                setDirty(true)
-                setChecked(
-                  v
-                    ? [...checked, capability]
-                    : checked.filter((c) => c !== capability),
-                )
-                setSaved(false)
-              }}
-            />
-            {labels[capability]}
-          </Label>
-        ))}
+    <Card className="flex flex-col gap-3">
+      <CardHeader>
+        <CardTitle asChild>
+          <h2 className="font-semibold">Database permissions</h2>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
         <p className="text-xs text-muted-foreground">
-          Creating databases, importing new archives and administering shared
-          destinations require a project-wide grant. Restoring a selected
-          database's backup may use a database-specific Restore grant. Revealing
-          credentials always requires Reveal.
+          Project administrators have all database rights. Teammates receive
+          only explicit grants; ordinary app deployment access does not reveal
+          database credentials.
         </p>
-        <Button disabled={!member || !grants} onClick={() => void save()}>
-          Save database permissions
-        </Button>
-        {saved && (
-          <p role="status" className="text-sm text-muted-foreground">
-            Database permissions saved.
+        <ErrorMessage message={error || loadError} />
+        <FieldSet disabled={busy} className="flex flex-col gap-3">
+          <Field>
+            <FieldLabel>Project member</FieldLabel>
+            <NativeSelect
+              value={member}
+              onChange={(e) => {
+                setDirty(false)
+                setMember(e.target.value)
+              }}
+            >
+              <option value="">Select a member</option>
+              {access?.members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.username}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <Field>
+            <FieldLabel>Database scope</FieldLabel>
+            <NativeSelect
+              value={target}
+              onChange={(e) => {
+                setDirty(false)
+                setTarget(e.target.value)
+              }}
+            >
+              <option value="">All databases in this project</option>
+              {resources.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          {capabilities.map((capability) => (
+            <Field
+              orientation="horizontal"
+              key={capability}
+              className="flex items-center gap-2"
+            >
+              <Checkbox
+                checked={checked.includes(capability)}
+                onCheckedChange={(v) => {
+                  setDirty(true)
+                  setChecked(
+                    v
+                      ? [...checked, capability]
+                      : checked.filter((c) => c !== capability),
+                  )
+                  setSaved(false)
+                }}
+              />
+              <FieldLabel>{labels[capability]}</FieldLabel>
+            </Field>
+          ))}
+          <p className="text-xs text-muted-foreground">
+            Creating databases, importing new archives and administering shared
+            destinations require a project-wide grant. Restoring a selected
+            database's backup may use a database-specific Restore grant.
+            Revealing credentials always requires Reveal.
           </p>
-        )}
-      </fieldset>
+          <Button disabled={!member || !grants} onClick={() => void save()}>
+            Save database permissions
+          </Button>
+          {saved && (
+            <p role="status" className="text-sm text-muted-foreground">
+              Database permissions saved.
+            </p>
+          )}
+        </FieldSet>
+      </CardContent>
     </Card>
   )
 }

@@ -1,3 +1,4 @@
+import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { createFileRoute } from '@tanstack/react-router'
 import { projectSession } from '../api'
 import { Shell } from '../components'
@@ -17,7 +18,7 @@ function Page() {
       active="cache"
       title="Storage / Cache"
     >
-      <section className="admin-content space-y-6">
+      <section className="admin-content flex flex-col gap-6">
         <div className="page-heading">
           <div>
             <p className="eyebrow">PROJECT CACHE</p>
@@ -30,9 +31,15 @@ function Page() {
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {['Redis', 'Valkey', 'KeyDB'].map((engine) => (
-            <Card key={engine} className="space-y-3">
-              <h2 className="font-semibold">{engine}</h2>
-              <StatusBadge>Coming soon</StatusBadge>
+            <Card key={engine} className="flex flex-col gap-3">
+              <CardHeader>
+                <CardTitle asChild>
+                  <h2 className="font-semibold">{engine}</h2>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StatusBadge>Coming soon</StatusBadge>
+              </CardContent>
             </Card>
           ))}
         </div>

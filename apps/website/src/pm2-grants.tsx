@@ -1,9 +1,10 @@
+import { FieldLegend, Field, FieldLabel } from '@/components/ui/field'
 import { CardFieldset } from './components/ui/card'
 import { useState } from 'react'
 import { normalizePm2Grants, type Pm2Grant } from '@kloud/protocol/pm2'
 import type { Pm2App } from './pm2'
 import { usePolling, ErrorMessage } from './components'
-import { Button, Label, NativeSelect } from './components/ui/controls'
+import { Button, NativeSelect } from './components/ui/controls'
 import {
   CheckboxTree,
   CheckboxTreeCheckboxState,
@@ -40,7 +41,7 @@ export function Pm2GrantsEditor({
     [selected, setSelected] = useState<string[]>(['view'])
   return (
     <CardFieldset disabled={disabled}>
-      <legend className="px-2 font-medium">PM2 permissions</legend>
+      <FieldLegend className="px-2 font-medium">PM2 permissions</FieldLegend>
       <p className="text-sm text-muted-foreground">
         Project administrators have all PM2 permissions. Other permissions
         include View. Manage excludes Delete.
@@ -82,8 +83,8 @@ export function Pm2GrantsEditor({
           </Button>
         </div>
       ))}
-      <Label>
-        PM2 application
+      <Field>
+        <FieldLabel>PM2 application</FieldLabel>
         <NativeSelect
           aria-label="PM2 grant target"
           value={target}
@@ -96,7 +97,7 @@ export function Pm2GrantsEditor({
             </option>
           ))}
         </NativeSelect>
-      </Label>
+      </Field>
       <CheckboxTree
         data={items}
         disabled={disabled}

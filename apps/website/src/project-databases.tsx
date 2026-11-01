@@ -1,3 +1,7 @@
+import { CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { FieldGroup, FieldSet, Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { DatabaseAccess } from './database-access'
 import { useState, type FormEvent } from 'react'
 import { Database, Download, RotateCcw, ShieldCheck, Plus } from 'lucide-react'
@@ -7,7 +11,6 @@ import { Card } from './components/ui/card'
 import {
   Button,
   Input,
-  Label,
   NativeSelect,
   Textarea,
   Checkbox,
@@ -163,7 +166,7 @@ export function ProjectDatabases({ project }: { project: string }) {
     }
   }
   return (
-    <section className="admin-content space-y-6">
+    <section className="admin-content flex flex-col gap-6">
       <div className="page-heading">
         <div>
           <p className="eyebrow">PROJECT DATABASES</p>
@@ -183,95 +186,124 @@ export function ProjectDatabases({ project }: { project: string }) {
           {message}
         </p>
       )}
-      <Card className="space-y-3">
-        <h2 className="font-semibold">Databases</h2>
-        {!data?.resources.length && (
-          <p className="text-muted-foreground">
-            No managed databases are available.
-          </p>
-        )}
-        {data?.resources.map((r) => (
-          <Button
-            key={r.id}
-            onClick={() => setSelected(r.id)}
-            aria-pressed={selected === r.id}
+      <Card className="flex flex-col gap-3">
+        <CardHeader>
+          <CardTitle asChild>
+            <h2 className="font-semibold">Databases</h2>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!data?.resources.length && (
+            <p className="text-muted-foreground">
+              No managed databases are available.
+            </p>
+          )}
+          <ToggleGroup
+            type="single"
+            value={selected}
+            spacing={2}
+            className="flex-wrap"
+            aria-label="Database"
+            onValueChange={(value) => {
+              if (value) setSelected(value)
+            }}
           >
-            {r.name} · {r.state}
-          </Button>
-        ))}
-        <p className="text-xs text-muted-foreground">
-          Data volumes and backups are independent of application deletion.
-          Public access is disabled; use the database network or configured
-          private connectivity.
-        </p>
+            {data?.resources.map((r) => (
+              <ToggleGroupItem key={r.id} value={r.id}>
+                {r.name} · {r.state}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <p className="text-xs text-muted-foreground">
+            Data volumes and backups are independent of application deletion.
+            Public access is disabled; use the database network or configured
+            private connectivity.
+          </p>
+        </CardContent>
       </Card>
       {data?.can_manage_access && (
         <DatabaseAccess project={project} resources={data.resources} />
       )}
       {data?.can_create && (
-        <Card className="space-y-3">
-          <h2 className="font-semibold">Create PostgreSQL 17.6</h2>
-          <form onSubmit={create}>
-            <fieldset disabled={busy} className="grid gap-3 md:grid-cols-2">
-              <Label>
-                Name
-                <Input name="name" required maxLength={100} />
-              </Label>
-              <Label>
-                Resource slug
-                <Input
-                  name="slug"
-                  required
-                  pattern="[a-z0-9]+(-[a-z0-9]+)*"
-                  maxLength={80}
-                />
-              </Label>
-              <DatabaseHost hosts={hosts ?? []} />
-              <Button variant="primary">
-                <Plus size={16} />
-                Create private database
-              </Button>
-            </fieldset>
-          </form>
+        <Card className="flex flex-col gap-3">
+          <CardHeader>
+            <CardTitle asChild>
+              <h2 className="font-semibold">Create PostgreSQL 17.6</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form onSubmit={create}>
+              <FieldSet disabled={busy} className="grid gap-3 md:grid-cols-2">
+                <Field>
+                  <FieldLabel>Name</FieldLabel>
+                  <Input name="name" required maxLength={100} />
+                </Field>
+                <Field>
+                  <FieldLabel>Resource slug</FieldLabel>
+                  <Input
+                    name="slug"
+                    required
+                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                    maxLength={80}
+                  />
+                </Field>
+                <DatabaseHost hosts={hosts ?? []} />
+                <Button variant="primary">
+                  <Plus data-icon="inline-start" />
+                  Create private database
+                </Button>
+              </FieldSet>
+            </Form>
+          </CardContent>
         </Card>
       )}
       {data?.can_restore && (
-        <Card className="space-y-3">
-          <h2 className="font-semibold">
-            Import an existing PostgreSQL export
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Upload a single-database custom-format .dmp/.dump archive (PGDMP),
-            up to 64 MiB. Archive versions and extensions are checked before
-            restore. A new resource is always created; existing targets are
-            preserved.
-          </p>
-          <form onSubmit={importArchive}>
-            <fieldset disabled={busy} className="grid gap-3 md:grid-cols-2">
-              <Label>
-                New database name
-                <Input name="name" required />
-              </Label>
-              <Label>
-                New resource slug
-                <Input name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" />
-              </Label>
-              <DatabaseHost hosts={hosts ?? []} />
-              <Label>
-                Custom archive
-                <Input
-                  type="file"
-                  name="archive"
-                  required
-                  accept=".dmp,.dump"
-                />
-              </Label>
-              <Button>
-                <Download size={16} />
-                Import into new database
-              </Button>
-            </fieldset>
-          </form>
+        <Card className="flex flex-col gap-3">
+          <CardHeader>
+            <CardTitle asChild>
+              <h2 className="font-semibold">
+                Import an existing PostgreSQL export
+              </h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">
+              Upload a single-database custom-format .dmp/.dump archive (PGDMP),
+              up to 64 MiB. Archive versions and extensions are checked before
+              restore. A new resource is always created; existing targets are
+              preserved.
+            </p>
+            <Form onSubmit={importArchive}>
+              <FieldSet disabled={busy} className="grid gap-3 md:grid-cols-2">
+                <Field>
+                  <FieldLabel>New database name</FieldLabel>
+                  <Input name="name" required />
+                </Field>
+                <Field>
+                  <FieldLabel>New resource slug</FieldLabel>
+                  <Input
+                    name="slug"
+                    required
+                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                  />
+                </Field>
+                <DatabaseHost hosts={hosts ?? []} />
+                <Field>
+                  <FieldLabel>Custom archive</FieldLabel>
+                  <Input
+                    type="file"
+                    name="archive"
+                    required
+                    accept=".dmp,.dump"
+                  />
+                </Field>
+                <Button>
+                  <Download data-icon="inline-start" />
+                  Import into new database
+                </Button>
+              </FieldSet>
+            </Form>
+          </CardContent>
         </Card>
       )}
       {data?.can_destinations && (
@@ -282,89 +314,101 @@ export function ProjectDatabases({ project }: { project: string }) {
         />
       )}
       {data?.can_destinations && !!destinations?.length && (
-        <Card className="space-y-3">
-          <h2 className="font-semibold">Destination connection tests</h2>
-          <p className="text-xs text-muted-foreground">
-            Select a database on the destination host. The test writes, reads,
-            verifies and deletes an isolated test object; results appear in that
-            database's operation history.
-          </p>
-          {destinations.map((destination) => (
-            <div
-              key={destination.id}
-              className="flex flex-wrap items-center justify-between gap-2"
-            >
-              <span>
-                {destination.name} · {destination.kind}
-              </span>
-              <Button
-                disabled={
-                  busy ||
-                  !resource ||
-                  resource.connector_id !== destination.connector_id
-                }
-                onClick={() =>
-                  void action(`/destinations/${destination.id}/test`, {
-                    resource: selected,
-                    request_key: crypto.randomUUID(),
-                  })
-                }
+        <Card className="flex flex-col gap-3">
+          <CardHeader>
+            <CardTitle asChild>
+              <h2 className="font-semibold">Destination connection tests</h2>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">
+              Select a database on the destination host. The test writes, reads,
+              verifies and deletes an isolated test object; results appear in
+              that database's operation history.
+            </p>
+            {destinations.map((destination) => (
+              <div
+                key={destination.id}
+                className="flex flex-wrap items-center justify-between gap-2"
               >
-                Test destination
-              </Button>
-            </div>
-          ))}
+                <span>
+                  {destination.name} · {destination.kind}
+                </span>
+                <Button
+                  disabled={
+                    busy ||
+                    !resource ||
+                    resource.connector_id !== destination.connector_id
+                  }
+                  onClick={() =>
+                    void action(`/destinations/${destination.id}/test`, {
+                      resource: selected,
+                      request_key: crypto.randomUUID(),
+                    })
+                  }
+                >
+                  Test destination
+                </Button>
+              </div>
+            ))}
+          </CardContent>
         </Card>
       )}
       {resource && detail && (
         <>
-          <Card className="space-y-4">
-            <h2 className="font-semibold">
-              {resource.name} · <StatusBadge>{resource.state}</StatusBadge>
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              PostgreSQL {resource.version}. Authentication role has no
-              superuser, role-creation, or database-creation privileges.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Observed runtime:{' '}
-              {detail.runtime && !detail.runtime.stale
-                ? `${detail.runtime.state} · ${detail.runtime.health ?? 'health check unavailable'}`
-                : 'awaiting current connector inventory'}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {['start', 'stop', 'restart', 'logs']
-                .filter((a) =>
-                  a === 'logs'
-                    ? resource.permissions.read
-                    : resource.permissions.manage,
-                )
-                .map((a) => (
-                  <Button
-                    key={a}
-                    disabled={busy}
-                    onClick={() => {
-                      if (a === 'stop' || a === 'restart') {
-                        if (
-                          !window.confirm(
-                            `${a} this database? Active applications may be interrupted.`,
+          <Card className="flex flex-col gap-4">
+            <CardHeader>
+              <CardTitle asChild>
+                <h2 className="font-semibold">
+                  {resource.name} · <StatusBadge>{resource.state}</StatusBadge>
+                </h2>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                PostgreSQL {resource.version}. Authentication role has no
+                superuser, role-creation, or database-creation privileges.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Observed runtime:{' '}
+                {detail.runtime && !detail.runtime.stale
+                  ? `${detail.runtime.state} · ${detail.runtime.health ?? 'health check unavailable'}`
+                  : 'awaiting current connector inventory'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {['start', 'stop', 'restart', 'logs']
+                  .filter((a) =>
+                    a === 'logs'
+                      ? resource.permissions.read
+                      : resource.permissions.manage,
+                  )
+                  .map((a) => (
+                    <Button
+                      key={a}
+                      disabled={busy}
+                      onClick={() => {
+                        if (a === 'stop' || a === 'restart') {
+                          if (
+                            !window.confirm(
+                              `${a} this database? Active applications may be interrupted.`,
+                            )
                           )
-                        )
-                          return
-                      }
-                      void action(`/${selected}/operations`, {
-                        action: a,
-                        request_key: crypto.randomUUID(),
-                      })
-                    }}
-                  >
-                    {a}
-                  </Button>
-                ))}
-            </div>
-            {resource.permissions.reveal && (
-              <CredentialReveal path={`${base}/${selected}/credentials`} />
-            )}
+                            return
+                        }
+                        void action(`/${selected}/operations`, {
+                          action: a,
+                          request_key: crypto.randomUUID(),
+                        })
+                      }}
+                    >
+                      {a}
+                    </Button>
+                  ))}
+              </div>
+              {resource.permissions.reveal && (
+                <CredentialReveal path={`${base}/${selected}/credentials`} />
+              )}
+            </CardContent>
           </Card>
           {resource.permissions.backup && (
             <BackupPolicy
@@ -377,161 +421,188 @@ export function ProjectDatabases({ project }: { project: string }) {
               onSaved={() => setRefresh((n) => n + 1)}
             />
           )}
-          <Card className="space-y-3">
-            <h2 className="font-semibold">Backup policies</h2>
-            {detail.policies.map((p) => (
-              <div
-                key={p.id}
-                className="rounded border border-border p-3 space-y-2"
-              >
-                <p>
-                  {p.name} · {p.enabled ? 'Scheduled' : 'On demand'} ·{' '}
-                  {p.config.timezone}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {p.config.cron} · next {new Date(p.next_run).toLocaleString()}
-                </p>
-                {resource.permissions.backup && (
-                  <Button
-                    disabled={busy}
-                    onClick={() => {
-                      setBusy(true)
-                      setError('')
-                      void api(`${base}/${selected}/policies/${p.id}`, 'PUT', {
-                        enabled: !p.enabled,
-                      })
-                        .then(() => setRefresh((n) => n + 1))
-                        .catch((e) => setError(e.message))
-                        .finally(() => setBusy(false))
-                    }}
-                  >
-                    {p.enabled ? 'Disable schedule' : 'Enable schedule'}
-                  </Button>
-                )}
-                {resource.permissions.backup && (
-                  <Button
-                    disabled={busy}
-                    onClick={() =>
-                      void action(`/${selected}/backups`, {
-                        policy: p.id,
-                        request_key: crypto.randomUUID(),
-                      })
-                    }
-                  >
-                    Back up now
-                  </Button>
-                )}
-              </div>
-            ))}
-          </Card>
-          <Card className="space-y-3">
-            <h2 className="font-semibold">Restore points</h2>
-            {!detail.archives.length && (
-              <p className="text-sm text-muted-foreground">
-                No backup artifacts have been recorded.
-              </p>
-            )}
-            {detail.archives.map((a) => (
-              <div
-                key={a.id}
-                className="rounded border border-border p-3 space-y-2"
-              >
-                <p>
-                  {a.destination_name} · {a.state} ·{' '}
-                  {new Date(a.created).toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {bytes(a.metadata.size ?? 0)} · PostgreSQL{' '}
-                  {a.metadata.sourceVersion ?? 'unknown'} ·{' '}
-                  {a.metadata.format ?? 'custom'}
-                </p>
-                {a.metadata.error && (
-                  <ErrorMessage message={a.metadata.error} />
-                )}{' '}
-                {resource.permissions.restore && a.state === 'complete' && (
-                  <RestoreForm
-                    base={base}
-                    source={selected}
-                    archive={a.id}
-                    hosts={hosts ?? []}
-                    defaultHost={resource.connector_id}
-                    onSaved={(id) => {
-                      setSelected(id)
-                      setRefresh((n) => n + 1)
-                    }}
-                  />
-                )}
-              </div>
-            ))}
-          </Card>
-          <Card className="space-y-3">
-            <h2 className="font-semibold">Operation history</h2>
-            {detail.jobs.map((j) => (
-              <details key={j.id} className="rounded border border-border p-3">
-                <summary>
-                  {j.kind} · {j.state} · {new Date(j.created).toLocaleString()}
-                </summary>
-                <pre className="mt-2 whitespace-pre-wrap break-all text-xs">
-                  {j.log || JSON.stringify(j.result ?? {}, null, 2)}
-                </pre>
-                {j.kind === 'import' &&
-                  j.has_import &&
-                  ['failed', 'cancelled'].includes(j.state) &&
-                  resource.permissions.restore && (
+          <Card className="flex flex-col gap-3">
+            <CardHeader>
+              <CardTitle asChild>
+                <h2 className="font-semibold">Backup policies</h2>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {detail.policies.map((p) => (
+                <div
+                  key={p.id}
+                  className="rounded border border-border p-3 flex flex-col gap-2"
+                >
+                  <p>
+                    {p.name} · {p.enabled ? 'Scheduled' : 'On demand'} ·{' '}
+                    {p.config.timezone}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {p.config.cron} · next{' '}
+                    {new Date(p.next_run).toLocaleString()}
+                  </p>
+                  {resource.permissions.backup && (
                     <Button
                       disabled={busy}
                       onClick={() => {
-                        if (
-                          !window.confirm(
-                            'Discard the retained uploaded source archive? The database volume is unchanged. Keep your original .dmp export separately.',
-                          )
-                        )
-                          return
                         setBusy(true)
+                        setError('')
                         void api(
-                          `${base}/${selected}/imports/${j.id}`,
-                          'DELETE',
+                          `${base}/${selected}/policies/${p.id}`,
+                          'PUT',
+                          {
+                            enabled: !p.enabled,
+                          },
                         )
                           .then(() => setRefresh((n) => n + 1))
                           .catch((e) => setError(e.message))
                           .finally(() => setBusy(false))
                       }}
                     >
-                      Discard retained upload
+                      {p.enabled ? 'Disable schedule' : 'Enable schedule'}
                     </Button>
                   )}
-                {j.state === 'unknown' && (
-                  <>
-                    {' '}
-                    <p className="text-sm text-muted-foreground">
-                      The host outcome is uncertain. Automatic database dispatch
-                      is paused. Inspect the host and reconcile before retrying;
-                      no restore is automatically repeated.
-                    </p>
-                    {resource.permissions.manage && (
+                  {resource.permissions.backup && (
+                    <Button
+                      disabled={busy}
+                      onClick={() =>
+                        void action(`/${selected}/backups`, {
+                          policy: p.id,
+                          request_key: crypto.randomUUID(),
+                        })
+                      }
+                    >
+                      Back up now
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+          <Card className="flex flex-col gap-3">
+            <CardHeader>
+              <CardTitle asChild>
+                <h2 className="font-semibold">Restore points</h2>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!detail.archives.length && (
+                <p className="text-sm text-muted-foreground">
+                  No backup artifacts have been recorded.
+                </p>
+              )}
+              {detail.archives.map((a) => (
+                <div
+                  key={a.id}
+                  className="rounded border border-border p-3 flex flex-col gap-2"
+                >
+                  <p>
+                    {a.destination_name} · {a.state} ·{' '}
+                    {new Date(a.created).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {bytes(a.metadata.size ?? 0)} · PostgreSQL{' '}
+                    {a.metadata.sourceVersion ?? 'unknown'} ·{' '}
+                    {a.metadata.format ?? 'custom'}
+                  </p>
+                  {a.metadata.error && (
+                    <ErrorMessage message={a.metadata.error} />
+                  )}{' '}
+                  {resource.permissions.restore && a.state === 'complete' && (
+                    <RestoreForm
+                      base={base}
+                      source={selected}
+                      archive={a.id}
+                      hosts={hosts ?? []}
+                      defaultHost={resource.connector_id}
+                      onSaved={(id) => {
+                        setSelected(id)
+                        setRefresh((n) => n + 1)
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+          <Card className="flex flex-col gap-3">
+            <CardHeader>
+              <CardTitle asChild>
+                <h2 className="font-semibold">Operation history</h2>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {detail.jobs.map((j) => (
+                <details
+                  key={j.id}
+                  className="rounded border border-border p-3"
+                >
+                  <summary>
+                    {j.kind} · {j.state} ·{' '}
+                    {new Date(j.created).toLocaleString()}
+                  </summary>
+                  <pre className="mt-2 whitespace-pre-wrap break-all text-xs">
+                    {j.log || JSON.stringify(j.result ?? {}, null, 2)}
+                  </pre>
+                  {j.kind === 'import' &&
+                    j.has_import &&
+                    ['failed', 'cancelled'].includes(j.state) &&
+                    resource.permissions.restore && (
                       <Button
                         disabled={busy}
                         onClick={() => {
                           if (
                             !window.confirm(
-                              'Inspect the host to release this pause? Any incomplete new import/restore target will be stopped and retained. The original job stays failed; it is never repeated or marked successful.',
+                              'Discard the retained uploaded source archive? The database volume is unchanged. Keep your original .dmp export separately.',
                             )
                           )
                             return
-                          void action(`/${selected}/reconcile`, {
-                            unknown_job: j.id,
-                            request_key: crypto.randomUUID(),
-                            confirm: true,
-                          })
+                          setBusy(true)
+                          void api(
+                            `${base}/${selected}/imports/${j.id}`,
+                            'DELETE',
+                          )
+                            .then(() => setRefresh((n) => n + 1))
+                            .catch((e) => setError(e.message))
+                            .finally(() => setBusy(false))
                         }}
                       >
-                        Inspect and reconcile host
+                        Discard retained upload
                       </Button>
                     )}
-                  </>
-                )}
-              </details>
-            ))}
+                  {j.state === 'unknown' && (
+                    <>
+                      {' '}
+                      <p className="text-sm text-muted-foreground">
+                        The host outcome is uncertain. Automatic database
+                        dispatch is paused. Inspect the host and reconcile
+                        before retrying; no restore is automatically repeated.
+                      </p>
+                      {resource.permissions.manage && (
+                        <Button
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                'Inspect the host to release this pause? Any incomplete new import/restore target will be stopped and retained. The original job stays failed; it is never repeated or marked successful.',
+                              )
+                            )
+                              return
+                            void action(`/${selected}/reconcile`, {
+                              unknown_job: j.id,
+                              request_key: crypto.randomUUID(),
+                              confirm: true,
+                            })
+                          }}
+                        >
+                          Inspect and reconcile host
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </details>
+              ))}
+            </CardContent>
           </Card>
         </>
       )}
@@ -546,8 +617,8 @@ function DatabaseHost({
   defaultValue?: string
 }) {
   return (
-    <Label>
-      Database host
+    <Field>
+      <FieldLabel>Database host</FieldLabel>
       <NativeSelect name="connector" required defaultValue={defaultValue ?? ''}>
         <option value="">Select PostgreSQL-enabled host</option>
         {hosts.map((h) => (
@@ -556,14 +627,14 @@ function DatabaseHost({
           </option>
         ))}
       </NativeSelect>
-    </Label>
+    </Field>
   )
 }
 function CredentialReveal({ path }: { path: string }) {
   const [value, setValue] = useState(''),
     [error, setError] = useState('')
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       <Button
         onClick={() => {
           if (value) {
@@ -577,7 +648,7 @@ function CredentialReveal({ path }: { path: string }) {
             .catch((e) => setError(e.message))
         }}
       >
-        <ShieldCheck size={16} />
+        <ShieldCheck data-icon="inline-start" />
         {value ? 'Hide credentials' : 'Reveal connection details'}
       </Button>
       <ErrorMessage message={error} />
@@ -635,60 +706,68 @@ function BackupDestination({
     }
   }
   return (
-    <Card className="space-y-3">
-      <h2 className="font-semibold">Add backup destination</h2>
-      <ErrorMessage message={error} />
-      <form onSubmit={save}>
-        <fieldset disabled={busy} className="grid gap-3 md:grid-cols-2">
-          <Label>
-            Name
-            <Input name="name" required />
-          </Label>
-          <DatabaseHost hosts={hosts} />
-          <Label>
-            Storage
-            <NativeSelect
-              value={kind}
-              onChange={(e) => setKind(e.target.value)}
-            >
-              <option value="disk">Host disk</option>
-              <option value="s3">S3-compatible storage</option>
-            </NativeSelect>
-          </Label>
-          {kind === 'disk' ? (
-            <Label>
-              Existing directory under BACKUP_DISK_ROOT
-              <Input
-                name="root"
-                required
-                placeholder="/var/lib/kloud/backups"
-              />
-            </Label>
-          ) : (
-            <>
-              {[
-                'endpoint',
-                'region',
-                'bucket',
-                'prefix',
-                'accessKey',
-                'secretKey',
-              ].map((k) => (
-                <Label key={k}>
-                  {k}
-                  <Input
-                    name={k}
-                    required
-                    type={k === 'secretKey' ? 'password' : 'text'}
-                    defaultValue={k === 'prefix' ? 'kloud' : undefined}
-                  />
-                </Label>
-              ))}
-            </>
-          )}
-          <Button>Save encrypted destination</Button>
-        </fieldset>
-      </form>
+    <Card className="flex flex-col gap-3">
+      <CardHeader>
+        <CardTitle asChild>
+          <h2 className="font-semibold">Add backup destination</h2>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ErrorMessage message={error} />
+        <Form onSubmit={save}>
+          <FieldSet disabled={busy} className="grid gap-3 md:grid-cols-2">
+            <Field>
+              <FieldLabel>Name</FieldLabel>
+              <Input name="name" required />
+            </Field>
+            <DatabaseHost hosts={hosts} />
+            <Field>
+              <FieldLabel>Storage</FieldLabel>
+              <NativeSelect
+                value={kind}
+                onChange={(e) => setKind(e.target.value)}
+              >
+                <option value="disk">Host disk</option>
+                <option value="s3">S3-compatible storage</option>
+              </NativeSelect>
+            </Field>
+            {kind === 'disk' ? (
+              <Field>
+                <FieldLabel>
+                  Existing directory under BACKUP_DISK_ROOT
+                </FieldLabel>
+                <Input
+                  name="root"
+                  required
+                  placeholder="/var/lib/kloud/backups"
+                />
+              </Field>
+            ) : (
+              <>
+                {[
+                  'endpoint',
+                  'region',
+                  'bucket',
+                  'prefix',
+                  'accessKey',
+                  'secretKey',
+                ].map((k) => (
+                  <Field key={k}>
+                    <FieldLabel>{k}</FieldLabel>
+                    <Input
+                      name={k}
+                      required
+                      type={k === 'secretKey' ? 'password' : 'text'}
+                      defaultValue={k === 'prefix' ? 'kloud' : undefined}
+                    />
+                  </Field>
+                ))}
+              </>
+            )}
+            <Button>Save encrypted destination</Button>
+          </FieldSet>
+        </Form>
+      </CardContent>
     </Card>
   )
 }
@@ -742,134 +821,146 @@ function BackupPolicy({
     }
   }
   return (
-    <Card className="space-y-3">
-      <h2 className="font-semibold">Configure backup policy</h2>
-      <ErrorMessage message={error} />
-      <form onSubmit={review} onChange={() => setPreview(null)}>
-        <fieldset disabled={busy} className="space-y-3">
-          <Label>
-            Policy name
-            <Input name="name" required />
-          </Label>
-          <Label>
-            Schedule preset
-            <NativeSelect onChange={(e) => setCron(e.target.value)}>
-              <option value="0 2 * * *">Daily at 02:00</option>
-              <option value="0 2 * * 0">Weekly Sunday at 02:00</option>
-              <option value="0 2 1 * *">Monthly on day 1 at 02:00</option>
-              <option value={cron}>Custom cron below</option>
-            </NativeSelect>
-          </Label>
-          <Label>
-            Cron
-            <Input
-              required
-              value={cron}
-              onChange={(e) => setCron(e.target.value)}
-            />
-          </Label>
-          <Label>
-            Timezone
-            <Input
-              name="timezone"
-              required
-              defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone}
-            />
-          </Label>
-          <Label className="flex items-center gap-2">
-            <Checkbox
-              checked={enabled}
-              onCheckedChange={(v) => {
-                setEnabled(v === true)
-                setPreview(null)
-              }}
-            />
-            Enable scheduled backups
-          </Label>
-          {destinations.map((d) => (
-            <div
-              key={d.id}
-              className="rounded border border-border p-3 space-y-2"
-            >
-              <Label className="flex items-center gap-2">
-                <Checkbox
-                  checked={selected.includes(d.id)}
-                  onCheckedChange={(v) => {
-                    setSelected(
-                      v
-                        ? [...selected, d.id]
-                        : selected.filter((x) => x !== d.id),
-                    )
-                    setPreview(null)
-                  }}
-                />
-                {d.name} ({d.kind})
-              </Label>
-              {selected.includes(d.id) && (
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Label>
-                    Storage limit (bytes)
-                    <Input
-                      type="number"
-                      name={`max-${d.id}`}
-                      required
-                      min={1}
-                    />
-                  </Label>
-                  <Label>
-                    Minimum restore points
-                    <Input
-                      type="number"
-                      name={`minimum-${d.id}`}
-                      required
-                      min={1}
-                    />
-                  </Label>
-                  <Label>
-                    Free-space reserve (bytes)
-                    <Input
-                      type="number"
-                      name={`reserve-${d.id}`}
-                      required
-                      min={0}
-                    />
-                  </Label>
-                </div>
-              )}
-            </div>
-          ))}
-          <p className="text-xs text-muted-foreground">
-            Set explicit limits and minimum points for each destination. Minimum
-            points are protected even when that prevents a backup under the
-            storage cap. Use one disk destination, one S3 destination, or both.
-          </p>
-          <Button disabled={!selected.length}>Review effective policy</Button>
-        </fieldset>
-      </form>
-      {preview && (
-        <div className="space-y-2">
-          <pre className="whitespace-pre-wrap break-all text-xs">
-            {JSON.stringify({ ...preview, enabled }, null, 2)}
-          </pre>
-          <Button
-            disabled={busy}
-            variant="primary"
-            onClick={() => {
-              setBusy(true)
-              void api(`${base}/${resource.id}/policies`, 'POST', body)
-                .then(() => {
-                  onSaved()
+    <Card className="flex flex-col gap-3">
+      <CardHeader>
+        <CardTitle asChild>
+          <h2 className="font-semibold">Configure backup policy</h2>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ErrorMessage message={error} />
+        <Form onSubmit={review} onChange={() => setPreview(null)}>
+          <FieldSet disabled={busy} className="flex flex-col gap-3">
+            <Field>
+              <FieldLabel>Policy name</FieldLabel>
+              <Input name="name" required />
+            </Field>
+            <Field>
+              <FieldLabel>Schedule preset</FieldLabel>
+              <NativeSelect onChange={(e) => setCron(e.target.value)}>
+                <option value="0 2 * * *">Daily at 02:00</option>
+                <option value="0 2 * * 0">Weekly Sunday at 02:00</option>
+                <option value="0 2 1 * *">Monthly on day 1 at 02:00</option>
+                <option value={cron}>Custom cron below</option>
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel>Cron</FieldLabel>
+              <Input
+                required
+                value={cron}
+                onChange={(e) => setCron(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>Timezone</FieldLabel>
+              <Input
+                name="timezone"
+                required
+                defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone}
+              />
+            </Field>
+            <Field orientation="horizontal" className="flex items-center gap-2">
+              <Checkbox
+                checked={enabled}
+                onCheckedChange={(v) => {
+                  setEnabled(v === true)
                   setPreview(null)
-                })
-                .catch((e) => setError(e.message))
-                .finally(() => setBusy(false))
-            }}
-          >
-            Confirm backup policy
-          </Button>
-          <Button onClick={() => setPreview(null)}>Cancel</Button>
-        </div>
-      )}
+                }}
+              />
+              <FieldLabel>Enable scheduled backups</FieldLabel>
+            </Field>
+            {destinations.map((d) => (
+              <FieldGroup
+                key={d.id}
+                className="rounded border border-border p-3 flex flex-col gap-2"
+              >
+                <Field
+                  orientation="horizontal"
+                  className="flex items-center gap-2"
+                >
+                  <Checkbox
+                    checked={selected.includes(d.id)}
+                    onCheckedChange={(v) => {
+                      setSelected(
+                        v
+                          ? [...selected, d.id]
+                          : selected.filter((x) => x !== d.id),
+                      )
+                      setPreview(null)
+                    }}
+                  />
+                  <FieldLabel>
+                    {d.name} ({d.kind})
+                  </FieldLabel>
+                </Field>
+                {selected.includes(d.id) && (
+                  <FieldGroup className="grid gap-3 md:grid-cols-3">
+                    <Field>
+                      <FieldLabel>Storage limit (bytes)</FieldLabel>
+                      <Input
+                        type="number"
+                        name={`max-${d.id}`}
+                        required
+                        min={1}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Minimum restore points</FieldLabel>
+                      <Input
+                        type="number"
+                        name={`minimum-${d.id}`}
+                        required
+                        min={1}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Free-space reserve (bytes)</FieldLabel>
+                      <Input
+                        type="number"
+                        name={`reserve-${d.id}`}
+                        required
+                        min={0}
+                      />
+                    </Field>
+                  </FieldGroup>
+                )}
+              </FieldGroup>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              Set explicit limits and minimum points for each destination.
+              Minimum points are protected even when that prevents a backup
+              under the storage cap. Use one disk destination, one S3
+              destination, or both.
+            </p>
+            <Button disabled={!selected.length}>Review effective policy</Button>
+          </FieldSet>
+        </Form>
+        {preview && (
+          <div className="flex flex-col gap-2">
+            <pre className="whitespace-pre-wrap break-all text-xs">
+              {JSON.stringify({ ...preview, enabled }, null, 2)}
+            </pre>
+            <Button
+              disabled={busy}
+              variant="primary"
+              onClick={() => {
+                setBusy(true)
+                void api(`${base}/${resource.id}/policies`, 'POST', body)
+                  .then(() => {
+                    onSaved()
+                    setPreview(null)
+                  })
+                  .catch((e) => setError(e.message))
+                  .finally(() => setBusy(false))
+              }}
+            >
+              Confirm backup policy
+            </Button>
+            <Button onClick={() => setPreview(null)}>Cancel</Button>
+          </div>
+        )}
+      </CardContent>
     </Card>
   )
 }
@@ -924,25 +1015,25 @@ function RestoreForm({
   return (
     <div>
       <Button onClick={() => setOpen(!open)}>
-        <RotateCcw size={14} />
+        <RotateCcw data-icon="inline-start" />
         Restore into new database
       </Button>
       {open && (
-        <form onSubmit={restore}>
-          <fieldset disabled={busy} className="space-y-2 mt-3">
-            <Label>
-              New name
+        <Form onSubmit={restore}>
+          <FieldSet disabled={busy} className="flex flex-col gap-2 mt-3">
+            <Field>
+              <FieldLabel>New name</FieldLabel>
               <Input name="name" required />
-            </Label>
-            <Label>
-              New resource slug
+            </Field>
+            <Field>
+              <FieldLabel>New resource slug</FieldLabel>
               <Input name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required />
-            </Label>
+            </Field>
             <DatabaseHost hosts={hosts} defaultValue={defaultHost} />
             <ErrorMessage message={error} />
             <Button>Queue restore</Button>
-          </fieldset>
-        </form>
+          </FieldSet>
+        </Form>
       )}
     </div>
   )

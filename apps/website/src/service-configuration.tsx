@@ -1,19 +1,19 @@
+import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { RepositoryOnboarding } from './repository-onboarding'
 import { BuildInputsFields } from './build-inputs-fields'
 import { defaultDeploymentPolicy } from './deployment-policy-fields'
 import type { ServerAddresses } from './server-addresses'
 import { EnvironmentEditor } from './environment-editor'
-import { type ReactNode } from 'react'
+import { Children, isValidElement, type ReactNode } from 'react'
 import type { PlatformConfig, RuntimeConfig } from '@kloud/protocol/platform'
 import {
   Button,
   Checkbox,
   Input,
-  Label,
   NativeSelect,
   Textarea,
 } from './components/ui/controls'
-import { Card } from './components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent } from './components/ui/card'
 import { CollapsibleSection } from './components/ui/collapsible'
 
 export interface Host extends ServerAddresses {
@@ -54,12 +54,12 @@ export function SourceFields({
 }) {
   const source = config.source
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {mode !== 'create' && (
         <>
           {' '}
-          <Label>
-            Deployment source
+          <Field>
+            <FieldLabel>Deployment source</FieldLabel>
             <NativeSelect
               value={
                 source.type === 'github'
@@ -117,13 +117,13 @@ export function SourceFields({
                 Pasted Compose
               </option>
             </NativeSelect>
-          </Label>
+          </Field>
         </>
       )}
       {source.type === 'image' && (
         <>
-          <Label>
-            Image
+          <Field>
+            <FieldLabel>Image</FieldLabel>
             <Input
               data-source-input
               required
@@ -136,14 +136,14 @@ export function SourceFields({
                 })
               }
             />
-          </Label>
+          </Field>
           <CreationSettings
             compact={mode === 'create'}
             title="Registry credentials"
             count={source.registry ? 1 : 0}
           >
-            <Label>
-              Registry server (optional)
+            <Field>
+              <FieldLabel>Registry server (optional)</FieldLabel>
               <Input
                 placeholder="ghcr.io"
                 value={source.registry?.server ?? ''}
@@ -163,11 +163,11 @@ export function SourceFields({
                   })
                 }
               />
-            </Label>
+            </Field>
             {source.registry && (
               <>
-                <Label>
-                  Registry username
+                <Field>
+                  <FieldLabel>Registry username</FieldLabel>
                   <Input
                     required
                     value={source.registry.username}
@@ -184,9 +184,9 @@ export function SourceFields({
                       })
                     }
                   />
-                </Label>
-                <Label>
-                  Registry password
+                </Field>
+                <Field>
+                  <FieldLabel>Registry password</FieldLabel>
                   <Input
                     type="password"
                     autoComplete="new-password"
@@ -205,15 +205,15 @@ export function SourceFields({
                       })
                     }
                   />
-                </Label>
+                </Field>
               </>
             )}
           </CreationSettings>
         </>
       )}
       {source.type === 'compose' && (
-        <Label>
-          Compose definition
+        <Field>
+          <FieldLabel>Compose definition</FieldLabel>
           <Textarea
             data-source-input
             required
@@ -236,7 +236,7 @@ export function SourceFields({
               </span>
             </>
           )}
-        </Label>
+        </Field>
       )}
       {source.type === 'github' && (
         <>
@@ -250,8 +250,8 @@ export function SourceFields({
               }
             />
           ) : (
-            <Label>
-              GitHub repository (owner/repo)
+            <Field>
+              <FieldLabel>GitHub repository (owner/repo)</FieldLabel>
               <Input
                 data-source-input
                 required
@@ -266,9 +266,9 @@ export function SourceFields({
                   })
                 }
               />
-            </Label>
+            </Field>
           )}
-          <Label className="flex items-center gap-2">
+          <Field orientation="horizontal" className="flex items-center gap-2">
             <Checkbox
               checked={source.config.enabled}
               onCheckedChange={(v) =>
@@ -281,8 +281,10 @@ export function SourceFields({
                 })
               }
             />
-            Automatically deploy signed pushes after setup is completed
-          </Label>
+            <FieldLabel>
+              Automatically deploy signed pushes after setup is completed
+            </FieldLabel>
+          </Field>
           <CreationSettings
             compact={mode === 'create'}
             title="Build settings"
@@ -298,8 +300,8 @@ export function SourceFields({
             }
           >
             {(!project || !service || !source.config.connection_id) && (
-              <Label>
-                Branch
+              <Field>
+                <FieldLabel>Branch</FieldLabel>
                 <Input
                   data-config-path="source.config.branch"
                   data-source-input
@@ -315,10 +317,10 @@ export function SourceFields({
                     })
                   }
                 />
-              </Label>
+              </Field>
             )}
-            <Label>
-              Application root (repository-relative)
+            <Field>
+              <FieldLabel>Application root (repository-relative)</FieldLabel>
               <Input
                 value={source.config.app_root ?? '.'}
                 required
@@ -336,9 +338,9 @@ export function SourceFields({
                 The app directory is separate from its Dockerfile and build
                 context. Workspace apps may need a repository-root context.
               </span>
-            </Label>
-            <Label>
-              Build file
+            </Field>
+            <Field>
+              <FieldLabel>Build file</FieldLabel>
               <Input
                 data-config-path="source.config.build_file"
                 data-source-input
@@ -354,9 +356,9 @@ export function SourceFields({
                   })
                 }
               />
-            </Label>
-            <Label>
-              Build context (repository-relative)
+            </Field>
+            <Field>
+              <FieldLabel>Build context (repository-relative)</FieldLabel>
               <Input
                 data-config-path="source.config.context"
                 data-source-input
@@ -372,10 +374,10 @@ export function SourceFields({
                   })
                 }
               />
-            </Label>
+            </Field>
             {source.config.kind === 'dockerfile' && (
-              <Label>
-                Public build arguments (JSON object)
+              <Field>
+                <FieldLabel>Public build arguments (JSON object)</FieldLabel>
                 <Textarea
                   defaultValue={JSON.stringify(
                     source.config.build_arguments ?? {},
@@ -419,7 +421,7 @@ export function SourceFields({
                   Dockerfile must declare ARG. Never enter credentials here;
                   these values can appear in image history and browser bundles.
                 </span>
-              </Label>
+              </Field>
             )}
           </CreationSettings>
         </>
@@ -447,7 +449,7 @@ export function RuntimeFields({
   onReveal?: (original: Record<string, string>) => void
 }) {
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5">
       <CreationSettings
         compact={compact}
         card
@@ -474,9 +476,9 @@ export function RuntimeFields({
           Number(value.restart !== 'unless-stopped')
         }
       >
-        <div className="grid gap-4 md:grid-cols-3">
-          <Label>
-            Restart policy
+        <FieldGroup className="grid gap-4 md:grid-cols-3">
+          <Field>
+            <FieldLabel>Restart policy</FieldLabel>
             <NativeSelect
               value={value.restart}
               onChange={(e) =>
@@ -490,9 +492,9 @@ export function RuntimeFields({
                 <option key={v}>{v}</option>
               ))}
             </NativeSelect>
-          </Label>
-          <Label>
-            Memory limit (MiB)
+          </Field>
+          <Field>
+            <FieldLabel>Memory limit (MiB)</FieldLabel>
             <Input
               type="number"
               min={16}
@@ -504,9 +506,9 @@ export function RuntimeFields({
                 })
               }
             />
-          </Label>
-          <Label>
-            CPU limit
+          </Field>
+          <Field>
+            <FieldLabel>CPU limit</FieldLabel>
             <Input
               type="number"
               min={0.1}
@@ -519,8 +521,8 @@ export function RuntimeFields({
                 })
               }
             />
-          </Label>
-        </div>
+          </Field>
+        </FieldGroup>
       </CreationSettings>
       <CreationSettings
         compact={compact}
@@ -530,9 +532,12 @@ export function RuntimeFields({
       >
         <h2 className="font-semibold">Published ports</h2>
         {value.ports.map((port, i) => (
-          <div key={i} className="flex flex-wrap items-end gap-2">
-            <Label className="min-w-24 flex-1">
-              Host port
+          <FieldGroup
+            key={i}
+            className="flex flex-wrap items-end gap-2 flex-row"
+          >
+            <Field className="min-w-24 flex-1">
+              <FieldLabel>Host port</FieldLabel>
               <Input
                 type="number"
                 required
@@ -548,9 +553,9 @@ export function RuntimeFields({
                   })
                 }
               />
-            </Label>
-            <Label className="min-w-24 flex-1">
-              Container port
+            </Field>
+            <Field className="min-w-24 flex-1">
+              <FieldLabel>Container port</FieldLabel>
               <Input
                 type="number"
                 required
@@ -566,9 +571,9 @@ export function RuntimeFields({
                   })
                 }
               />
-            </Label>
-            <Label>
-              Protocol
+            </Field>
+            <Field>
+              <FieldLabel>Protocol</FieldLabel>
               <NativeSelect
                 value={port.protocol}
                 onChange={(e) =>
@@ -585,7 +590,7 @@ export function RuntimeFields({
                 <option value="tcp">TCP</option>
                 <option value="udp">UDP</option>
               </NativeSelect>
-            </Label>
+            </Field>
             <Button
               type="button"
               aria-label={'Remove port ' + port.host}
@@ -598,7 +603,7 @@ export function RuntimeFields({
             >
               Remove
             </Button>
-          </div>
+          </FieldGroup>
         ))}
         <Button
           type="button"
@@ -623,9 +628,12 @@ export function RuntimeFields({
       >
         <h2 className="font-semibold">Persistent volumes</h2>
         {value.volumes.map((volume, i) => (
-          <div key={i} className="flex flex-wrap items-end gap-2">
-            <Label className="min-w-24 flex-1">
-              Volume name
+          <FieldGroup
+            key={i}
+            className="flex flex-wrap items-end gap-2 flex-row"
+          >
+            <Field className="min-w-24 flex-1">
+              <FieldLabel>Volume name</FieldLabel>
               <Input
                 required
                 value={volume.source}
@@ -638,9 +646,9 @@ export function RuntimeFields({
                   })
                 }
               />
-            </Label>
-            <Label className="min-w-24 flex-1">
-              Mount path
+            </Field>
+            <Field className="min-w-24 flex-1">
+              <FieldLabel>Mount path</FieldLabel>
               <Input
                 required
                 placeholder="/data"
@@ -654,9 +662,9 @@ export function RuntimeFields({
                   })
                 }
               />
-            </Label>
-            <Label>
-              Access
+            </Field>
+            <Field>
+              <FieldLabel>Access</FieldLabel>
               <NativeSelect
                 value={String(volume.readOnly)}
                 onChange={(e) =>
@@ -673,7 +681,7 @@ export function RuntimeFields({
                 <option value="false">Read and write</option>
                 <option value="true">Read only</option>
               </NativeSelect>
-            </Label>
+            </Field>
             <Button
               type="button"
               aria-label={'Remove volume ' + volume.source}
@@ -686,7 +694,7 @@ export function RuntimeFields({
             >
               Remove
             </Button>
-          </div>
+          </FieldGroup>
         ))}
         <Button
           type="button"
@@ -708,8 +716,8 @@ export function RuntimeFields({
         title="Networks"
         count={value.networks.length}
       >
-        <Label>
-          Networks
+        <Field>
+          <FieldLabel>Networks</FieldLabel>
           <Input
             placeholder="app-network, shared-network"
             defaultValue={value.networks.join(', ')}
@@ -726,15 +734,15 @@ export function RuntimeFields({
           <span className="text-xs">
             Comma-separated existing Docker network names.
           </span>
-        </Label>
+        </Field>
       </CreationSettings>
       <CreationSettings
         compact={compact}
         title="Health check"
         count={value.healthcheck ? 1 : 0}
       >
-        <Label>
-          Health check command
+        <Field>
+          <FieldLabel>Health check command</FieldLabel>
           <Textarea
             placeholder={
               '/bin/sh\n-c\ncurl --fail http://localhost:3000/health'
@@ -755,10 +763,10 @@ export function RuntimeFields({
           <span className="text-xs">
             One argument per line. Leave blank to use the image’s health check.
           </span>
-        </Label>
+        </Field>
         {value.healthcheck && (
-          <Label>
-            Health check interval (seconds)
+          <Field>
+            <FieldLabel>Health check interval (seconds)</FieldLabel>
             <Input
               type="number"
               min={1}
@@ -774,7 +782,7 @@ export function RuntimeFields({
                 })
               }
             />
-          </Label>
+          </Field>
         )}
       </CreationSettings>
     </div>
@@ -790,8 +798,8 @@ export function HostField({
   onChange: (config: PlatformConfig) => void
 }) {
   return (
-    <Label>
-      Deployment host
+    <Field>
+      <FieldLabel>Deployment host</FieldLabel>
       <NativeSelect
         required
         value={config.connector_id}
@@ -836,7 +844,7 @@ export function HostField({
           </option>
         ))}
       </NativeSelect>
-    </Label>
+    </Field>
   )
 }
 
@@ -853,15 +861,24 @@ function CreationSettings({
   children: ReactNode
   card?: boolean
 }) {
+  const parts = Children.toArray(children)
+  const heading = parts.find(
+    (part) => isValidElement(part) && part.type === 'h2',
+  )
   if (compact)
     return (
       <CollapsibleSection title={title} count={count}>
-        <div className="space-y-4 [&>h2]:hidden [&>p]:hidden">{children}</div>
+        <div className="flex flex-col gap-4 [&>h2]:hidden [&>p]:hidden">
+          {children}
+        </div>
       </CollapsibleSection>
     )
   return card ? (
-    <Card size="compact" className="space-y-3">
-      {children}
+    <Card size="compact" className="flex flex-col gap-3">
+      <CardHeader>
+        <CardTitle asChild>{heading ?? <h2>{title}</h2>}</CardTitle>
+      </CardHeader>
+      <CardContent>{parts.filter((part) => part !== heading)}</CardContent>
     </Card>
   ) : (
     <>{children}</>

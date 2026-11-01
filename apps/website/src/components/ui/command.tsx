@@ -1,6 +1,6 @@
 import { Command as Primitive } from 'cmdk'
 import { Search } from 'lucide-react'
-import { clsx } from 'clsx'
+import { cn } from '@/lib/utils'
 import type { ComponentProps } from 'react'
 
 export function Command({
@@ -9,7 +9,7 @@ export function Command({
 }: ComponentProps<typeof Primitive>) {
   return (
     <Primitive
-      className={clsx(
+      className={cn(
         'flex flex-col overflow-hidden rounded-md bg-card text-foreground',
         className,
       )}
@@ -53,8 +53,23 @@ export function CommandItem({
 }: ComponentProps<typeof Primitive.Item>) {
   return (
     <Primitive.Item
-      className={clsx(
+      className={cn(
         'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-[selected=true]:bg-secondary data-[disabled=true]:cursor-not-allowed data-[disabled=true]:opacity-50',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+export function CommandGroup({
+  className,
+  ...props
+}: ComponentProps<typeof Primitive.Group>) {
+  return (
+    <Primitive.Group
+      className={cn(
+        'overflow-hidden p-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted-foreground',
         className,
       )}
       {...props}

@@ -1,6 +1,8 @@
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { useState } from 'react'
 import type { PublicAddresses } from '@kloud/protocol/addresses'
-import { Button, Input, Label } from './components/ui/controls'
+import { Button, Input } from './components/ui/controls'
 import { ErrorMessage } from './components'
 import { api } from './api'
 
@@ -29,7 +31,7 @@ export function ServerAddressDetails({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <h2 className="font-semibold">Network addresses</h2>
       <dl className="grid gap-4 sm:grid-cols-2">
         {(['ipv4', 'ipv6'] as const).map((family) => {
@@ -56,8 +58,8 @@ export function ServerAddressDetails({
         inbound reachability. Address changes never rewrite DNS automatically.
       </p>
       {editable && (
-        <form
-          className="space-y-3"
+        <Form
+          className="flex flex-col gap-3"
           onSubmit={async (e) => {
             e.preventDefault()
             setError('')
@@ -83,33 +85,33 @@ export function ServerAddressDetails({
             }
           }}
         >
-          <Label>
-            DNS IPv4 override
+          <Field>
+            <FieldLabel>DNS IPv4 override</FieldLabel>
             <Input
               name="ipv4"
               defaultValue={server.dns_targets?.ipv4 ?? ''}
               placeholder="Use detected address"
             />
-          </Label>
-          <Label>
-            DNS IPv6 override
+          </Field>
+          <Field>
+            <FieldLabel>DNS IPv6 override</FieldLabel>
             <Input
               name="ipv6"
               defaultValue={server.dns_targets?.ipv6 ?? ''}
               placeholder="Use detected address"
             />
-          </Label>
-          <Label>
-            Private / VPN addresses
+          </Field>
+          <Field>
+            <FieldLabel>Private / VPN addresses</FieldLabel>
             <Input
               name="private"
               defaultValue={server.private_addresses?.join(', ') ?? ''}
               placeholder="Configured separately; comma-separated addresses"
             />
-          </Label>
+          </Field>
           <ErrorMessage message={error} />
           <Button disabled={busy}>Save address settings</Button>
-        </form>
+        </Form>
       )}
     </div>
   )

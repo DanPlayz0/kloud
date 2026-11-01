@@ -196,9 +196,12 @@ for (const width of [320, 390, 768, 1280]) {
       await page.getByRole('button', { name: 'Toggle navigation' }).click()
     await page.getByRole('button', { name: new RegExp(owner.username) }).click()
     await expect(
-      page.getByRole('button', { name: 'Sign out', exact: true }),
+      page.getByRole('menuitem', { name: 'Sign out', exact: true }),
     ).toBeVisible()
-    await expectContained(page, '.account-menu,.account-button')
+    await expectContained(
+      page,
+      '[data-slot="dropdown-menu-content"],.account-button',
+    )
     await page.goto('/login')
     expect(
       await page

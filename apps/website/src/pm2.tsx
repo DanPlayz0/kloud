@@ -1,3 +1,12 @@
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from '@/components/ui/table'
+import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { TableCard } from './components/ui/card'
 import { StatusBadge } from './components/ui/status-badge'
 import { InventoryCard } from './components/inventory-card'
@@ -19,7 +28,7 @@ import {
   type User,
 } from './api'
 import { Shell, usePolling, ErrorMessage, Notice, bytes } from './components'
-import { Button, Checkbox, Label, NativeSelect } from './components/ui/controls'
+import { Button, Checkbox, NativeSelect } from './components/ui/controls'
 import {
   Dialog,
   DialogContent,
@@ -102,7 +111,7 @@ export function Pm2Page({
       title="Compute / PM2"
       active={connector ? 'compute/pm2' : 'pm2'}
     >
-      <section className="compute-content space-y-4">
+      <section className="compute-content flex flex-col gap-4">
         <div className="page-heading">
           <div>
             <p className="eyebrow">COMPUTE</p>
@@ -129,9 +138,9 @@ export function Pm2Page({
         )}
         {data && data.length > 0 && (
           <TableCard>
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-border text-muted-foreground">
-                <tr>
+            <Table className="w-full text-left text-sm">
+              <TableHeader className="border-b border-border text-muted-foreground">
+                <TableRow>
                   {[
                     'Application',
                     connector ? 'Project' : 'Host',
@@ -142,13 +151,13 @@ export function Pm2Page({
                     'Uptime',
                     'Restarts',
                   ].map((label) => (
-                    <th key={label} scope="col" className="p-3">
+                    <TableHead key={label} scope="col" className="p-3">
                       {label}
-                    </th>
+                    </TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.map((app) => (
                   <Pm2Row
                     key={app.id}
@@ -158,8 +167,8 @@ export function Pm2Page({
                     refresh={() => setRevision((v) => v + 1)}
                   />
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </TableCard>
         )}
       </section>
@@ -189,14 +198,15 @@ function Pm2Row({
     : '—'
   return (
     <Fragment>
-      <tr
+      <TableRow
         className="cursor-pointer border-b border-border hover:bg-muted focus-within:bg-muted"
         onClick={() => setOpen(true)}
       >
-        <td className="p-3">
+        <TableCell className="p-3">
           <Button
             ref={trigger}
-            className="!border-0 !bg-transparent !p-0 font-medium hover:underline"
+
+            variant="link"
             aria-label={`Open ${app.name}`}
             aria-haspopup="dialog"
             onClick={() => setOpen(true)}
@@ -204,8 +214,8 @@ function Pm2Row({
             {app.name}
           </Button>
           <p className="mt-1 text-xs text-muted-foreground">{app.namespace}</p>
-        </td>
-        <td className="p-3">
+        </TableCell>
+        <TableCell className="p-3">
           {scope.kind === 'connector' ? (
             app.project_slug &&
             projects.some((p) => p.slug === app.project_slug) ? (
@@ -226,18 +236,20 @@ function Pm2Row({
           ) : (
             (app.host ?? app.connector_name)
           )}
-        </td>
-        <td className="p-3">
+        </TableCell>
+        <TableCell className="p-3">
           <StatusBadge>{status(app)}</StatusBadge>
-        </td>
-        <td className="p-3">{app.workers.length}</td>
-        <td className="p-3">{current ? cpu : '—'}</td>
-        <td className="p-3">{current ? memory : '—'}</td>
-        <td className="p-3">{current ? uptime(app.workers) : '—'}</td>
-        <td className="p-3">
+        </TableCell>
+        <TableCell className="p-3">{app.workers.length}</TableCell>
+        <TableCell className="p-3">{current ? cpu : '—'}</TableCell>
+        <TableCell className="p-3">{current ? memory : '—'}</TableCell>
+        <TableCell className="p-3">
+          {current ? uptime(app.workers) : '—'}
+        </TableCell>
+        <TableCell className="p-3">
           {current ? app.workers.reduce((v, w) => v + w.restarts, 0) : '—'}
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
       <Pm2Operations
         app={app}
         scope={scope}
@@ -343,7 +355,7 @@ function Pm2Operations({
       }}
     >
       <DialogContent
-        className="!max-w-4xl space-y-4"
+        className="!max-w-4xl flex flex-col gap-4"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           title.current?.focus()
@@ -363,7 +375,10 @@ function Pm2Operations({
         <DialogDescription>
           {app.namespace} · {app.host ?? app.connector_name}
         </DialogDescription>
-        <section className="space-y-2" aria-label={`${app.name} workers`}>
+        <section
+          className="flex flex-col gap-2"
+          aria-label={`${app.name} workers`}
+        >
           <h3 className="text-sm font-medium">Workers</h3>
           {!app.workers.length && (
             <p className="text-sm text-muted-foreground">No current workers.</p>
@@ -419,7 +434,7 @@ function Pm2Operations({
                       : void perform(action)
                   }
                 >
-                  <Icon size={16} aria-hidden="true" />
+                  <Icon data-icon="inline-start" aria-hidden="true" />
                   {action}
                 </Button>
               </QuickTip>
@@ -428,7 +443,7 @@ function Pm2Operations({
         </div>
         {confirmAction && (
           <div
-            className="rounded border border-border bg-background p-4 space-y-3"
+            className="rounded border border-border bg-background p-4 flex flex-col gap-3"
             role="alert"
           >
             <p>
@@ -539,10 +554,10 @@ function Pm2LogViewer({
       log.current.scrollTop = log.current.scrollHeight
   }, [output, autoScroll])
   return (
-    <section aria-label="PM2 logs" className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <Label>
-          Stream
+    <section aria-label="PM2 logs" className="flex flex-col gap-3">
+      <FieldGroup className="flex flex-wrap items-end gap-3 flex-row">
+        <Field>
+          <FieldLabel>Stream</FieldLabel>
           <NativeSelect
             aria-label="Log stream"
             value={channel}
@@ -552,9 +567,9 @@ function Pm2LogViewer({
             <option value="stdout">stdout file</option>
             <option value="stderr">stderr file</option>
           </NativeSelect>
-        </Label>
-        <Label>
-          Worker
+        </Field>
+        <Field>
+          <FieldLabel>Worker</FieldLabel>
           <NativeSelect
             aria-label="Log worker"
             value={worker}
@@ -567,18 +582,22 @@ function Pm2LogViewer({
               </option>
             ))}
           </NativeSelect>
-        </Label>
+        </Field>
         <Button onClick={() => setPaused((v) => !v)}>
-          {paused ? <Play size={16} /> : <Pause size={16} />}
+          {paused ? (
+            <Play data-icon="inline-start" />
+          ) : (
+            <Pause data-icon="inline-start" />
+          )}
           {paused ? 'Resume' : 'Pause'}
         </Button>
-        <Label className="!flex-row items-center gap-2">
+        <Field orientation="horizontal" className="items-center gap-2">
           <Checkbox
             checked={autoScroll}
             onCheckedChange={(v) => setAutoScroll(v === true)}
           />
-          Auto-scroll
-        </Label>
+          <FieldLabel>Auto-scroll</FieldLabel>
+        </Field>
         {error && (
           <Button
             disabled={!available || paused}
@@ -587,7 +606,7 @@ function Pm2LogViewer({
             Reconnect logs
           </Button>
         )}
-      </div>
+      </FieldGroup>
       <ErrorMessage message={error} />
       <p className="text-xs text-muted-foreground">
         {paused
@@ -647,7 +666,7 @@ export function Pm2Inventory({ projects }: { projects: Project[] }) {
     }
   }
   return (
-    <section className="mt-6 space-y-4" aria-label="PM2 inventory">
+    <section className="mt-6 flex flex-col gap-4" aria-label="PM2 inventory">
       <h2>PM2 inventory</h2>
       <p className="text-sm text-muted-foreground">
         Enable PM2 and discovery on a connector to assign applications.
@@ -674,8 +693,8 @@ export function Pm2Inventory({ projects }: { projects: Project[] }) {
             )
           }}
         >
-          <Label>
-            Project
+          <Field data-disabled={busy}>
+            <FieldLabel>Project</FieldLabel>
             <NativeSelect
               name="project"
               aria-label={`Project for ${app.name} (${app.namespace})`}
@@ -689,7 +708,7 @@ export function Pm2Inventory({ projects }: { projects: Project[] }) {
                 </option>
               ))}
             </NativeSelect>
-          </Label>
+          </Field>
           <div className="inventory-card-actions">
             <Button type="submit" disabled={busy}>
               Save assignment

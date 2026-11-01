@@ -1,53 +1,58 @@
-import { Button } from './controls'
+import { Tabs as Primitive } from 'radix-ui'
+import type { ComponentProps } from 'react'
+import { cn } from '@/lib/utils'
+
 export function Tabs({
-  items,
-  value,
-  onChange,
-  label,
-}: {
-  items: string[]
-  value: string
-  onChange: (value: string) => void
-  label: string
-}) {
+  className,
+  ...props
+}: ComponentProps<typeof Primitive.Root>) {
   return (
-    <div
-      role="tablist"
-      aria-label={label}
-      className="flex flex-wrap gap-2 border-b border-border pb-3"
-      onKeyDown={(e) => {
-        const index = items.indexOf(value)
-        const next =
-          e.key === 'ArrowRight'
-            ? (index + 1) % items.length
-            : e.key === 'ArrowLeft'
-              ? (index + items.length - 1) % items.length
-              : e.key === 'Home'
-                ? 0
-                : e.key === 'End'
-                  ? items.length - 1
-                  : -1
-        if (next >= 0) {
-          e.preventDefault()
-          onChange(items[next]!)
-          const tabs =
-            e.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]')
-          tabs[next]?.focus()
-        }
-      }}
-    >
-      {items.map((item) => (
-        <Button
-          key={item}
-          role="tab"
-          aria-selected={value === item}
-          tabIndex={value === item ? 0 : -1}
-          variant={value === item ? 'primary' : 'default'}
-          onClick={() => onChange(item)}
-        >
-          {item}
-        </Button>
-      ))}
-    </div>
+    <Primitive.Root
+      data-slot="tabs"
+      className={cn('flex min-w-0 flex-col gap-5', className)}
+      {...props}
+    />
+  )
+}
+export function TabsList({
+  className,
+  ...props
+}: ComponentProps<typeof Primitive.List>) {
+  return (
+    <Primitive.List
+      data-slot="tabs-list"
+      className={cn(
+        'flex flex-wrap gap-2 border-b border-border pb-3',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+export function TabsTrigger({
+  className,
+  ...props
+}: ComponentProps<typeof Primitive.Trigger>) {
+  return (
+    <Primitive.Trigger
+      data-slot="tabs-trigger"
+      className={cn(
+        'ui-button data-[state=active]:bg-primary data-[state=active]:text-primary-foreground',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+export function TabsContent({
+  className,
+  ...props
+}: ComponentProps<typeof Primitive.Content>) {
+  return (
+    <Primitive.Content
+      data-slot="tabs-content"
+      className={cn('min-w-0 outline-none', className)}
+      {...props}
+    />
   )
 }

@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
-import { clsx } from 'clsx'
+import { cn } from '@/lib/utils'
 
 export const TooltipProvider = TooltipPrimitive.Provider
 export const Tooltip = TooltipPrimitive.Root
@@ -16,7 +16,7 @@ export function TooltipContent({
     <TooltipPrimitive.Content
       data-slot="tooltip-content"
       sideOffset={sideOffset}
-      className={clsx(
+      className={cn(
         'z-50 max-w-xs rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground shadow-md',
         className,
       )}

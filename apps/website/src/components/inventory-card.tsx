@@ -1,6 +1,13 @@
+import { Form } from '@/components/ui/form'
 import type { ComponentProps, ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Card } from './ui/card'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from './ui/card'
 
 export function InventoryCard({
   name,
@@ -19,23 +26,27 @@ export function InventoryCard({
 }) {
   return (
     <Card size="flush" className="inventory-card">
-      <div className="inventory-card-header">
+      <CardHeader className="inventory-card-header">
         <div className="inventory-card-icon bg-muted text-muted-foreground border-border">
           <Icon size={20} aria-hidden="true" />
         </div>
         <div className="inventory-card-identity">
-          <h3 className="text-sm font-semibold text-foreground">{name}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">{metadata}</p>
+          <CardTitle asChild>
+            <h3>{name}</h3>
+          </CardTitle>
+          <CardDescription>{metadata}</CardDescription>
         </div>
         {status}
-      </div>
-      <form
-        className="inventory-card-form border-border"
-        aria-label={`Assignment for ${name}`}
-        onSubmit={onSubmit}
-      >
-        {children}
-      </form>
+      </CardHeader>
+      <CardContent>
+        <Form
+          className="inventory-card-form border-border"
+          aria-label={`Assignment for ${name}`}
+          onSubmit={onSubmit}
+        >
+          {children}
+        </Form>
+      </CardContent>
     </Card>
   )
 }

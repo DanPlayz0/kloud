@@ -1,10 +1,13 @@
+import { X, ArrowRight } from 'lucide-react'
+import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
 import { Card, FormCard } from './components/ui/card'
 import { StatusBadge } from './components/ui/status-badge'
 import { Container } from 'lucide-react'
+import { Alert, AlertDescription } from './components/ui/alert'
 import { ConnectorControls } from './components/connector-controls'
 import { InventoryCard } from './components/inventory-card'
 import { ProjectFields, projectFormValues } from './components/project-fields'
-import { Button, Input, NativeSelect, Label } from './components/ui/controls'
+import { Button, Input, NativeSelect } from './components/ui/controls'
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   api,
@@ -88,14 +91,21 @@ export function Admin({
         </div>
         <ErrorMessage message={error} />
         {message && (
-          <div className="success" role="status">
-            <span>{message}</span>
-            <Button onClick={() => setMessage('')} aria-label="Dismiss">
-              <Icon name="close" />
+          <Alert role="status" className="mb-5 grid-cols-[1fr_auto]">
+            <AlertDescription className="col-start-1">
+              {message}
+            </AlertDescription>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMessage('')}
+              aria-label="Dismiss"
+            >
+              <Icon data-icon="inline-start" icon={X} />
             </Button>
-          </div>
+          </Alert>
         )}
-        <fieldset className="admin-controls" disabled={busy}>
+        <FieldSet className="admin-controls" disabled={busy}>
           {section === 'dns' ? (
             <DnsProviders projects={projectList} />
           ) : section === 'projects' ? (
@@ -123,7 +133,7 @@ export function Admin({
               <Pm2Inventory projects={projectList} />
             </>
           )}
-        </fieldset>
+        </FieldSet>
       </section>
     </Shell>
   )
@@ -150,7 +160,7 @@ function Projects({
       {canCreate && (
         <FormCard onSubmit={submit}>
           <ProjectFields />
-          <Button className="primary">Create project</Button>
+          <Button variant="primary">Create project</Button>
         </FormCard>
       )}
       <ErrorMessage message={error} />
@@ -192,7 +202,7 @@ function Projects({
             </Button>
             <Button asChild>
               <a href={`/projects/${p.slug}/compute/containers`}>
-                Open project <Icon name="arrow" />
+                Open project <Icon data-icon="inline-start" icon={ArrowRight} />
               </a>
             </Button>
           </div>
@@ -225,16 +235,16 @@ function Connectors({
   return (
     <>
       <FormCard onSubmit={submit}>
-        <Label>
-          Connector name
+        <Field>
+          <FieldLabel>Connector name</FieldLabel>
           <Input
             name="name"
             placeholder="Production Docker host"
             required
             maxLength={100}
           />
-        </Label>
-        <Button className="primary">Create connector token</Button>
+        </Field>
+        <Button variant="primary">Create connector token</Button>
       </FormCard>
       <p className="helper">
         Install the connector on your Docker host using the token. Discovery
@@ -281,7 +291,7 @@ function Inventory({
     `/admin/containers?revision=${revision}`,
   )
   return (
-    <section className="space-y-4" aria-label="Container inventory">
+    <section className="flex flex-col gap-4" aria-label="Container inventory">
       <h2>Container inventory</h2>
       <p className="text-sm text-muted-foreground">
         Enable discovery on a connector to assign unlabeled containers. Docker
@@ -339,10 +349,12 @@ function Assignment({
         </div>
       ) : (
         <>
-          <Label>
-            <span>
-              Project<span className="sr-only"> for {row.data.name}</span>
-            </span>
+          <Field>
+            <FieldLabel>
+              <span>
+                Project<span className="sr-only"> for {row.data.name}</span>
+              </span>
+            </FieldLabel>
             <NativeSelect
               required
               value={project}
@@ -355,12 +367,14 @@ function Assignment({
                 </option>
               ))}
             </NativeSelect>
-          </Label>
-          <Label>
-            <span>
-              Application slug
-              <span className="sr-only"> for {row.data.name}</span>
-            </span>
+          </Field>
+          <Field>
+            <FieldLabel>
+              <span>
+                Application slug
+                <span className="sr-only"> for {row.data.name}</span>
+              </span>
+            </FieldLabel>
             <Input
               value={application}
               required
@@ -369,7 +383,7 @@ function Assignment({
               onChange={(e) => setApplication(e.target.value)}
               placeholder="Application slug"
             />
-          </Label>
+          </Field>
           <div className="inventory-card-actions">
             <Button type="submit" disabled={row.stale}>
               Assign

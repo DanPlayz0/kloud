@@ -1,9 +1,10 @@
-import type { ComponentProps } from 'react'
+import { useImperativeHandle, useContext, type ComponentProps } from 'react'
+import { useFieldControl, FieldContext } from './field-control'
 import { Slot } from '@radix-ui/react-slot'
 import * as LabelPrimitive from '@radix-ui/react-label'
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { clsx } from 'clsx'
+import { cn } from '@/lib/utils'
 import { Check, Minus } from 'lucide-react'
 
 // shadcn/ui's Radix composition, adapted to the dashboard's CSS theme.
@@ -12,7 +13,16 @@ const buttonVariants = cva(
   'ui-button bg-secondary text-foreground border-border',
   {
     variants: {
-      variant: { default: '', primary: 'primary', destructive: 'danger' },
+      variant: {
+        default: '',
+        primary: 'primary',
+        destructive: 'danger',
+        ghost: 'ui-button-ghost',
+        outline: 'ui-button-outline',
+        choice: 'ui-button-choice',
+        link: 'ui-button-link',
+      },
+      size: { default: '', sm: 'ui-button-sm', icon: 'ui-button-icon' },
     },
     defaultVariants: { variant: 'default' },
   },
@@ -20,6 +30,7 @@ const buttonVariants = cva(
 export function Button({
   className,
   variant,
+  size,
   asChild = false,
   ...props
 }: ComponentProps<'button'> &
@@ -28,21 +39,33 @@ export function Button({
   return (
     <Component
       data-slot="button"
-      className={clsx(buttonVariants({ variant }), className)}
+      className={cn(buttonVariants({ variant, size }), className)}
       {...props}
     />
   )
 }
-export function Input({ className, type, ...props }: ComponentProps<'input'>) {
+export function Input({
+  className,
+  type,
+  ref,
+  validationMessage,
+  ...props
+}: ComponentProps<'input'> & { validationMessage?: string }) {
+  const field = useFieldControl<HTMLInputElement>({
+    ...props,
+    validationMessage,
+  })
+  useImperativeHandle(ref, () => field.ref.current!)
   return (
     <input
       data-slot="input"
       type={type}
-      className={clsx(
+      className={cn(
         'ui-input bg-muted text-foreground border-border',
         className,
       )}
       {...props}
+      {...field}
     />
   )
 }
@@ -53,20 +76,31 @@ export function Label({
   return (
     <LabelPrimitive.Root
       data-slot="label"
-      className={clsx('ui-label text-muted-foreground', className)}
+      className={cn('ui-label text-muted-foreground', className)}
       {...props}
     />
   )
 }
-export function Textarea({ className, ...props }: ComponentProps<'textarea'>) {
+export function Textarea({
+  className,
+  ref,
+  validationMessage,
+  ...props
+}: ComponentProps<'textarea'> & { validationMessage?: string }) {
+  const field = useFieldControl<HTMLTextAreaElement>({
+    ...props,
+    validationMessage,
+  })
+  useImperativeHandle(ref, () => field.ref.current!)
   return (
     <textarea
       data-slot="textarea"
-      className={clsx(
+      className={cn(
         'ui-input min-h-28 w-full bg-muted text-foreground border-border font-mono text-sm',
         className,
       )}
       {...props}
+      {...field}
     />
   )
 }
@@ -74,16 +108,20 @@ export function Textarea({ className, ...props }: ComponentProps<'textarea'>) {
 // keyboard and mobile behavior for these short project lists.
 export function NativeSelect({
   className,
+  ref,
   ...props
 }: ComponentProps<'select'>) {
+  const field = useFieldControl<HTMLSelectElement>(props)
+  useImperativeHandle(ref, () => field.ref.current!)
   return (
     <select
       data-slot="native-select"
-      className={clsx(
+      className={cn(
         'ui-native-select bg-muted text-foreground border-border',
         className,
       )}
       {...props}
+      {...field}
     />
   )
 }
@@ -92,10 +130,12 @@ export function Checkbox({
   checked,
   ...props
 }: ComponentProps<typeof CheckboxPrimitive.Root>) {
+  const field = useContext(FieldContext)
   return (
     <CheckboxPrimitive.Root
+      id={props.id ?? field?.id}
       data-slot="checkbox"
-      className={clsx('ui-checkbox', className)}
+      className={cn('ui-checkbox', className)}
       checked={checked}
       {...props}
     >

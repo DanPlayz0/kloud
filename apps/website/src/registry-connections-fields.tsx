@@ -1,13 +1,9 @@
+import { Separator } from '@/components/ui/separator'
+import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useState } from 'react'
 import { api } from './api'
 import { ErrorMessage } from './components'
-import {
-  Button,
-  Input,
-  Label,
-  NativeSelect,
-  Checkbox,
-} from './components/ui/controls'
+import { Button, Input, NativeSelect, Checkbox } from './components/ui/controls'
 
 interface Registry {
   id: string
@@ -51,7 +47,8 @@ export function RegistryConnectionsFields({
     }
   }
   return (
-    <div className="space-y-3 border-t border-border pt-3">
+    <div className="flex flex-col gap-3   pt-3">
+      <Separator className="basis-full" />
       <h4 className="text-sm font-medium">Reusable registry connections</h4>
       <ErrorMessage message={error} />
       {registries.map((registry) => (
@@ -109,34 +106,34 @@ export function RegistryConnectionsFields({
         {adding ? 'Cancel' : 'Add reusable registry'}
       </Button>
       {adding && (
-        <div className="grid gap-3 rounded border border-border p-3 md:grid-cols-2">
-          <Label>
-            Name
+        <FieldGroup className="grid gap-3 rounded border border-border p-3 md:grid-cols-2">
+          <Field>
+            <FieldLabel>Name</FieldLabel>
             <Input data-registry-name />
-          </Label>
-          <Label>
-            Server
+          </Field>
+          <Field>
+            <FieldLabel>Server</FieldLabel>
             <Input data-registry-server placeholder="ghcr.io" />
-          </Label>
-          <Label>
-            Username
+          </Field>
+          <Field>
+            <FieldLabel>Username</FieldLabel>
             <Input data-registry-username />
-          </Label>
-          <Label>
-            Password / token
+          </Field>
+          <Field>
+            <FieldLabel>Password / token</FieldLabel>
             <Input
               data-registry-password
               type="password"
               autoComplete="new-password"
             />
-          </Label>
-          <Label>
-            Ownership
+          </Field>
+          <Field>
+            <FieldLabel>Ownership</FieldLabel>
             <NativeSelect data-registry-scope>
               <option value="personal">Personal</option>
               <option value="shared">Shared (server administrators)</option>
             </NativeSelect>
-          </Label>
+          </Field>
           <Button
             type="button"
             disabled={busy}
@@ -169,7 +166,7 @@ export function RegistryConnectionsFields({
           >
             Save encrypted registry
           </Button>
-        </div>
+        </FieldGroup>
       )}
       <p className="text-xs text-muted-foreground">
         Credential owners authorize persistent app bindings. Removing an owner

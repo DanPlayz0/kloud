@@ -1,3 +1,6 @@
+import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty'
+import { FieldSet, Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { StatusBadge } from './components/ui/status-badge'
 import { useState, type FormEvent } from 'react'
 import { Boxes, Plus, Pencil, Trash2 } from 'lucide-react'
@@ -10,8 +13,15 @@ import {
 } from './api'
 import { Shell, ErrorMessage, usePolling, bytes } from './components'
 import type { ContainerRow } from './api'
-import { Button, Input, Label } from './components/ui/controls'
+import { Button, Input } from './components/ui/controls'
 import { Card } from './components/ui/card'
+import {
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from './components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -86,7 +96,7 @@ export function ServicesPage({
       active="services"
       title="Project / Services"
     >
-      <section className="admin-content space-y-6">
+      <section className="admin-content flex flex-col gap-6">
         <div className="page-heading">
           <div>
             <h1>Services</h1>
@@ -98,7 +108,7 @@ export function ServicesPage({
           {data?.can_create && (
             <Button variant="primary" asChild>
               <a href={`/projects/${project}/services/new`}>
-                <Plus size={16} />
+                <Plus data-icon="inline-start" />
                 Create service
               </a>
             </Button>
@@ -128,86 +138,90 @@ export function ServicesPage({
                 c.stale || !c.seen || Date.now() - Date.parse(c.seen) > 20000,
             )
             return (
-              <Card key={service.slug} className="space-y-4">
-                <div className="flex items-start gap-3">
+              <Card key={service.slug} className="flex flex-col gap-4">
+                <CardHeader className="flex-row items-start gap-3">
                   <Boxes size={20} />
                   <div className="min-w-0">
-                    <a
-                      className="font-semibold break-all"
-                      href={`/projects/${project}/applications/${service.slug}`}
-                    >
-                      {service.name}
-                    </a>
-                    <p className="text-sm text-muted-foreground">
+                    <CardTitle asChild>
+                      <a
+                        className="font-semibold break-all"
+                        href={`/projects/${project}/applications/${service.slug}`}
+                      >
+                        {service.name}
+                      </a>
+                    </CardTitle>
+                    <CardDescription>
                       {service.type === 'compose'
                         ? 'Docker Compose'
                         : 'Application'}
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground break-words">
+                    {service.description || service.slug}
+                  </p>
+                  <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">
+                      Runtime:{' '}
+                      <StatusBadge>
+                        {runtimeError
+                          ? 'Unavailable'
+                          : !runtime
+                            ? 'Loading'
+                            : stale
+                              ? 'Host disconnected'
+                              : !runtime.length
+                                ? 'Not deployed'
+                                : runtime.every(
+                                      (c) =>
+                                        c.data.state === 'running' &&
+                                        c.data.health !== 'unhealthy' &&
+                                        c.data.health !== 'starting',
+                                    )
+                                  ? 'Running'
+                                  : 'Needs attention'}
+                      </StatusBadge>
+                    </p>
+                    {!!runtime?.length && (
+                      <>
+                        <p>
+                          {[
+                            ...new Set(
+                              runtime.map((c) => c.host ?? c.connector_name),
+                            ),
+                          ].join(', ')}
+                        </p>
+                        <p>
+                          {runtime.length} container
+                          {runtime.length === 1 ? '' : 's'} ·{' '}
+                          {stale
+                            ? 'Metrics unavailable'
+                            : `${runtime.reduce((sum, c) => sum + (c.data.cpu ?? 0), 0).toFixed(1)}% CPU · ${bytes(runtime.reduce((sum, c) => sum + (c.data.memory ?? 0), 0))} RAM`}
+                        </p>
+                      </>
+                    )}
+                    <p>
+                      {service.source_label ??
+                        (service.repository
+                          ? `${service.repository} · ${service.branch}`
+                          : 'Source not configured')}
+                    </p>
+                    <p>
+                      {service.deployment_status ? (
+                        <>
+                          Latest deployment:{' '}
+                          <StatusBadge deployment>
+                            {service.deployment_status}
+                          </StatusBadge>
+                        </>
+                      ) : (
+                        'No deployments yet'
+                      )}
                     </p>
                   </div>
-                </div>
-                <p className="text-sm text-muted-foreground break-words">
-                  {service.description || service.slug}
-                </p>
-                <div className="space-y-1 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">
-                    Runtime:{' '}
-                    <StatusBadge>
-                      {runtimeError
-                        ? 'Unavailable'
-                        : !runtime
-                          ? 'Loading'
-                          : stale
-                            ? 'Host disconnected'
-                            : !runtime.length
-                              ? 'Not deployed'
-                              : runtime.every(
-                                    (c) =>
-                                      c.data.state === 'running' &&
-                                      c.data.health !== 'unhealthy' &&
-                                      c.data.health !== 'starting',
-                                  )
-                                ? 'Running'
-                                : 'Needs attention'}
-                    </StatusBadge>
-                  </p>
-                  {!!runtime?.length && (
-                    <>
-                      <p>
-                        {[
-                          ...new Set(
-                            runtime.map((c) => c.host ?? c.connector_name),
-                          ),
-                        ].join(', ')}
-                      </p>
-                      <p>
-                        {runtime.length} container
-                        {runtime.length === 1 ? '' : 's'} ·{' '}
-                        {stale
-                          ? 'Metrics unavailable'
-                          : `${runtime.reduce((sum, c) => sum + (c.data.cpu ?? 0), 0).toFixed(1)}% CPU · ${bytes(runtime.reduce((sum, c) => sum + (c.data.memory ?? 0), 0))} RAM`}
-                      </p>
-                    </>
-                  )}
-                  <p>
-                    {service.source_label ??
-                      (service.repository
-                        ? `${service.repository} · ${service.branch}`
-                        : 'Source not configured')}
-                  </p>
-                  <p>
-                    {service.deployment_status ? (
-                      <>
-                        Latest deployment:{' '}
-                        <StatusBadge deployment>
-                          {service.deployment_status}
-                        </StatusBadge>
-                      </>
-                    ) : (
-                      'No deployments yet'
-                    )}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
+                </CardContent>
+                <CardFooter className="flex-wrap">
                   <Button asChild>
                     <a
                       href={`/projects/${project}/applications/${service.slug}`}
@@ -223,7 +237,7 @@ export function ServicesPage({
                         setEditing(service)
                       }}
                     >
-                      <Pencil size={16} />
+                      <Pencil data-icon="inline-start" />
                     </Button>
                   )}
                   {service.can_delete && (
@@ -234,20 +248,24 @@ export function ServicesPage({
                         setRemoving(service)
                       }}
                     >
-                      <Trash2 size={16} />
+                      <Trash2 data-icon="inline-start" />
                     </Button>
                   )}
-                </div>
+                </CardFooter>
               </Card>
             )
           })}
         </div>
         {data && !filtered.length && (
-          <Card className="p-8 text-center text-muted-foreground">
-            {query
-              ? 'No services match your search.'
-              : 'No services available. Create a service or ask a project administrator for access.'}
-          </Card>
+          <Empty>
+            <EmptyHeader>
+              <EmptyDescription>
+                {query
+                  ? 'No services match your search.'
+                  : 'No services available. Create a service or ask a project administrator for access.'}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </section>
       <Dialog
@@ -262,25 +280,29 @@ export function ServicesPage({
             Services keep their identity and permissions across deployments.
           </DialogDescription>
           {editing && (
-            <form key={editing.slug} onSubmit={save} className="mt-4 space-y-4">
-              <fieldset disabled={busy} className="space-y-4">
-                <Label>
-                  Name
+            <Form
+              key={editing.slug}
+              onSubmit={save}
+              className="mt-4 flex flex-col gap-4"
+            >
+              <FieldSet disabled={busy} className="flex flex-col gap-4">
+                <Field>
+                  <FieldLabel>Name</FieldLabel>
                   <Input
                     name="name"
                     required
                     maxLength={100}
                     defaultValue={editing.name}
                   />
-                </Label>
-                <Label>
-                  Description
+                </Field>
+                <Field>
+                  <FieldLabel>Description</FieldLabel>
                   <Input
                     name="description"
                     maxLength={1000}
                     defaultValue={editing.description}
                   />
-                </Label>
+                </Field>
                 <ErrorMessage message={error} />
                 <div className="flex justify-end gap-2">
                   <Button type="button" onClick={() => setEditing(null)}>
@@ -290,8 +312,8 @@ export function ServicesPage({
                     {busy ? 'Saving…' : 'Save service'}
                   </Button>
                 </div>
-              </fieldset>
-            </form>
+              </FieldSet>
+            </Form>
           )}
         </DialogContent>
       </Dialog>

@@ -1,21 +1,38 @@
 import { Button } from '../components/ui/controls'
+import { Alert, AlertTitle, AlertDescription } from '../components/ui/alert'
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyContent,
+} from '../components/ui/empty'
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 
 export const Route = createRootRoute({
   component: Outlet,
   errorComponent: ({ error, reset }) => (
-    <div className="notice">
-      <h1>Unable to open this page</h1>
-      <p role="alert">
+    <Alert>
+      <AlertTitle>
+        <h1>Unable to open this page</h1>
+      </AlertTitle>
+      <AlertDescription>
         {error instanceof Error ? error.message : 'Unable to load this page'}
-      </p>
+      </AlertDescription>
       <Button onClick={reset}>Try again</Button> <a href="/">Go home</a>
-    </div>
+    </Alert>
   ),
   notFoundComponent: () => (
-    <div className="notice">
-      <h1>Page not found</h1>
-      <a href="/">Go home</a>
-    </div>
+    <Empty>
+      <EmptyHeader>
+        <EmptyTitle>
+          <h1>Page not found</h1>
+        </EmptyTitle>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button asChild>
+          <a href="/">Go home</a>
+        </Button>
+      </EmptyContent>
+    </Empty>
   ),
 })

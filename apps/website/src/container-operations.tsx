@@ -116,7 +116,7 @@ export function ContainerOperations({
           aria-label={`Manage ${container.data.name}`}
           onClick={() => setOpen(true)}
         >
-          <Settings2 size={14} />
+          <Settings2 data-icon="inline-start" />
           Manage
         </Button>
       )}
@@ -140,7 +140,7 @@ export function ContainerOperations({
               aria-label="Close container details"
               onClick={() => setOpen(false)}
             >
-              <X size={16} aria-hidden="true" />
+              <X data-icon="inline-start" aria-hidden="true" />
             </Button>
           </div>
           <DialogDescription>
@@ -151,7 +151,7 @@ export function ContainerOperations({
               disabled={!permissions?.logs}
               onClick={() => setMode('logs')}
             >
-              <ScrollText size={14} />
+              <ScrollText data-icon="inline-start" />
               Logs
             </Button>
             <Button
@@ -164,7 +164,7 @@ export function ContainerOperations({
               disabled={!permissions?.terminal}
               onClick={() => setMode('terminal')}
             >
-              <Terminal size={14} />
+              <Terminal data-icon="inline-start" />
               Shell
             </Button>
             {(['start', 'stop', 'restart'] as const).map((action) => (
@@ -174,11 +174,11 @@ export function ContainerOperations({
                 onClick={() => void lifecycle(action)}
               >
                 {action === 'start' ? (
-                  <Play size={14} />
+                  <Play data-icon="inline-start" />
                 ) : action === 'stop' ? (
-                  <Square size={14} />
+                  <Square data-icon="inline-start" />
                 ) : (
-                  <RotateCw size={14} />
+                  <RotateCw data-icon="inline-start" />
                 )}{' '}
                 {action}
               </Button>

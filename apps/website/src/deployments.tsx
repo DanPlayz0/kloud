@@ -1,16 +1,13 @@
+import { Separator } from '@/components/ui/separator'
+import { Field, FieldLabel, FieldGroup } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { StatusBadge } from './components/ui/status-badge'
 import { useState, useEffect, type FormEvent } from 'react'
 import { GitBranch, Hammer } from 'lucide-react'
 import { api, type ContainerRow } from './api'
 import { usePolling, ErrorMessage } from './components'
 import { Card } from './components/ui/card'
-import {
-  Button,
-  Input,
-  Label,
-  NativeSelect,
-  Checkbox,
-} from './components/ui/controls'
+import { Button, Input, NativeSelect, Checkbox } from './components/ui/controls'
 
 interface Config {
   connector_id: string
@@ -60,7 +57,7 @@ export function DeploymentSettings({
     ContainerRow[]
   >(`/projects/${project}/containers`)
   return (
-    <div className="space-y-6 p-6">
+    <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center gap-3">
         <GitBranch size={22} />
         <div>
@@ -90,9 +87,9 @@ export function DeploymentSettings({
         />
       )}
       {data && (
-        <Card className="space-y-4">
+        <Card className="flex flex-col gap-4">
           {canDeploy && (
-            <form
+            <Form
               className="flex flex-wrap items-end gap-3"
               onSubmit={async (e) => {
                 e.preventDefault()
@@ -112,8 +109,8 @@ export function DeploymentSettings({
                 }
               }}
             >
-              <Label>
-                Commit SHA
+              <Field>
+                <FieldLabel>Commit SHA</FieldLabel>
                 <Input
                   aria-label="Commit SHA"
                   value={commit}
@@ -123,11 +120,11 @@ export function DeploymentSettings({
                   placeholder="Full 40-character commit SHA"
                   onChange={(e) => setCommit(e.target.value)}
                 />
-              </Label>
+              </Field>
               <Button variant="primary" disabled={queuing}>
                 {queuing ? 'Queuing…' : 'Deploy commit'}
               </Button>
-            </form>
+            </Form>
           )}
           <ErrorMessage message={queueError} />
           {queueMessage && (
@@ -263,22 +260,24 @@ function DeploymentForm({
     }
   }
   return (
-    <Card className="space-y-5">
-      <form
+    <Card className="flex flex-col gap-5">
+      <Form
         onSubmit={save}
         onChange={() => setSaved(false)}
-        className="space-y-5"
+        className="flex flex-col gap-5"
       >
         <h2 className="font-semibold">Deployment configuration</h2>
         <p className="text-sm text-muted-foreground">
           Choose where this service runs. Builds use temporary isolated workers.
         </p>
         <ErrorMessage message={hostError} />
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
+        <FieldGroup className="grid gap-4 md:grid-cols-2">
+          <Field className="flex flex-col gap-2">
             {config.managed ? (
               <>
-                <Label htmlFor="deployment-host">Deployment host</Label>
+                <FieldLabel htmlFor="deployment-host">
+                  Deployment host
+                </FieldLabel>
                 <NativeSelect
                   id="deployment-host"
                   required
@@ -295,7 +294,9 @@ function DeploymentForm({
               </>
             ) : (
               <>
-                <Label htmlFor="deployment-target">Container / host</Label>
+                <FieldLabel htmlFor="deployment-target">
+                  Container / host
+                </FieldLabel>
                 <NativeSelect
                   id="deployment-target"
                   required
@@ -325,11 +326,11 @@ function DeploymentForm({
                 </NativeSelect>
               </>
             )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="deployment-repository">
+          </Field>
+          <Field className="flex flex-col gap-2">
+            <FieldLabel htmlFor="deployment-repository">
               GitHub repository (owner/repo)
-            </Label>
+            </FieldLabel>
             <Input
               id="deployment-repository"
               required
@@ -337,18 +338,18 @@ function DeploymentForm({
               value={config.repository}
               onChange={(e) => change('repository', e.target.value)}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="deployment-branch">Branch</Label>
+          </Field>
+          <Field className="flex flex-col gap-2">
+            <FieldLabel htmlFor="deployment-branch">Branch</FieldLabel>
             <Input
               id="deployment-branch"
               required
               value={config.branch}
               onChange={(e) => change('branch', e.target.value)}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="deployment-kind">Build type</Label>
+          </Field>
+          <Field data-disabled={!!serviceType} className="flex flex-col gap-2">
+            <FieldLabel htmlFor="deployment-kind">Build type</FieldLabel>
             <NativeSelect
               id="deployment-kind"
               disabled={!!serviceType}
@@ -366,53 +367,55 @@ function DeploymentForm({
               <option value="dockerfile">Dockerfile</option>
               <option value="compose">Docker Compose</option>
             </NativeSelect>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="deployment-file">
+          </Field>
+          <Field className="flex flex-col gap-2">
+            <FieldLabel htmlFor="deployment-file">
               Build file (repository-relative)
-            </Label>
+            </FieldLabel>
             <Input
               id="deployment-file"
               required
               value={config.build_file}
               onChange={(e) => change('build_file', e.target.value)}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="deployment-context">
+          </Field>
+          <Field className="flex flex-col gap-2">
+            <FieldLabel htmlFor="deployment-context">
               {config.kind === 'compose'
                 ? 'Compose project directory'
                 : 'Build context'}
-            </Label>
+            </FieldLabel>
             <Input
               id="deployment-context"
               required
               value={config.context}
               onChange={(e) => change('context', e.target.value)}
             />
-          </div>
+          </Field>
           {config.kind === 'compose' && !config.managed && (
-            <div className="space-y-2">
-              <Label htmlFor="deployment-service">Compose service</Label>
+            <Field className="flex flex-col gap-2">
+              <FieldLabel htmlFor="deployment-service">
+                Compose service
+              </FieldLabel>
               <Input
                 id="deployment-service"
                 required
                 value={config.service}
                 onChange={(e) => change('service', e.target.value)}
               />
-            </div>
+            </Field>
           )}
-        </div>
-        <div className="flex items-center gap-2">
+        </FieldGroup>
+        <Field orientation="horizontal" className="flex items-center gap-2">
           <Checkbox
             id="deployment-enabled"
             checked={config.enabled}
             onCheckedChange={(v) => change('enabled', v === true)}
           />
-          <Label htmlFor="deployment-enabled">
+          <FieldLabel htmlFor="deployment-enabled">
             Automatically deploy pushes
-          </Label>
-        </div>
+          </FieldLabel>
+        </Field>
         <ErrorMessage message={error} />
         <div className="flex items-center gap-3">
           <Button
@@ -432,24 +435,27 @@ function DeploymentForm({
             </span>
           )}
         </div>
-      </form>
+      </Form>
       {url && (
-        <div className="space-y-3 border-t border-border pt-5">
+        <FieldGroup className="flex flex-col gap-3   pt-5">
+          <Separator className="basis-full" />
           <h2 className="font-semibold">GitHub webhook</h2>
           <p className="text-sm text-muted-foreground">
             In repository Settings → Webhooks, add this URL with content type
             application/json, the secret below, and push events. Keep SSL
             verification enabled.
           </p>
-          <Label htmlFor="webhook-url">Payload URL</Label>
-          <Input id="webhook-url" readOnly value={url} />
+          <Field>
+            <FieldLabel htmlFor="webhook-url">Payload URL</FieldLabel>
+            <Input id="webhook-url" readOnly value={url} />
+          </Field>
           {secret ? (
-            <>
-              <Label htmlFor="webhook-secret">
+            <Field>
+              <FieldLabel htmlFor="webhook-secret">
                 Secret — copy now; it is only shown once
-              </Label>
+              </FieldLabel>
               <Input id="webhook-secret" readOnly value={secret} />
-            </>
+            </Field>
           ) : (
             <p className="text-sm text-muted-foreground">
               The existing secret is hidden. Generate a new one if you need to
@@ -463,7 +469,7 @@ function DeploymentForm({
             Generating a new secret invalidates the previous secret. Update
             GitHub to match.
           </p>
-        </div>
+        </FieldGroup>
       )}
     </Card>
   )

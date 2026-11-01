@@ -1,3 +1,8 @@
+import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { cn } from '@/lib/utils'
+import { FieldSet } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Check, ChevronsUpDown, FolderKanban, Plus, Server } from 'lucide-react'
 import { api, hasServer, type Project, type User, type Connector } from '../api'
@@ -6,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import {
   Command,
   CommandEmpty,
+  CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
@@ -28,7 +34,10 @@ function ProjectMark({
   return (
     <span
       aria-hidden="true"
-      className={`project-mark flex shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground ${compact ? 'size-7 text-[10px]' : 'size-9 text-xs'}`}
+      className={cn(
+        'project-mark flex shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground',
+        compact ? 'size-7 text-[10px]' : 'size-9 text-xs',
+      )}
     >
       {project ? (
         project.name.trim().slice(0, 2).toUpperCase()
@@ -125,7 +134,11 @@ export function ProjectPicker({
           >
             {connector ? (
               <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
-                <Server className="size-4" aria-hidden="true" />
+                <Server
+                  data-icon="inline-start"
+
+                  aria-hidden="true"
+                />
               </span>
             ) : (
               <ProjectMark project={current} />
@@ -141,7 +154,8 @@ export function ProjectPicker({
               </span>
             </span>
             <ChevronsUpDown
-              className="size-4 shrink-0 text-muted-foreground"
+              data-icon="inline-start"
+              className="shrink-0 text-muted-foreground"
               aria-hidden="true"
             />
           </Button>
@@ -175,52 +189,45 @@ export function ProjectPicker({
             <CommandList
               label={showConnectors ? 'Projects and connectors' : 'Projects'}
             >
-              <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
-                Projects
-              </div>
               <CommandEmpty>
                 {showConnectors
                   ? 'No projects or connectors found'
                   : 'No projects found'}
               </CommandEmpty>
-              {filtered.map((p) => (
-                <CommandItem
-                  key={p.slug}
-                  value={'project:' + p.slug}
-                  disabled={p.slug === project}
-                  aria-current={p.slug === project ? 'true' : undefined}
-                  onSelect={() => {
-                    setOpen(false)
-                    navigate(p.slug)
-                  }}
-                >
-                  <ProjectMark project={p} compact />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{p.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {p.slug}
+              <CommandGroup heading="Projects">
+                {filtered.map((p) => (
+                  <CommandItem
+                    key={p.slug}
+                    value={'project:' + p.slug}
+                    disabled={p.slug === project}
+                    aria-current={p.slug === project ? 'true' : undefined}
+                    onSelect={() => {
+                      setOpen(false)
+                      navigate(p.slug)
+                    }}
+                  >
+                    <ProjectMark project={p} compact />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{p.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {p.slug}
+                      </span>
                     </span>
-                  </span>
-                  {project === p.slug && (
-                    <Check
-                      className="size-4 shrink-0 text-muted-foreground"
-                      aria-hidden="true"
-                    />
-                  )}
-                </CommandItem>
-              ))}
+                    {project === p.slug && (
+                      <Check
+                        className="size-4 shrink-0 text-muted-foreground"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
               {showConnectors && (
-                <>
-                  <div className="px-2 pt-3 pb-1 text-xs font-medium text-muted-foreground">
-                    Connectors
-                  </div>
+                <CommandGroup heading="Connectors">
                   {connectorError && (
-                    <p
-                      role="alert"
-                      className="px-2 py-2 text-xs text-muted-foreground"
-                    >
-                      {connectorError}
-                    </p>
+                    <Alert variant="destructive">
+                      <AlertDescription>{connectorError}</AlertDescription>
+                    </Alert>
                   )}
                   {filteredConnectors.map((c) => (
                     <CommandItem
@@ -254,12 +261,13 @@ export function ProjectPicker({
                       )}
                     </CommandItem>
                   ))}
-                </>
+                </CommandGroup>
               )}
             </CommandList>
           </Command>
           {canCreate && (
-            <div className="border-t border-border p-1">
+            <div className="p-1">
+              <Separator className="basis-full" />
               <Button
                 type="button"
                 className="project-picker-create w-full text-left text-sm text-muted-foreground"
@@ -271,7 +279,11 @@ export function ProjectPicker({
                 }}
               >
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background">
-                  <Plus className="size-4" aria-hidden="true" />
+                  <Plus
+                    data-icon="inline-start"
+
+                    aria-hidden="true"
+                  />
                 </span>
                 Create project
               </Button>
@@ -303,14 +315,18 @@ export function ProjectPicker({
           <DialogDescription className="mt-2 text-sm text-muted-foreground">
             Create a project on this infrastructure.
           </DialogDescription>
-          <form onSubmit={submit} className="mt-5 space-y-4" aria-busy={busy}>
-            <fieldset disabled={busy} className="min-w-0 space-y-4">
+          <Form
+            onSubmit={submit}
+            className="mt-5 flex flex-col gap-4"
+            aria-busy={busy}
+          >
+            <FieldSet disabled={busy} className="min-w-0 flex flex-col gap-4">
               <ProjectFields />
-            </fieldset>
+            </FieldSet>
             {error && (
-              <p role="alert" className="error">
-                {error}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
             <div className="flex flex-wrap justify-end gap-2">
               <Button
@@ -324,7 +340,7 @@ export function ProjectPicker({
                 {busy ? 'Creating…' : 'Create project'}
               </Button>
             </div>
-          </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>

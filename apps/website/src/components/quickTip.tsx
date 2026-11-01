@@ -1,5 +1,5 @@
 import { isValidElement, type ComponentProps, type ReactNode } from 'react'
-import { clsx } from 'clsx'
+import { cn } from '@/lib/utils'
 import {
   Tooltip,
   TooltipContent,
@@ -57,7 +57,7 @@ export default function QuickTip({
       side={side}
       align={align}
       {...contentProps}
-      className={clsx(
+      className={cn(
         keybind?.length && 'flex items-center gap-2',
         className,
         contentProps?.className,

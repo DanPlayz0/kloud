@@ -1,5 +1,10 @@
-import { Button, Input, Label } from '../components/ui/controls'
-import { Card } from '../components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { KeyRound, ArrowRight } from 'lucide-react'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
+import { Button, Input } from '../components/ui/controls'
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
+import { markFieldInvalid } from '@/components/ui/field-control'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../api'
@@ -18,6 +23,10 @@ function Enroll() {
     const form = new FormData(event.currentTarget)
     if (form.get('password') !== form.get('confirm')) {
       setError('Passwords must match')
+      markFieldInvalid(
+        event.currentTarget.querySelector('[name="confirm"]'),
+        'Passwords must match',
+      )
       return
     }
     setBusy(true)
@@ -37,66 +46,75 @@ function Enroll() {
   return (
     <main className="auth-page bg-background text-foreground">
       <Card className="auth-card">
-        <div className="auth-mark">
-          <Icon name="key" />
-        </div>
-        <p className="eyebrow">KLOUD</p>
-        <h1>{done ? 'You’re ready' : 'Set up your account'}</h1>
-        {done ? (
-          <>
-            <p>
-              Your password is registered. You can enable two-factor
-              authentication in account security after signing in.
-            </p>
-            <Button asChild variant="primary">
-              <a href="/login">
-                Continue to sign in <Icon name="arrow" />
-              </a>
-            </Button>
-          </>
-        ) : !invitation ? (
-          <p role="alert">
-            Open the enrollment link provided by your administrator.
-          </p>
-        ) : (
-          <>
-            <p>Choose a password to activate your account.</p>
-            <form
-              onSubmit={(e) => {
-                void submit(e)
-              }}
-            >
-              <Label>
-                Password
-                <Input
-                  name="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={12}
-                  maxLength={256}
-                />
-              </Label>
-              <Label>
-                Confirm password
-                <Input
-                  name="confirm"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={12}
-                  maxLength={256}
-                />
-              </Label>
-              <small>Use at least 12 characters.</small>
-              <ErrorMessage message={error} />
-              <Button className="primary" disabled={busy}>
-                {busy ? 'Creating account…' : 'Set password'}
-                <Icon name="key" />
+        <CardHeader>
+          <div className="auth-mark">
+            <Icon icon={KeyRound} />
+          </div>
+          <p className="eyebrow">KLOUD</p>
+          <CardTitle asChild>
+            <h1>{done ? 'You’re ready' : 'Set up your account'}</h1>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {done ? (
+            <>
+              <p>
+                Your password is registered. You can enable two-factor
+                authentication in account security after signing in.
+              </p>
+              <Button asChild variant="primary">
+                <a href="/login">
+                  Continue to sign in{' '}
+                  <Icon data-icon="inline-start" icon={ArrowRight} />
+                </a>
               </Button>
-            </form>
-          </>
-        )}
+            </>
+          ) : !invitation ? (
+            <Alert variant="destructive">
+              <AlertDescription>
+                Open the enrollment link provided by your administrator.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <>
+              <p>Choose a password to activate your account.</p>
+              <Form
+                onSubmit={(e) => {
+                  void submit(e)
+                }}
+              >
+                <Field>
+                  <FieldLabel>Password</FieldLabel>
+                  <Input
+                    name="password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={256}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>Confirm password</FieldLabel>
+                  <Input
+                    name="confirm"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={256}
+                  />
+                </Field>
+                <small>Use at least 12 characters.</small>
+                <ErrorMessage message={error} />
+                <Button variant="primary" disabled={busy}>
+                  {busy ? 'Creating account…' : 'Set password'}
+                  <Icon data-icon="inline-start" icon={KeyRound} />
+                </Button>
+              </Form>
+            </>
+          )}
+        </CardContent>
       </Card>
     </main>
   )

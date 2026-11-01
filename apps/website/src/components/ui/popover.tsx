@@ -1,5 +1,5 @@
 import * as Primitive from '@radix-ui/react-popover'
-import { clsx } from 'clsx'
+import { cn } from '@/lib/utils'
 import type { ComponentProps } from 'react'
 
 export const Popover = Primitive.Root
@@ -15,7 +15,7 @@ export function PopoverContent({
       <Primitive.Content
         align={align}
         sideOffset={sideOffset}
-        className={clsx(
+        className={cn(
           'z-50 w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] rounded-md border border-border bg-card text-foreground shadow-xl outline-none',
           className,
         )}

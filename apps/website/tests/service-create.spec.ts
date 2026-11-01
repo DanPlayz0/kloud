@@ -128,8 +128,8 @@ test('visual picker supports keyboard navigation and preserves source drafts and
   await page.getByLabel('Service name').fill('My web')
   await page.getByLabel('GitHub repository (owner/repo)').fill('owner/web')
   await expect(
-    page.getByRole('button', { name: 'Deploy to Production' }),
-  ).toHaveAttribute('aria-pressed', 'true')
+    page.getByRole('radio', { name: 'Deploy to Production' }),
+  ).toHaveAttribute('aria-checked', 'true')
   await expect(page.getByLabel('Branch')).toBeHidden()
   await page
     .getByRole('button', { name: 'Build settings', exact: true })
@@ -195,15 +195,17 @@ test('unavailable hosts are explained and multiple eligible hosts require an exp
   })
   await image(page)
   await expect(
-    page.getByRole('button', { name: 'Deploy to Offline host' }),
+    page.getByRole('radio', { name: 'Deploy to Offline host' }),
   ).toBeDisabled()
   await expect(
-    page.getByRole('button', { name: 'Deploy to Read-only host' }),
+    page.getByRole('radio', { name: 'Deploy to Read-only host' }),
   ).toContainText('Deployments disabled')
   await page.getByRole('button', { name: 'Save draft', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('Deployment host')
+  await expect(page.locator('[data-slot="alert"]')).toContainText(
+    'Deployment host',
+  )
   expect(calls.created).toHaveLength(0)
-  await page.getByRole('button', { name: 'Deploy to Staging' }).click()
+  await page.getByRole('radio', { name: 'Deploy to Staging' }).click()
   await page.getByRole('button', { name: 'Save draft', exact: true }).click()
   await expect(page).toHaveURL('/projects/demo/applications/my-image')
   expect(calls.configurations[0].config.connector_id).toBe(
@@ -229,7 +231,15 @@ test('collapsed validation errors reveal the affected settings without losing co
     page.getByRole('button', { name: 'Registry credentials', exact: true }),
   ).toHaveAttribute('aria-expanded', 'true')
   await expect(page.getByLabel('Registry username')).toBeFocused()
+  await expect(page.getByLabel('Registry username')).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  )
   await page.getByLabel('Registry username').fill('owner')
+  await expect(page.getByLabel('Registry username')).not.toHaveAttribute(
+    'aria-invalid',
+    'true',
+  )
   await page.getByLabel('Registry password').fill('secret')
   await page
     .getByRole('button', { name: 'Registry credentials', exact: true })
@@ -260,7 +270,7 @@ test('schema errors open build settings and focus the invalid field', async ({
     .getByLabel('GitHub repository (owner/repo)')
     .fill('invalid-repository')
   await page.getByRole('button', { name: 'Save draft', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('Repository')
+  await expect(page.locator('[data-slot="alert"]')).toContainText('Repository')
   await expect(page.getByLabel('GitHub repository (owner/repo)')).toBeFocused()
   await expect(
     page.getByRole('button', { name: 'Build settings', exact: true }),
@@ -276,7 +286,9 @@ test('schema errors open build settings and focus the invalid field', async ({
   await page.getByRole('button', { name: 'Save draft', exact: true }).click()
   await expect(page.getByLabel('Build file', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Build file', { exact: true })).toBeFocused()
-  await expect(page.getByRole('alert')).toContainText('Build settings')
+  await expect(page.locator('[data-slot="alert"]')).toContainText(
+    'Build settings',
+  )
   expect(calls.created).toHaveLength(0)
 })
 
@@ -329,7 +341,7 @@ test('explicit Git deployment reveals a commit field and duplicate submits do no
   expect(calls.created).toHaveLength(0)
   await page.getByLabel('Commit SHA', { exact: true }).fill('a'.repeat(40))
   await page.getByRole('button', { name: 'Deploy now', exact: true }).click()
-  await expect(page.getByRole('alert')).toHaveText(
+  await expect(page.locator('[data-slot="alert"]')).toHaveText(
     'Queue temporarily unavailable',
   )
   await page.getByRole('button', { name: 'Deploy now', exact: true }).click()
@@ -372,7 +384,7 @@ test('failed configuration saves preserve values and retry metadata only once', 
   await page
     .getByRole('button', { name: 'Create and deploy', exact: true })
     .click()
-  await expect(page.getByRole('alert')).toHaveText(
+  await expect(page.locator('[data-slot="alert"]')).toHaveText(
     'Host temporarily unavailable',
   )
   await expect(page.getByLabel('Image', { exact: true })).toHaveValue(

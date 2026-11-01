@@ -55,13 +55,13 @@ test('canceling a passkey leaves other second-factor methods available', async (
   await page.getByLabel('Username', { exact: true }).fill('cancel-test')
   await page.getByLabel('Password', { exact: true }).fill('some password')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await page.getByRole('button', { name: 'Passkey', exact: true }).click()
+  await page.getByRole('radio', { name: 'Passkey', exact: true }).click()
   await expect(page.getByRole('alert')).toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Recovery code', exact: true }),
+    page.getByRole('radio', { name: 'Recovery code', exact: true }),
   ).toBeEnabled()
   await page
-    .getByRole('button', { name: 'Authenticator app', exact: true })
+    .getByRole('radio', { name: 'Authenticator app', exact: true })
     .click()
   await expect(page.getByLabel('Authenticator app code')).toBeVisible()
   expect(verifications).toBe(0)
@@ -136,7 +136,7 @@ test('account security enables TOTP, recovery and passkeys while Email is unavai
       .getByRole('button', { name: 'Confirm identity', exact: true })
       .click()
     await page
-      .getByRole('button', { name: 'Recovery code', exact: true })
+      .getByRole('radio', { name: 'Recovery code', exact: true })
       .click()
     await page.getByLabel('Recovery code', { exact: true }).fill(recovery[0]!)
     await page.getByRole('button', { name: 'Verify code', exact: true }).click()
@@ -151,9 +151,9 @@ test('account security enables TOTP, recovery and passkeys while Email is unavai
     await page.getByLabel('Password', { exact: true }).fill(password)
     await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await expect(
-      page.getByRole('button', { name: 'Authenticator app', exact: true }),
+      page.getByRole('radio', { name: 'Authenticator app', exact: true }),
     ).toBeVisible()
-    await page.getByRole('button', { name: 'Passkey', exact: true }).click()
+    await page.getByRole('radio', { name: 'Passkey', exact: true }).click()
     await expect(
       page.getByRole('heading', { name: 'Account security', exact: true }),
     ).toBeVisible()

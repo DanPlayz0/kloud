@@ -1,8 +1,10 @@
+import { cn } from '@/lib/utils'
 import { useRef, useState, useEffect, type ReactNode } from 'react'
 import * as Primitive from '@radix-ui/react-collapsible'
 import { ChevronDown } from 'lucide-react'
 import { Button } from './controls'
 import { Card } from './card'
+import { Badge } from './badge'
 
 /** shadcn/Radix composition with persistent form fields and validation reveal. */
 export function CollapsibleSection({
@@ -37,21 +39,22 @@ export function CollapsibleSection({
         <Primitive.Trigger asChild>
           <Button
             type="button"
-            className="!h-auto w-full !justify-between !border-0 !bg-transparent !p-4 text-left"
+            className="h-auto w-full justify-between p-4 text-left"
+            variant="ghost"
             aria-label={title}
           >
             <span className="flex min-w-0 items-center gap-2">
               <span className="font-medium">{title}</span>
-              {count !== undefined && (
-                <span className="rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground">
-                  {count}
-                </span>
-              )}
+              {count !== undefined && <Badge variant="outline">{count}</Badge>}
             </span>
             <ChevronDown
+              data-icon="inline-start"
               aria-hidden="true"
-              size={16}
-              className={`shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+
+              className={cn(
+                'shrink-0 text-muted-foreground transition-transform',
+                open ? 'rotate-180' : '',
+              )}
             />
           </Button>
         </Primitive.Trigger>

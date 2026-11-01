@@ -1,7 +1,9 @@
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { FieldGroup, Field, FieldLabel } from '@/components/ui/field'
 import { useEffect, useState } from 'react'
 import { Terminal, ArrowRight } from 'lucide-react'
 import type { Connector } from '../api'
-import { Button, Checkbox, Label } from './ui/controls'
+import { Button, Checkbox } from './ui/controls'
 import {
   Dialog,
   DialogContent,
@@ -36,7 +38,7 @@ export function ConnectorControls({
   }, [available])
   return (
     <>
-      <div className="row-actions">
+      <FieldGroup className="row-actions">
         {showOpen && (
           <Button asChild>
             <a
@@ -46,7 +48,8 @@ export function ConnectorControls({
                 '/compute/containers'
               }
             >
-              Open connector <ArrowRight size={14} aria-hidden="true" />
+              Open connector{' '}
+              <ArrowRight data-icon="inline-start" aria-hidden="true" />
             </a>
           </Button>
         )}
@@ -62,10 +65,14 @@ export function ConnectorControls({
             setTerminal(true)
           }}
         >
-          <Terminal size={14} aria-hidden="true" />
+          <Terminal data-icon="inline-start" aria-hidden="true" />
           Host terminal
         </Button>
-        <Label className="checkbox">
+        <Field
+          data-disabled={c.revoked || busy}
+          orientation="horizontal"
+          className="checkbox"
+        >
           <Checkbox
             checked={pending ?? c.discovery}
             disabled={c.revoked || busy}
@@ -83,8 +90,8 @@ export function ConnectorControls({
                 .finally(() => setBusy(false))
             }}
           />
-          Discover unassigned containers
-        </Label>
+          <FieldLabel>Discover unassigned containers</FieldLabel>
+        </Field>
         <Button
           variant="destructive"
           disabled={c.revoked || busy}
@@ -106,7 +113,7 @@ export function ConnectorControls({
         >
           Revoke token
         </Button>
-      </div>
+      </FieldGroup>
       <Dialog open={terminal} onOpenChange={setTerminal}>
         <DialogContent className="max-w-5xl">
           <DialogTitle>Host terminal — {c.name}</DialogTitle>
@@ -114,9 +121,9 @@ export function ConnectorControls({
             SSH shell on the configured host, using the connector's SSH account.
           </DialogDescription>
           {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
           {terminal && (
             <ContainerTerminal

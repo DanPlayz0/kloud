@@ -1,3 +1,20 @@
+import { Separator } from '@/components/ui/separator'
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from '@/components/ui/table'
+import {
+  FieldGroup,
+  Field,
+  FieldLabel,
+  FieldSet,
+  FieldLegend,
+} from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
 import { TableCard, Card } from './components/ui/card'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Globe, Plus, Trash2, Pencil, ExternalLink } from 'lucide-react'
@@ -14,13 +31,7 @@ import {
 } from '@kloud/protocol/dns'
 import { api, type Project, type User } from './api'
 import { Shell, ErrorMessage, usePolling } from './components'
-import {
-  Button,
-  Input,
-  Label,
-  NativeSelect,
-  Checkbox,
-} from './components/ui/controls'
+import { Button, Input, NativeSelect, Checkbox } from './components/ui/controls'
 import {
   Dialog,
   DialogContent,
@@ -120,8 +131,8 @@ export function DnsRuleEditor({
   const [types, setTypes] = useState<string[]>([]),
     [actions, setActions] = useState<DnsAction[]>(['read'])
   return (
-    <div className="space-y-3 min-w-0">
-      <ul className="space-y-2">
+    <div className="flex flex-col gap-3 min-w-0">
+      <ul className="flex flex-col gap-2">
         {rules.map((r, i) => (
           <li
             key={i}
@@ -136,14 +147,14 @@ export function DnsRuleEditor({
               aria-label={`Remove DNS rule ${i + 1}`}
               onClick={() => onChange(rules.filter((_, j) => j !== i))}
             >
-              <Trash2 size={14} />
+              <Trash2 data-icon="inline-start" />
             </Button>
           </li>
         ))}
       </ul>
-      <div className="flex flex-wrap items-end gap-3">
-        <Label>
-          Scope
+      <FieldGroup className="flex flex-wrap items-end gap-3 flex-row">
+        <Field>
+          <FieldLabel>Scope</FieldLabel>
           <NativeSelect
             value={kind}
             onChange={(e) => {
@@ -160,10 +171,10 @@ export function DnsRuleEditor({
             )}
             <option value="record">Existing record</option>
           </NativeSelect>
-        </Label>
+        </Field>
         {kind === 'record' ? (
-          <Label>
-            Record
+          <Field>
+            <FieldLabel>Record</FieldLabel>
             <NativeSelect
               value={target}
               onChange={(e) => setTarget(e.target.value)}
@@ -175,26 +186,26 @@ export function DnsRuleEditor({
                 </option>
               ))}
             </NativeSelect>
-          </Label>
+          </Field>
         ) : (
           kind !== 'zone' && (
-            <Label>
-              Fully qualified DNS name
+            <Field>
+              <FieldLabel>Fully qualified DNS name</FieldLabel>
               <Input
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 placeholder="voice.example.com"
               />
-            </Label>
+            </Field>
           )
         )}
-      </div>
-      <fieldset className="flex flex-wrap gap-3">
-        <legend className="text-sm text-muted-foreground mb-2">
+      </FieldGroup>
+      <FieldSet className="flex flex-wrap gap-3">
+        <FieldLegend className="text-sm text-muted-foreground mb-2">
           Record types
-        </legend>
+        </FieldLegend>
         {availableTypes.map((type) => (
-          <Label key={type} className="checkbox">
+          <Field orientation="horizontal" key={type} className="checkbox">
             <Checkbox
               checked={types.includes(type)}
               onCheckedChange={(checked) =>
@@ -203,14 +214,16 @@ export function DnsRuleEditor({
                 )
               }
             />
-            {type}
-          </Label>
+            <FieldLabel>{type}</FieldLabel>
+          </Field>
         ))}
-      </fieldset>
-      <fieldset className="flex flex-wrap gap-3">
-        <legend className="text-sm text-muted-foreground mb-2">Actions</legend>
+      </FieldSet>
+      <FieldSet className="flex flex-wrap gap-3">
+        <FieldLegend className="text-sm text-muted-foreground mb-2">
+          Actions
+        </FieldLegend>
         {availableActions.map((action) => (
-          <Label key={action} className="checkbox">
+          <Field orientation="horizontal" key={action} className="checkbox">
             <Checkbox
               checked={actions.includes(action)}
               onCheckedChange={(checked) =>
@@ -221,10 +234,10 @@ export function DnsRuleEditor({
                 )
               }
             />
-            {action}
-          </Label>
+            <FieldLabel>{action}</FieldLabel>
+          </Field>
         ))}
-      </fieldset>
+      </FieldSet>
       <Button
         type="button"
         disabled={
@@ -244,7 +257,7 @@ export function DnsRuleEditor({
           ])
         }}
       >
-        <Plus size={14} />
+        <Plus data-icon="inline-start" />
         Add DNS rule
       </Button>
       <p className="text-sm text-muted-foreground">
@@ -291,10 +304,10 @@ export function DnsProviders({
     }
   }
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-5">
       <ErrorMessage message={error || loadError || projectChoices.error} />
       {notice && <p role="status">{notice}</p>}
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <p className="text-muted-foreground">
           Create a Cloudflare API token with Zone Read and DNS Edit (includes
           read) preselected. The template includes all zones; you can limit it
@@ -308,12 +321,12 @@ export function DnsProviders({
             target="_blank"
             rel="noopener noreferrer"
           >
-            <ExternalLink size={14} aria-hidden="true" />
+            <ExternalLink data-icon="inline-start" aria-hidden="true" />
             Create Cloudflare API token
           </a>
         </Button>
       </div>
-      <form
+      <Form
         className="flex flex-wrap items-end gap-3"
         onSubmit={async (e) => {
           e.preventDefault()
@@ -328,27 +341,27 @@ export function DnsProviders({
             form.reset()
         }}
       >
-        <Label>
-          Connection name
+        <Field>
+          <FieldLabel>Connection name</FieldLabel>
           <Input required name="name" maxLength={100} />
-        </Label>
-        <Label>
-          API token
+        </Field>
+        <Field>
+          <FieldLabel>API token</FieldLabel>
           <Input
             required
             name="token"
             type="password"
             autoComplete="new-password"
           />
-        </Label>
+        </Field>
         <Button disabled={busy}>Connect provider</Button>
-      </form>
+      </Form>
       {!data && !loadError && <p>Loading providers…</p>}
       {data?.length === 0 && (
         <p className="text-muted-foreground">No DNS providers connected.</p>
       )}
       {data?.map((p) => (
-        <Card size="compact" className="space-y-3" key={p.id}>
+        <Card size="compact" className="flex flex-col gap-3" key={p.id}>
           <div className="flex flex-wrap gap-3 items-center">
             <Globe size={18} />
             <strong>{p.name}</strong>
@@ -391,7 +404,7 @@ export function DnsProviders({
               Disconnect
             </Button>
           </div>
-          <form
+          <Form
             className="flex flex-wrap items-end gap-3"
             onSubmit={async (e) => {
               e.preventDefault()
@@ -407,21 +420,21 @@ export function DnsProviders({
                 form.reset()
             }}
           >
-            <Label>
-              Name
+            <Field>
+              <FieldLabel>Name</FieldLabel>
               <Input name="name" required defaultValue={p.name} />
-            </Label>
-            <Label>
-              Replace token
+            </Field>
+            <Field>
+              <FieldLabel>Replace token</FieldLabel>
               <Input
                 name="token"
                 type="password"
                 autoComplete="new-password"
                 placeholder="Leave blank to keep token"
               />
-            </Label>
+            </Field>
             <Button disabled={busy}>Save connection</Button>
-          </form>
+          </Form>
           {selected === p.id && (
             <ProviderZones
               base={`${base}/${p.id}`}
@@ -480,10 +493,11 @@ function ProviderZones({
         ),
     ) ?? []
   return (
-    <div className="space-y-4 border-t border-border pt-4">
+    <FieldGroup className="flex flex-col gap-4   pt-4">
+      <Separator className="basis-full" />
       <ErrorMessage message={error} />
-      <Label>
-        Discovered zone
+      <Field>
+        <FieldLabel>Discovered zone</FieldLabel>
         <NativeSelect
           value={zone}
           onChange={(e) => {
@@ -498,7 +512,7 @@ function ProviderZones({
             </option>
           ))}
         </NativeSelect>
-      </Label>
+      </Field>
       {data?.length === 0 && (
         <p>Discover zones to begin. Discovery grants no project access.</p>
       )}
@@ -506,7 +520,11 @@ function ProviderZones({
         <>
           <h3>Project delegations</h3>
           {current.delegations.map((d) => (
-            <Card size="compact" key={d.project} className="space-y-2">
+            <Card
+              size="compact"
+              key={d.project}
+              className="flex flex-col gap-2"
+            >
               <strong>
                 {projects.find((p) => p.slug === d.project)?.name ?? d.project}
               </strong>
@@ -559,8 +577,8 @@ function ProviderZones({
               can change the same records.
             </p>
           )}
-          <Label>
-            Project
+          <Field>
+            <FieldLabel>Project</FieldLabel>
             <NativeSelect
               value={target}
               onChange={(e) => {
@@ -575,7 +593,7 @@ function ProviderZones({
                 </option>
               ))}
             </NativeSelect>
-          </Label>
+          </Field>
           <Button
             disabled={!target || disabled}
             onClick={() => setEditing(true)}
@@ -594,7 +612,7 @@ function ProviderZones({
           )}
         </>
       )}
-    </div>
+    </FieldGroup>
   )
 }
 function DelegationEditor({
@@ -617,8 +635,8 @@ function DelegationEditor({
     `${base}/zones/${zone.id}/records`,
   )
   return (
-    <fieldset disabled={disabled} className="space-y-4">
-      <legend className="font-medium">Access to {zone.name}</legend>
+    <FieldSet disabled={disabled} className="flex flex-col gap-4">
+      <FieldLegend className="font-medium">Access to {zone.name}</FieldLegend>
       <ErrorMessage message={records.error} />
       <DnsRuleEditor rules={rules} onChange={setRules} records={records.data} />
       <Button
@@ -630,7 +648,7 @@ function DelegationEditor({
       >
         Save project DNS access
       </Button>
-    </fieldset>
+    </FieldSet>
   )
 }
 
@@ -669,7 +687,7 @@ export function DnsPage({
       active="dns"
       title="Networking / Cloud DNS"
     >
-      <section className="admin-content space-y-5">
+      <section className="admin-content flex flex-col gap-5">
         <div className="page-heading">
           <div>
             <p className="eyebrow">NETWORKING</p>
@@ -691,9 +709,9 @@ export function DnsPage({
             access, and members need DNS permissions.
           </p>
         )}
-        <div className="flex flex-wrap gap-3 items-end">
-          <Label>
-            Domain
+        <FieldGroup className="flex flex-wrap gap-3 items-end flex-row">
+          <Field>
+            <FieldLabel>Domain</FieldLabel>
             <NativeSelect
               value={zone}
               onChange={(e) => {
@@ -708,9 +726,9 @@ export function DnsPage({
                 </option>
               ))}
             </NativeSelect>
-          </Label>
+          </Field>
           <Button onClick={() => setRevision((n) => n + 1)}>Refresh</Button>
-        </div>
+        </FieldGroup>
         {selected && (
           <DnsRecords
             key={zone}
@@ -781,52 +799,56 @@ function DnsRecords({
         .includes(query.toLowerCase()),
   )
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <ErrorMessage message={error} />
-      <div className="flex flex-wrap gap-3 items-end">
-        <Label>
-          Search records
+      <FieldGroup className="flex flex-wrap gap-3 items-end flex-row">
+        <Field>
+          <FieldLabel>Search records</FieldLabel>
           <Input value={query} onChange={(e) => setQuery(e.target.value)} />
-        </Label>
-        <Label>
-          Type
+        </Field>
+        <Field>
+          <FieldLabel>Type</FieldLabel>
           <NativeSelect value={type} onChange={(e) => setType(e.target.value)}>
             <option value="">All types</option>
             {dnsTypes.map((t) => (
               <option key={t}>{t}</option>
             ))}
           </NativeSelect>
-        </Label>
+        </Field>
         {!!data?.creation_scopes.length && (
           <Button onClick={() => setEdit('new')}>
-            <Plus size={14} />
+            <Plus data-icon="inline-start" />
             Add record
           </Button>
         )}
-      </div>
+      </FieldGroup>
       {!data && !error && <p>Loading records…</p>}
       <TableCard>
-        <table className="w-full min-w-160 text-left text-sm">
-          <thead className="text-muted-foreground border-b border-border">
-            <tr>
+        <Table className="w-full min-w-160 text-left text-sm">
+          <TableHeader className="text-muted-foreground border-b border-border">
+            <TableRow>
               {['Type', 'Name', 'Value', 'TTL', 'Proxy', 'Actions'].map((t) => (
-                <th className="p-3" key={t}>
+                <TableHead className="p-3" key={t}>
                   {t}
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {records?.map((r) => (
-              <tr key={r.id} className="border-b border-border">
-                <td className="p-3">{r.type}</td>
-                <td className="p-3 break-all">{r.name}</td>
-                <td className="p-3 max-w-96 break-all">
+              <TableRow key={r.id} className="border-b border-border">
+                <TableCell className="p-3">{r.type}</TableCell>
+                <TableCell className="p-3 break-all">{r.name}</TableCell>
+                <TableCell className="p-3 max-w-96 break-all">
                   {r.content ?? JSON.stringify(r.data)}
-                </td>
-                <td className="p-3">{r.ttl === 1 ? 'Auto' : r.ttl}</td>
-                <td className="p-3">{r.proxied ? 'Proxied' : 'DNS only'}</td>
-                <td className="p-3">
+                </TableCell>
+                <TableCell className="p-3">
+                  {r.ttl === 1 ? 'Auto' : r.ttl}
+                </TableCell>
+                <TableCell className="p-3">
+                  {r.proxied ? 'Proxied' : 'DNS only'}
+                </TableCell>
+                <TableCell className="p-3">
                   <div className="flex gap-2">
                     {r.actions?.includes('update') && (
                       <Button
@@ -834,7 +856,7 @@ function DnsRecords({
                         aria-label={`Edit ${r.type} ${r.name}`}
                         onClick={() => setEdit(r)}
                       >
-                        <Pencil size={14} />
+                        <Pencil data-icon="inline-start" />
                       </Button>
                     )}
                     {r.actions?.includes('delete') && (
@@ -844,22 +866,22 @@ function DnsRecords({
                         aria-label={`Delete ${r.type} ${r.name}`}
                         onClick={() => void remove(r)}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 data-icon="inline-start" />
                       </Button>
                     )}
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
             {data && !records?.length && (
-              <tr>
-                <td colSpan={6} className="p-6 text-muted-foreground">
+              <TableRow>
+                <TableCell colSpan={6} className="p-6 text-muted-foreground">
                   No matching records.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </TableCard>
       <Dialog
         open={edit !== null}
@@ -974,12 +996,12 @@ export function DnsRecordEditor({
     void onSave(parsed.data).catch((e) => setError(message(e)))
   }
   return (
-    <form onSubmit={submit} className="space-y-4 mt-4">
+    <Form onSubmit={submit} className="flex flex-col gap-4 mt-4">
       <ErrorMessage message={error} />
-      <fieldset disabled={busy} className="space-y-4">
-        <div className="flex flex-wrap gap-3">
-          <Label>
-            Record type
+      <FieldSet disabled={busy} className="flex flex-col gap-4">
+        <FieldGroup className="flex flex-wrap gap-3 flex-row">
+          <Field>
+            <FieldLabel>Record type</FieldLabel>
             <NativeSelect
               value={type}
               onChange={(e) => setType(e.target.value)}
@@ -988,16 +1010,16 @@ export function DnsRecordEditor({
                 <option key={t}>{t}</option>
               ))}
             </NativeSelect>
-          </Label>
-          <Label>
-            DNS name
+          </Field>
+          <Field>
+            <FieldLabel>DNS name</FieldLabel>
             <Input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-          </Label>
-        </div>
+          </Field>
+        </FieldGroup>
         {!record && (
           <p className="text-sm text-muted-foreground">
             Allowed creation scopes:{' '}
@@ -1026,8 +1048,10 @@ export function DnsRecordEditor({
                   (record as unknown as Record<string, unknown>)[key])
                 : undefined
             return (
-              <Label key={key}>
-                {key === 'content' ? spec : key.replaceAll('_', ' ')}
+              <Field key={key}>
+                <FieldLabel>
+                  {key === 'content' ? spec : key.replaceAll('_', ' ')}
+                </FieldLabel>
                 <Input
                   name={key}
                   required
@@ -1036,56 +1060,56 @@ export function DnsRecordEditor({
                   max={typeof spec === 'number' ? spec : undefined}
                   defaultValue={String(value ?? (numeric ? 0 : ''))}
                 />
-              </Label>
+              </Field>
             )
           })}
         </div>
-        <Label>
-          TTL (1 = automatic)
+        <Field>
+          <FieldLabel>TTL (1 = automatic)</FieldLabel>
           <Input
             type="number"
             required
             name="ttl"
             defaultValue={record?.ttl ?? 1}
           />
-        </Label>
+        </Field>
         {['A', 'AAAA', 'CNAME'].includes(type) && (
-          <Label className="checkbox">
+          <Field orientation="horizontal" className="checkbox">
             <Checkbox name="proxied" defaultChecked={record?.proxied} />
-            Cloudflare proxy
-          </Label>
+            <FieldLabel>Cloudflare proxy</FieldLabel>
+          </Field>
         )}
         {['A', 'AAAA', 'CNAME'].includes(type) && (
-          <div className="flex flex-wrap gap-3">
-            <Label className="checkbox">
+          <FieldGroup className="flex flex-wrap gap-3 flex-row">
+            <Field orientation="horizontal" className="checkbox">
               <Checkbox
                 name="ipv4_only"
                 defaultChecked={record?.settings?.ipv4_only}
               />
-              Proxy IPv4 only
-            </Label>
-            <Label className="checkbox">
+              <FieldLabel>Proxy IPv4 only</FieldLabel>
+            </Field>
+            <Field orientation="horizontal" className="checkbox">
               <Checkbox
                 name="ipv6_only"
                 defaultChecked={record?.settings?.ipv6_only}
               />
-              Proxy IPv6 only
-            </Label>
-          </div>
+              <FieldLabel>Proxy IPv6 only</FieldLabel>
+            </Field>
+          </FieldGroup>
         )}
-        <Label>
-          Comment
+        <Field>
+          <FieldLabel>Comment</FieldLabel>
           <Input name="comment" defaultValue={record?.comment ?? ''} />
-        </Label>
-        <Label>
-          Tags (comma-separated)
+        </Field>
+        <Field>
+          <FieldLabel>Tags (comma-separated)</FieldLabel>
           <Input name="tags" defaultValue={record?.tags?.join(', ') ?? ''} />
-        </Label>
+        </Field>
         <Button disabled={busy} type="submit">
           {busy ? 'Saving…' : 'Save DNS record'}
         </Button>
-      </fieldset>
-    </form>
+      </FieldSet>
+    </Form>
   )
 }
 
@@ -1109,8 +1133,8 @@ export function DnsMemberGrants({
     zone ? `/projects/${project}/dns/zones/${zone}/records` : null,
   )
   return (
-    <fieldset disabled={disabled} className="space-y-3">
-      <legend className="font-medium">Cloud DNS permissions</legend>
+    <FieldSet disabled={disabled} className="flex flex-col gap-3">
+      <FieldLegend className="font-medium">Cloud DNS permissions</FieldLegend>
       <ErrorMessage message={zones.error} />
       {disabled ? (
         <p className="text-sm text-muted-foreground">
@@ -1139,8 +1163,8 @@ export function DnsMemberGrants({
                 </li>
               ))}
           </ul>
-          <Label>
-            Domain
+          <Field>
+            <FieldLabel>Domain</FieldLabel>
             <NativeSelect
               value={zone}
               onChange={(e) => setZone(e.target.value)}
@@ -1152,7 +1176,7 @@ export function DnsMemberGrants({
                 </option>
               ))}
             </NativeSelect>
-          </Label>
+          </Field>
           {current && (
             <>
               <p className="text-sm text-muted-foreground">
@@ -1183,6 +1207,6 @@ export function DnsMemberGrants({
           )}
         </>
       )}
-    </fieldset>
+    </FieldSet>
   )
 }

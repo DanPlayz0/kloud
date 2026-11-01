@@ -1,4 +1,20 @@
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+} from './components/ui/dropdown-menu'
+import { Alert, AlertDescription } from './components/ui/alert'
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from './components/ui/empty'
+import { cn } from '@/lib/utils'
+import {
   Server,
   Database,
   ChartColumnIncreasing,
@@ -10,17 +26,13 @@ import {
   Hammer,
   ShieldCheck,
   Menu,
-  ChevronsUpDown,
   Ellipsis,
-  ArrowUpRight,
-  ArrowRight,
-  X,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from './components/ui/controls'
 import QuickTip from './components/quickTip'
 import { ProjectPicker } from './components/project-picker'
-import { Card } from './components/ui/card'
+
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -40,38 +52,21 @@ import {
   type User,
 } from './api'
 
-const icons: Record<string, LucideIcon> = {
-  box: Server,
-  database: Database,
-  chart: ChartColumnIncreasing,
-  key: KeyRound,
-  users: Users,
-  network: Network,
-  globe: Globe,
-  activity: History,
-  build: Hammer,
-  shield: ShieldCheck,
-  menu: Menu,
-  chevrons: ChevronsUpDown,
-  more: Ellipsis,
-  external: ArrowUpRight,
-  arrow: ArrowRight,
-  close: X,
-}
 export function Icon({
-  name = 'box',
+  icon: Component = Server,
   className,
+  ...props
 }: {
-  name?: string
+  icon?: LucideIcon
   className?: string
+  'data-icon'?: 'inline-start' | 'inline-end'
 }) {
-  const Component = icons[name] ?? Server
   return (
     <Component
-      size={16}
       strokeWidth={1.6}
       className={className}
       aria-hidden="true"
+      {...props}
     />
   )
 }
@@ -79,34 +74,34 @@ const groups = [
   [
     'BUILD',
     [
-      ['Builds', 'build'],
-      ['Triggers', 'network'],
+      ['Builds', Hammer],
+      ['Triggers', Network],
     ],
   ],
   [
     'STORAGE',
     [
-      ['Databases', 'database'],
-      ['Cache', 'activity'],
-      ['Block storage', 'box'],
-      ['Messaging', 'box'],
-      ['Analytics', 'chart'],
+      ['Databases', Database],
+      ['Cache', History],
+      ['Block storage', Server],
+      ['Messaging', Server],
+      ['Analytics', ChartColumnIncreasing],
     ],
   ],
   [
     'NETWORKING',
     [
-      ['Load balancers', 'network'],
-      ['Domain management', 'globe'],
-      ['Cloud DNS', 'network'],
+      ['Load balancers', Network],
+      ['Domain management', Globe],
+      ['Cloud DNS', Network],
     ],
   ],
   [
     'OPERATIONS',
     [
-      ['Secrets', 'key'],
-      ['Access', 'users'],
-      ['Activity', 'activity'],
+      ['Secrets', KeyRound],
+      ['Access', Users],
+      ['Activity', History],
     ],
   ],
 ] as const
@@ -146,7 +141,7 @@ export function Shell({
         aria-label="Toggle navigation"
         aria-expanded={open}
       >
-        <Icon name="menu" />
+        <Icon data-icon="inline-start" icon={Menu} />
       </Button>
       {open && (
         <Button
@@ -156,7 +151,10 @@ export function Shell({
         />
       )}
       <aside
-        className={`sidebar bg-sidebar border-sidebar-border ${open ? 'open' : ''}`}
+        className={cn(
+          'sidebar bg-sidebar border-sidebar-border',
+          open ? 'open' : '',
+        )}
       >
         <ProjectPicker
           user={user}
@@ -172,17 +170,19 @@ export function Shell({
             <div className="nav-group">
               <p>CONNECTOR</p>
               {[
-                ['Overview', 'overview', 'network'],
+                ['Overview', 'overview', Network] as const,
                 ...(canBrowseConnectorResources(user)
                   ? [
-                      ['Containers', 'compute/containers', 'box'],
-                      ['PM2', 'compute/pm2', 'activity'],
+                      ['Containers', 'compute/containers', Server] as const,
+                      ['PM2', 'compute/pm2', History] as const,
                     ]
                   : []),
               ].map(([label, path, icon]) => (
                 <a
                   key={path}
-                  className={active === path ? 'nav-item active' : 'nav-item'}
+                  className={cn(
+                    active === path ? 'nav-item active' : 'nav-item',
+                  )}
                   aria-current={active === path ? 'page' : undefined}
                   href={
                     '/connectors/' +
@@ -191,7 +191,7 @@ export function Shell({
                     path
                   }
                 >
-                  <Icon name={icon} />
+                  <Icon icon={icon as LucideIcon} />
                   {label}
                 </a>
               ))}
@@ -202,19 +202,19 @@ export function Shell({
               <div className="nav-group">
                 <p>COMPUTE</p>
                 <a
-                  className={
-                    active === 'services' ? 'nav-item active' : 'nav-item'
-                  }
+                  className={cn(
+                    active === 'services' ? 'nav-item active' : 'nav-item',
+                  )}
                   href={`/projects/${project}/services`}
                   aria-current={active === 'services' ? 'page' : undefined}
                 >
-                  <Icon name="box" />
+                  <Icon icon={Server} />
                   Services
                 </a>
                 <a
-                  className={
-                    active === 'containers' ? 'nav-item active' : 'nav-item'
-                  }
+                  className={cn(
+                    active === 'containers' ? 'nav-item active' : 'nav-item',
+                  )}
                   href={
                     project ? `/projects/${project}/compute/containers` : '/'
                   }
@@ -224,23 +224,25 @@ export function Shell({
                   Containers
                 </a>
                 <a
-                  className={
-                    active === 'serverless' ? 'nav-item active' : 'nav-item'
-                  }
+                  className={cn(
+                    active === 'serverless' ? 'nav-item active' : 'nav-item',
+                  )}
                   href={
                     project ? `/projects/${project}/compute/serverless` : '/'
                   }
                   aria-current={active === 'serverless' ? 'page' : undefined}
                 >
-                  <Icon name="network" />
+                  <Icon icon={Network} />
                   Serverless<span className="soon">Soon</span>
                 </a>
                 <a
-                  className={active === 'pm2' ? 'nav-item active' : 'nav-item'}
+                  className={cn(
+                    active === 'pm2' ? 'nav-item active' : 'nav-item',
+                  )}
                   href={`/projects/${project}/compute/pm2`}
                   aria-current={active === 'pm2' ? 'page' : undefined}
                 >
-                  <Icon name="activity" />
+                  <Icon icon={History} />
                   PM2
                 </a>
               </div>
@@ -259,12 +261,12 @@ export function Shell({
                       name === 'Databases' || name === 'Cache' ? (
                         <a
                           key={name}
-                          className={
+                          className={cn(
                             active ===
-                            (name === 'Cache' ? 'cache' : 'databases')
+                              (name === 'Cache' ? 'cache' : 'databases')
                               ? 'nav-item active'
-                              : 'nav-item'
-                          }
+                              : 'nav-item',
+                          )}
                           href={`/projects/${project}/${name === 'Cache' ? 'cache' : 'databases'}`}
                           aria-current={
                             active ===
@@ -273,17 +275,20 @@ export function Shell({
                               : undefined
                           }
                         >
-                          <Icon name={icon} />
+                          <Icon icon={icon as LucideIcon} />
                           {name}
                         </a>
                       ) : name === 'Cloud DNS' && project ? (
                         <a
                           key={name}
-                          className={`nav-item ${active === 'dns' ? 'active' : ''}`}
+                          className={cn(
+                            'nav-item',
+                            active === 'dns' ? 'active' : '',
+                          )}
                           href={`/projects/${project}/dns`}
                           aria-current={active === 'dns' ? 'page' : undefined}
                         >
-                          <Icon name={icon} />
+                          <Icon icon={icon as LucideIcon} />
                           Cloud DNS
                         </a>
                       ) : name === 'Access' &&
@@ -292,13 +297,16 @@ export function Shell({
                           ?.can_manage_access ? (
                         <a
                           key={name}
-                          className={`nav-item ${active === 'access' ? 'active' : ''}`}
+                          className={cn(
+                            'nav-item',
+                            active === 'access' ? 'active' : '',
+                          )}
                           href={`/projects/${project}/access`}
                           aria-current={
                             active === 'access' ? 'page' : undefined
                           }
                         >
-                          <Icon name={icon} />
+                          <Icon icon={icon as LucideIcon} />
                           Access
                         </a>
                       ) : (
@@ -319,7 +327,10 @@ export function Shell({
                               className="nav-item deferred pointer-events-none"
                               disabled
                             >
-                              <Icon name={icon} />
+                              <Icon
+                                data-icon="inline-start"
+                                icon={icon as LucideIcon}
+                              />
                               {name}
                               <span className="soon">Soon</span>
                             </Button>
@@ -336,26 +347,31 @@ export function Shell({
           ) && (
             <div className="nav-group">
               <p>ADMINISTRATION</p>
-              {[
-                ['Projects', 'projects', 'box'],
-                ['Users', 'users', 'users'],
-                ['Connectors', 'connectors', 'network'],
-                ['Inventory', 'containers', 'database'],
-                ['DNS providers', 'dns', 'globe'],
-              ]
+              {(
+                [
+                  ['Projects', 'projects', Server],
+                  ['Users', 'users', Users],
+                  ['Connectors', 'connectors', Network],
+                  ['Inventory', 'containers', Database],
+                  ['DNS providers', 'dns', Globe],
+                ] as const
+              )
                 .filter(([, path]) =>
                   hasServer(user, adminCapabilities[path!]!),
                 )
                 .map(([label, path, icon]) => (
                   <a
-                    className={`nav-item ${active === `admin-${path}` ? 'active' : ''}`}
+                    className={cn(
+                      'nav-item',
+                      active === `admin-${path}` ? 'active' : '',
+                    )}
                     key={path}
                     href={`/admin/${path}`}
                     aria-current={
                       active === `admin-${path}` ? 'page' : undefined
                     }
                   >
-                    <Icon name={icon} />
+                    <Icon icon={icon as LucideIcon} />
                     {label}
                   </a>
                 ))}
@@ -363,45 +379,54 @@ export function Shell({
           )}
         </nav>
         <div className="account border-border">
-          {account && (
-            <Card className="account-menu">
-              <Button asChild>
-                <a href="/account/security">Account security</a>
+          <DropdownMenu open={account} onOpenChange={setAccount}>
+            <DropdownMenuTrigger asChild>
+              <Button className="account-button">
+                <span className="avatar">
+                  <Icon data-icon="inline-start" icon={ShieldCheck} />
+                </span>
+                <span>
+                  <strong>{user.username}</strong>
+                  <small>
+                    {user.admin
+                      ? 'Server Administrator'
+                      : user.capabilities?.length
+                        ? 'Server permissions'
+                        : projects.find((p) => p.slug === project)?.role ===
+                            'admin'
+                          ? 'Project Administrator'
+                          : 'Project Member'}
+                  </small>
+                </span>
+                <Icon
+                  data-icon="inline-start"
+                  icon={Ellipsis}
+                  className="account-dots"
+                />
               </Button>
-              <Button
-                onClick={() => {
-                  void api('/auth/logout', 'POST')
-                    .then(() => location.assign('/login'))
-                    .catch((e) => setError(e.message))
-                }}
-              >
-                Sign out
-              </Button>
-              {error && <p role="alert">{error}</p>}
-            </Card>
-          )}
-          <Button
-            className="account-button"
-            onClick={() => setAccount(!account)}
-            aria-expanded={account}
-          >
-            <span className="avatar">
-              <Icon name="shield" />
-            </span>
-            <span>
-              <strong>{user.username}</strong>
-              <small>
-                {user.admin
-                  ? 'Server Administrator'
-                  : user.capabilities?.length
-                    ? 'Server permissions'
-                    : projects.find((p) => p.slug === project)?.role === 'admin'
-                      ? 'Project Administrator'
-                      : 'Project Member'}
-              </small>
-            </span>
-            <Icon name="more" className="account-dots" />
-          </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="top"
+              align="start"
+              className="w-[var(--radix-dropdown-menu-trigger-width)]"
+            >
+              <DropdownMenuGroup>
+                <DropdownMenuItem asChild>
+                  <a href="/account/security">Account security</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void api('/auth/logout', 'POST')
+                      .then(() => location.assign('/login'))
+                      .catch((e) => setError(e.message))
+                  }}
+                >
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <ErrorMessage message={error} />
         </div>
       </aside>
       <main className="workspace bg-background">
@@ -485,18 +510,24 @@ export function Notice({
   children?: ReactNode
 }) {
   return (
-    <div className="notice">
-      <Icon />
-      <h2>{title}</h2>
-      <p>{children}</p>
-    </div>
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Icon />
+        </EmptyMedia>
+        <EmptyTitle>
+          <h2>{title}</h2>
+        </EmptyTitle>
+        <EmptyDescription>{children}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   )
 }
 export function ErrorMessage({ message }: { message: string }) {
   return message ? (
-    <p className="error" role="alert">
-      {message}
-    </p>
+    <Alert variant="destructive">
+      <AlertDescription>{message}</AlertDescription>
+    </Alert>
   ) : null
 }
 export function bytes(value: number | null) {

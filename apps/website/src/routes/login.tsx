@@ -1,5 +1,16 @@
-import { Button, Input, Label } from '../components/ui/controls'
-import { Card } from '../components/ui/card'
+import { ArrowRight, ShieldCheck } from 'lucide-react'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Form } from '@/components/ui/form'
+import { Button, Input } from '../components/ui/controls'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from '../components/ui/card'
+import { markFieldInvalid } from '@/components/ui/field-control'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import type { AuthenticationResult } from '@kloud/protocol/auth'
@@ -33,8 +44,13 @@ function Login() {
     const data = new FormData(event.currentTarget)
     try {
       if (setup && !created) {
-        if (data.get('password') !== data.get('confirm'))
+        if (data.get('password') !== data.get('confirm')) {
+          markFieldInvalid(
+            event.currentTarget.querySelector('[name="confirm"]'),
+            'Passwords must match',
+          )
           throw new Error('Passwords must match')
+        }
         setPhase('Creating account')
         await api('/auth/setup', 'POST', {
           username: data.get('username'),
@@ -63,93 +79,101 @@ function Login() {
   return (
     <main className="auth-page bg-background text-foreground">
       <Card className="auth-card">
-        <div className="auth-mark">
-          <Icon />
-        </div>
-        <p className="eyebrow">KLOUD</p>
-        <h1>
-          {setup && !created
-            ? 'Create your Server Administrator account'
-            : 'Welcome back'}
-        </h1>
-        <p className="text-muted-foreground">
-          {created
-            ? 'Your Server Administrator account is ready. Sign in with your password.'
-            : setup
-              ? 'No accounts exist yet. Choose a username and password to get started. You can enable two-factor authentication in account security.'
-              : 'Sign in to your infrastructure.'}
-        </p>
-        {challenge ? (
-          <FactorVerification
-            challenge={challenge}
-            onComplete={() => location.assign(next)}
-            onCancel={() => {
-              setChallenge(undefined)
-              setError('')
-            }}
-          />
-        ) : (
-          <form
-            onSubmit={(e) => {
-              void submit(e)
-            }}
-          >
-            <Label>
-              Username
-              <Input
-                name="username"
-                autoComplete="username"
-                required
-                maxLength={100}
-                pattern={setup && !created ? '[a-zA-Z0-9_.@\\-]+' : undefined}
-              />
-            </Label>
-            <Label>
-              Password
-              <Input
-                name="password"
-                type="password"
-                autoComplete={
-                  setup && !created ? 'new-password' : 'current-password'
-                }
-                required
-                minLength={setup && !created ? 12 : undefined}
-                maxLength={256}
-              />
-            </Label>
-            {setup && !created && (
-              <>
-                <Label>
-                  Confirm password
-                  <Input
-                    name="confirm"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    minLength={12}
-                    maxLength={256}
-                  />
-                </Label>
-                <small className="text-muted-foreground">
-                  Use at least 12 characters. Usernames may contain letters,
-                  numbers, underscores, periods, @, and hyphens.
-                </small>
-              </>
-            )}
-            <ErrorMessage message={error} />
-            <Button className="primary" disabled={busy}>
-              {busy
-                ? phase + '…'
-                : setup && !created
-                  ? 'Create Server Administrator'
-                  : 'Sign in'}
-              <Icon name="arrow" />
-            </Button>
-          </form>
-        )}
-        <p className="auth-foot">
-          <Icon name="shield" /> Optional two-factor authentication
-        </p>
+        <CardHeader>
+          <div className="auth-mark">
+            <Icon />
+          </div>
+          <p className="eyebrow">KLOUD</p>
+          <CardTitle asChild>
+            <h1>
+              {setup && !created
+                ? 'Create your Server Administrator account'
+                : 'Welcome back'}
+            </h1>
+          </CardTitle>
+          <CardDescription>
+            {created
+              ? 'Your Server Administrator account is ready. Sign in with your password.'
+              : setup
+                ? 'No accounts exist yet. Choose a username and password to get started. You can enable two-factor authentication in account security.'
+                : 'Sign in to your infrastructure.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {challenge ? (
+            <FactorVerification
+              challenge={challenge}
+              onComplete={() => location.assign(next)}
+              onCancel={() => {
+                setChallenge(undefined)
+                setError('')
+              }}
+            />
+          ) : (
+            <Form
+              onSubmit={(e) => {
+                void submit(e)
+              }}
+            >
+              <Field>
+                <FieldLabel>Username</FieldLabel>
+                <Input
+                  name="username"
+                  autoComplete="username"
+                  required
+                  maxLength={100}
+                  pattern={setup && !created ? '[a-zA-Z0-9_.@\\-]+' : undefined}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Password</FieldLabel>
+                <Input
+                  name="password"
+                  type="password"
+                  autoComplete={
+                    setup && !created ? 'new-password' : 'current-password'
+                  }
+                  required
+                  minLength={setup && !created ? 12 : undefined}
+                  maxLength={256}
+                />
+              </Field>
+              {setup && !created && (
+                <>
+                  <Field>
+                    <FieldLabel>Confirm password</FieldLabel>
+                    <Input
+                      name="confirm"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                      minLength={12}
+                      maxLength={256}
+                    />
+                  </Field>
+                  <small className="text-muted-foreground">
+                    Use at least 12 characters. Usernames may contain letters,
+                    numbers, underscores, periods, @, and hyphens.
+                  </small>
+                </>
+              )}
+              <ErrorMessage message={error} />
+              <Button variant="primary" disabled={busy}>
+                {busy
+                  ? phase + '…'
+                  : setup && !created
+                    ? 'Create Server Administrator'
+                    : 'Sign in'}
+                <Icon data-icon="inline-start" icon={ArrowRight} />
+              </Button>
+            </Form>
+          )}
+        </CardContent>
+        <CardFooter>
+          <p className="auth-foot">
+            <Icon icon={ShieldCheck} /> Optional two-factor authentication
+          </p>
+        </CardFooter>
       </Card>
     </main>
   )
