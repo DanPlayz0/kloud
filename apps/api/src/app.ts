@@ -1,3 +1,5 @@
+import { organizations, organizationMiddleware } from './organizations.js'
+import { connectorUpdates } from './connector-updates.js'
 import { registryConnections } from './registry-connections.js'
 import { forwarding, forwardingWorker } from './forwarding.js'
 import { recovery, recoveryWorker } from './recovery.js'
@@ -17,6 +19,11 @@ import { pm2 } from './pm2.js'
 import { connectorWorkspace } from './connector-workspace.js'
 
 export const app = new OpenAPIHono<Env>()
+app.use(
+  '*',
+  organizationMiddleware((request) => app.fetch(request)),
+)
+
 app.use('*', (c, next) =>
   bodyLimit({
     maxSize: /^\/projects\/[^/]+\/databases\/imports$/.test(c.req.path)
@@ -72,6 +79,7 @@ app.onError((error, c) => {
   return c.json({ error: 'Service unavailable' }, 503)
 })
 app.route('/auth', auth)
+app.route('/', organizations)
 
 const healthRoute = createRoute({
   method: 'get',
@@ -105,6 +113,7 @@ app.route('/', gitAdmin)
 app.route('/', registryConnections)
 app.route('/', pm2)
 app.route('/', connectorWorkspace)
+app.route('/', connectorUpdates)
 app.route('/', dashboard)
 
 app.use('/openapi.json', requireUser)

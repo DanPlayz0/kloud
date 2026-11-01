@@ -9,7 +9,13 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react'
-import { api, resourceBase, type ResourceScope, type ContainerRow } from './api'
+import {
+  api,
+  organizationApiPath,
+  resourceBase,
+  type ResourceScope,
+  type ContainerRow,
+} from './api'
 import { usePolling, ErrorMessage } from './components'
 import { Button } from './components/ui/controls'
 import { Alert, AlertTitle, AlertDescription } from './components/ui/alert'
@@ -62,7 +68,7 @@ export function ContainerOperations({
     setError('')
     setOutput('')
     if (mode === 'logs') {
-      const stream = new EventSource('/api' + base + '/logs')
+      const stream = new EventSource(organizationApiPath(base + '/logs'))
       stream.onmessage = (event) => {
         try {
           setOutput(JSON.parse(event.data).output ?? '')

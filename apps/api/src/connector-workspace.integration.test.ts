@@ -139,9 +139,52 @@ test(
         ).status,
         403,
       )
+      // Connector-view assignment reuses inventory authority, not runtime authority.
+      const assign = (connector: string, body: unknown) =>
+        app.request(`/admin/containers/${connector}/${container}`, {
+          method: 'PUT',
+          headers: {
+            origin: publicOrigin,
+            cookie: 'session=' + secret,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        })
+      assert.equal(
+        (await assign(host, { project: 'missing', application: 'web' })).status,
+        404,
+      )
+      assert.equal(
+        (await assign(randomUUID(), { project: 'alpha', application: 'web' }))
+          .status,
+        409,
+      )
+      assert.equal(
+        (await assign(host, { project: 'alpha', application: 'web' })).status,
+        200,
+      )
+      const assigned = (await (
+        await request(base + '/containers')
+      ).json()) as any[]
+      assert.equal(assigned[0].assignment, 'manual')
+      assert.equal(assigned[0].project, 'alpha')
+      assert.equal(assigned[0].application, 'web')
+      assert.equal((await assign(host, null)).status, 200)
+      assert.equal(
+        (
+          await pool.query('SELECT 1 FROM assignments WHERE connector_id=$1', [
+            host,
+          ])
+        ).rowCount,
+        0,
+      )
       await pool.query(
         "UPDATE users SET capabilities=ARRAY['connectors.operate'] WHERE id=$1",
         [user],
+      )
+      assert.equal(
+        (await assign(host, { project: 'alpha', application: 'web' })).status,
+        403,
       )
       const document = (await (await request('/openapi.json')).json()) as any
       assert.ok(

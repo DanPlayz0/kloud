@@ -23,6 +23,7 @@ import {
 import {
   api,
   resourceBase,
+  organizationApiPath,
   type ResourceScope,
   type Connector,
   type Project,
@@ -519,7 +520,7 @@ function Pm2LogViewer({
       stream: channel,
       ...(worker ? { worker } : {}),
     })
-    const source = new EventSource(`/api${base}/logs?${query}`)
+    const source = new EventSource(organizationApiPath(`${base}/logs?${query}`))
     source.onmessage = (event) => {
       const data = JSON.parse(event.data) as Pm2Logs
       setOutput(data.output)

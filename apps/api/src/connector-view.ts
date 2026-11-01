@@ -10,6 +10,8 @@ export function connectorView(row: Record<string, unknown>, workspace = false) {
     'host',
     'seen',
     'capabilities',
+    'agent_status',
+    'auto_update',
     'stale',
     ...(workspace
       ? ['public_addresses', 'dns_targets', 'private_addresses']

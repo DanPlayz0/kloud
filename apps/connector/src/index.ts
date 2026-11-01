@@ -1,3 +1,4 @@
+import { connectorUpdater } from './updates.js'
 import { forwardingWorker } from './forwarding.js'
 import { databaseWorker } from './postgres-recovery.js'
 import { publicAddressDiscovery } from './public-addresses.js'
@@ -24,6 +25,7 @@ if (!/^[A-Za-z0-9_-]{43}$/.test(config.token))
   )
 const shutdown = new AbortController()
 const addresses = publicAddressDiscovery(shutdown.signal)
+const updater = connectorUpdater(shutdown.signal)
 const runtimeEnabled =
   config.dockerEnabled && process.env.RUNTIME_ENABLED === 'true'
 const forwardingEnabled =
@@ -67,6 +69,7 @@ const health = createServer((request, response) => {
       apiReachable,
       dockerReachable,
       pm2Reachable,
+      connector: updater.snapshot(),
     }),
   )
 })
@@ -157,6 +160,11 @@ try {
             void send()
           }, config.pollIntervalMs)
       }
+      let statusTimer: NodeJS.Timeout | undefined
+      const sendStatus = () => {
+        if (ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify(updater.snapshot()))
+      }
       let heartbeat: NodeJS.Timeout | undefined
       const touch = () => {
         clearTimeout(heartbeat)
@@ -167,6 +175,7 @@ try {
           JSON.stringify({
             type: 'capabilities',
             capabilities: [
+              'connector-update-v1',
               ...(runtimeEnabled ? ['runtime'] : []),
               ...(config.dockerEnabled && config.deploymentsEnabled
                 ? ['deploy', 'rollout-v1']
@@ -179,6 +188,8 @@ try {
             ],
           }),
         )
+        sendStatus()
+        statusTimer = setInterval(sendStatus, 5000)
         touch()
         if (config.dockerEnabled) void send()
         if (pm2) void sendPm2()
@@ -187,7 +198,38 @@ try {
       ws.on('message', (raw) => {
         try {
           const message = JSON.parse(raw.toString())
+          if (message.type === 'connector-settings') {
+            if (typeof message.auto_update === 'boolean')
+              updater.configure(
+                message.auto_update && updater.snapshot().updater.configured,
+              )
+            sendStatus()
+            return
+          }
           if (message.type === 'operation') {
+            if (message.operation?.kind === 'connector-update') {
+              try {
+                const result = updater.execute(message.operation)
+                ws.send(
+                  JSON.stringify({
+                    type: 'operation-result',
+                    id: message.id,
+                    result,
+                  }),
+                )
+                sendStatus()
+              } catch {
+                ws.send(
+                  JSON.stringify({
+                    type: 'operation-result',
+                    id: message.id,
+                    error:
+                      'Connector update unavailable; configure the trusted updater on its host.',
+                  }),
+                )
+              }
+              return
+            }
             if (message.operation?.kind === 'host-terminal') {
               void hostTerminal
                 .execute(message.operation)
@@ -299,6 +341,7 @@ try {
         clearTimeout(timer)
         clearTimeout(pm2Timer)
         clearTimeout(heartbeat)
+        clearInterval(statusTimer)
         apiReachable = false
         resolve()
       })

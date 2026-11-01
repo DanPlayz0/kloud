@@ -1,3 +1,4 @@
+import { scopedApiUrl } from './organization-context.js'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import {
@@ -325,7 +326,7 @@ deployments.get(base, async (c) => {
     row
       ? {
           ...row,
-          webhook_url: `${publicOrigin}/api/hooks/github/${row.id}`,
+          webhook_url: scopedApiUrl(publicOrigin, `/hooks/github/${row.id}`),
           builds: (
             await pool.query(
               'SELECT id,commit,status,created,started,finished,log FROM deployment_builds WHERE deployment_id=$1 ORDER BY created DESC,id DESC LIMIT 30',
@@ -521,7 +522,7 @@ deployments.put(base, async (c) => {
   ).rows[0]
   return c.json({
     id: result.id,
-    webhook_url: `${publicOrigin}/api/hooks/github/${result.id}`,
+    webhook_url: scopedApiUrl(publicOrigin, `/hooks/github/${result.id}`),
     ...(stored?.fresh ? { webhook_secret: secret } : {}),
   })
 })

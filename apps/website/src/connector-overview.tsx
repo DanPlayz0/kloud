@@ -1,3 +1,4 @@
+import { ConnectorUpdateControls } from './connector-update-controls'
 import { useNavigate } from '@tanstack/react-router'
 import { ServerAddressDetails } from './server-addresses'
 import { useState } from 'react'
@@ -95,6 +96,11 @@ export function ConnectorOverview({
               <dd>{current.discovery ? 'Enabled' : 'Disabled'}</dd>
             </div>
           </dl>
+          <ConnectorUpdateControls
+            connector={{ ...current, stale: stale || !!error }}
+            user={user}
+            onSaved={() => setRevision((v) => v + 1)}
+          />
           <ServerAddressDetails
             key={JSON.stringify(current.dns_targets)}
             server={current}

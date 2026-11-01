@@ -15,6 +15,10 @@ RUN pnpm --filter @kloud/connector run build
 
 FROM docker:29-cli AS docker-cli
 FROM node:26-bookworm-slim AS runtime
+ARG CONNECTOR_VERSION=0.1.0
+ARG CONNECTOR_REVISION=unknown
+ENV CONNECTOR_VERSION=$CONNECTOR_VERSION
+ENV CONNECTOR_REVISION=$CONNECTOR_REVISION
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /var/lib/kloud/deployments && chown node:node /var/lib/kloud/deployments
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker

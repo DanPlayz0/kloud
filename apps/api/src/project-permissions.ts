@@ -1,3 +1,4 @@
+import { organizationBrowserQuery } from './organization-context.js'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { randomUUID } from 'node:crypto'
@@ -166,7 +167,7 @@ projectPermissions.post('/projects/:project/access/members', async (c) => {
           `INSERT INTO invitations(token,user_id,expires) VALUES($1,$2,now()+interval '24 hours')`,
           [digest(invitation), user.id],
         )
-        enrollmentUrl = `${browserOrigin(c)}/enroll#${invitation}`
+        enrollmentUrl = `${browserOrigin(c)}/enroll${organizationBrowserQuery()}#${invitation}`
       }
       if (user.disabled)
         throw new HTTPException(409, {

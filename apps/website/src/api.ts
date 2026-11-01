@@ -1,5 +1,65 @@
 import type { ServerAddresses } from './server-addresses'
 import { redirect } from '@tanstack/react-router'
+
+export interface Organization {
+  slug: string
+  name: string
+  api_url?: string
+}
+const organizationSlug = /^[a-z0-9]+(-[a-z0-9]+)*$/
+export function validOrganizationSlug(value: string) {
+  return value.length <= 63 && organizationSlug.test(value)
+}
+function initialOrganization() {
+  const requested = new URLSearchParams(location.search).get('organization')
+  let saved: string | null = null
+  try {
+    saved = localStorage.getItem('kloud-organization')
+  } catch {
+    /* Storage can be disabled. */
+  }
+  const slug =
+    requested && validOrganizationSlug(requested)
+      ? requested
+      : saved && validOrganizationSlug(saved)
+        ? saved
+        : 'default'
+  try {
+    localStorage.setItem('kloud-organization', slug)
+  } catch {
+    /* URL routing still works. */
+  }
+  return slug
+}
+const selectedOrganization = initialOrganization()
+export const currentOrganization = () => selectedOrganization
+export function organizationApiPath(path: string) {
+  return (
+    '/api' +
+    (selectedOrganization === 'default'
+      ? ''
+      : '/organizations/' + encodeURIComponent(selectedOrganization)) +
+    path
+  )
+}
+export function organizationPath(path: string) {
+  return (
+    path +
+    (path.includes('?') ? '&' : '?') +
+    'organization=' +
+    encodeURIComponent(selectedOrganization)
+  )
+}
+export function switchOrganization(slug: string) {
+  if (!validOrganizationSlug(slug))
+    throw new Error('Enter a valid organization slug')
+  try {
+    localStorage.setItem('kloud-organization', slug)
+  } catch {
+    /* URL routing still works. */
+  }
+  window.location.assign('/login?organization=' + encodeURIComponent(slug))
+}
 export interface User {
   id: string
   username: string
@@ -144,21 +204,26 @@ export async function api<T = unknown>(
       : ['/auth/factor/challenge', '/auth/security/enroll'].includes(path)
         ? 30000
         : 10000
-  const response = await fetch(`/api${path}`, {
-    method,
-    credentials: 'same-origin',
-    headers: {
-      'X-Kloud-Origin': location.origin,
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+  const lookup = path.startsWith('/organizations/lookup/')
+  const response = await fetch(
+    lookup ? '/api' + path : organizationApiPath(path),
+    {
+      method,
+      credentials: 'same-origin',
+      headers: {
+        'X-Kloud-Origin': location.origin,
+        ...(!lookup ? { 'X-Kloud-Organization': selectedOrganization } : {}),
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(timeout)])
+        : AbortSignal.timeout(timeout),
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(timeout)])
-      : AbortSignal.timeout(timeout),
-  })
+  )
   if (response.status === 401 && !path.startsWith('/auth/')) {
     window.location.assign(
-      `/login?next=${encodeURIComponent(location.pathname)}`,
+      `/login?organization=${encodeURIComponent(selectedOrganization)}&next=${encodeURIComponent(location.pathname)}`,
     )
     throw new Error('Session expired')
   }
@@ -194,6 +259,8 @@ export async function adminSession(section: string) {
 }
 
 export interface Connector extends ServerAddresses {
+  agent_status?: import('@kloud/protocol/connector').ConnectorStatus | null
+  auto_update?: boolean | null
   id: string
   created_at?: string | null
   name: string

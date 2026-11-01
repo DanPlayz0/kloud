@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono'
 import { randomUUID } from 'node:crypto'
-import { getCookie, setCookie } from 'hono/cookie'
+import { getCookie as readCookie, setCookie as writeCookie } from 'hono/cookie'
+import { currentOrganization } from './organization-context.js'
 import { HTTPException } from 'hono/http-exception'
 import { z } from 'zod'
 import type { PoolClient } from 'pg'
@@ -60,6 +61,19 @@ export const cookieOptions = (c: Context) => ({
   sameSite: 'Strict' as const,
   path: '/',
 })
+const cookieName = (name: string) => {
+  const organization = currentOrganization()
+  return organization && organization.slug !== 'default'
+    ? `kloud_${organization.slug}_${name}`
+    : name
+}
+const getCookie = (c: Context, name: string) => readCookie(c, cookieName(name))
+const setCookie = (
+  c: Context,
+  name: string,
+  value: string,
+  options: Parameters<typeof writeCookie>[3],
+) => writeCookie(c, cookieName(name), value, options)
 const sessionHash = (c: Context) => digest(getCookie(c, 'session') ?? '')
 const pendingToken = (c: Context) => getCookie(c, 'pending') ?? ''
 export const currentUser = async (c: Context) => {
@@ -89,21 +103,9 @@ export const requireAdmin = async (
     return c.json({ error: 'Administrator access required' }, 403)
   await next()
 }
-let accountsExist = false
-let accountCheck: Promise<boolean> | undefined
 async function hasAccounts(): Promise<boolean> {
-  if (accountsExist) return true
-  if (!accountCheck)
-    accountCheck = pool
-      .query('SELECT EXISTS(SELECT 1 FROM users) AS populated')
-      .then((r) => {
-        accountsExist ||= r.rows[0].populated
-        return accountsExist
-      })
-      .finally(() => {
-        accountCheck = undefined
-      })
-  return accountCheck
+  return (await pool.query('SELECT EXISTS(SELECT 1 FROM users) AS populated'))
+    .rows[0].populated
 }
 function enabled(user: any): FactorMethod[] {
   return [
@@ -263,7 +265,6 @@ auth.post('/setup', async (c) => {
       [randomUUID(), body.username.toLowerCase(), hashed],
     )
   })
-  accountsExist = true
   return c.json({ ok: true })
 })
 auth.post('/enroll', async (c) => {

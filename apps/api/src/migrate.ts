@@ -1,3 +1,4 @@
+import { migrateConnectorUpdates } from './migrations-connector-updates.js'
 import { migrateForwarding } from './forwarding.js'
 import { migrateRecovery } from './migrations-recovery.js'
 import { migrateGit } from './migrations-git.js'
@@ -5,6 +6,7 @@ import { migrateGithubCallbacks } from './migrations-github-callbacks.js'
 import { migrateRollouts } from './migrations-rollouts.js'
 import { pool, transaction } from './db.js'
 import { rpID } from './security.js'
+import type { PoolClient } from 'pg'
 export const migration = `
 CREATE TABLE users (id uuid PRIMARY KEY, username text UNIQUE NOT NULL, password_hash text, admin boolean NOT NULL DEFAULT false, disabled boolean NOT NULL DEFAULT false);
 CREATE TABLE projects (slug text PRIMARY KEY CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'), name text NOT NULL);
@@ -20,34 +22,31 @@ CREATE TABLE assignments (connector_id uuid REFERENCES connectors ON DELETE CASC
 CREATE INDEX sessions_expiry ON sessions(expires);
 CREATE INDEX passkeys_user ON passkeys(user_id);
 `
-export async function migrate() {
-  await transaction(async (db) => {
-    await db.query('SELECT pg_advisory_xact_lock(842191)')
-    await db.query(
-      'CREATE TABLE IF NOT EXISTS migrations (version integer PRIMARY KEY, applied timestamptz NOT NULL DEFAULT now())',
-    )
-    const result = await db.query(
-      'SELECT version FROM migrations WHERE version=1',
-    )
-    if (!result.rowCount) {
-      await db.query(migration)
-      await db.query('INSERT INTO migrations(version) VALUES(1)')
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=2'))
-        .rowCount
-    ) {
-      await db.query(`CREATE TABLE setup_challenges (
+export async function migrateDatabase(db: PoolClient) {
+  await db.query('SELECT pg_advisory_xact_lock(842191)')
+  await db.query(
+    'CREATE TABLE IF NOT EXISTS migrations (version integer PRIMARY KEY, applied timestamptz NOT NULL DEFAULT now())',
+  )
+  const result = await db.query(
+    'SELECT version FROM migrations WHERE version=1',
+  )
+  if (!result.rowCount) {
+    await db.query(migration)
+    await db.query('INSERT INTO migrations(version) VALUES(1)')
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=2')).rowCount
+  ) {
+    await db.query(`CREATE TABLE setup_challenges (
         token text PRIMARY KEY, user_id uuid NOT NULL, username text NOT NULL,
         password_hash text NOT NULL, challenge text NOT NULL, expires timestamptz NOT NULL
       )`)
-      await db.query('INSERT INTO migrations(version) VALUES(2)')
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=3'))
-        .rowCount
-    ) {
-      await db.query(`
+    await db.query('INSERT INTO migrations(version) VALUES(2)')
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=3')).rowCount
+  ) {
+    await db.query(`
         ALTER TABLE users ADD COLUMN capabilities text[] NOT NULL DEFAULT '{}'
           CHECK (capabilities <@ ARRAY['users.manage','projects.manage','connectors.manage','inventory.manage']::text[]);
         ALTER TABLE projects ADD COLUMN grant_mode text NOT NULL DEFAULT 'id' CHECK(grant_mode IN ('id','name'));
@@ -65,26 +64,24 @@ export async function migrate() {
         INSERT INTO container_grants(id,user_id,project_slug,capability,kind)
           SELECT gen_random_uuid(),user_id,project_slug,'view','all' FROM memberships;
       `)
-      await db.query('INSERT INTO migrations(version) VALUES(3)')
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=4'))
-        .rowCount
-    ) {
-      await db.query(`
+    await db.query('INSERT INTO migrations(version) VALUES(3)')
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=4')).rowCount
+  ) {
+    await db.query(`
         ALTER TABLE users DROP CONSTRAINT users_capabilities_check;
         ALTER TABLE users ADD CONSTRAINT users_capabilities_check
           CHECK (capabilities <@ ARRAY['users.manage','projects.create','projects.manage','connectors.manage','inventory.manage']::text[]);
         UPDATE users SET capabilities = array_append(capabilities, 'projects.create')
           WHERE 'projects.manage' = ANY(capabilities) AND NOT ('projects.create' = ANY(capabilities));
       `)
-      await db.query('INSERT INTO migrations(version) VALUES(4)')
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=5'))
-        .rowCount
-    ) {
-      await db.query(`
+    await db.query('INSERT INTO migrations(version) VALUES(4)')
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=5')).rowCount
+  ) {
+    await db.query(`
         CREATE TABLE deployments (
           id uuid PRIMARY KEY, project text NOT NULL REFERENCES projects(slug) ON DELETE CASCADE,
           application text NOT NULL, connector_id uuid NOT NULL REFERENCES connectors(id) ON DELETE CASCADE,
@@ -101,13 +98,12 @@ export async function migrate() {
         );
         CREATE INDEX deployment_builds_queue ON deployment_builds(status, created);
       `)
-      await db.query('INSERT INTO migrations(version) VALUES(5)')
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=6'))
-        .rowCount
-    ) {
-      await db.query(`
+    await db.query('INSERT INTO migrations(version) VALUES(5)')
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=6')).rowCount
+  ) {
+    await db.query(`
         CREATE TABLE services (
           project_slug text NOT NULL REFERENCES projects(slug) ON DELETE CASCADE,
           slug text NOT NULL CHECK(slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
@@ -132,13 +128,12 @@ export async function migrate() {
           SELECT project,application,application,CASE WHEN config->>'kind'='compose' THEN 'compose' ELSE 'application' END FROM deployments
           ON CONFLICT(project_slug,slug) DO UPDATE SET type=EXCLUDED.type;
       `)
-      await db.query('INSERT INTO migrations(version) VALUES(6)')
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=7'))
-        .rowCount
-    ) {
-      await db.query(`
+    await db.query('INSERT INTO migrations(version) VALUES(6)')
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=7')).rowCount
+  ) {
+    await db.query(`
         ALTER TABLE users DROP CONSTRAINT users_capabilities_check;
         ALTER TABLE users ADD CONSTRAINT users_capabilities_check CHECK
           (capabilities <@ ARRAY['dns.manage','users.manage','projects.create','projects.manage','connectors.manage','inventory.manage']::text[]);
@@ -163,13 +158,12 @@ export async function migrate() {
         );
         CREATE INDEX dns_member_grants_member ON dns_member_grants(user_id,project_slug);
       `)
-      await db.query('INSERT INTO migrations(version) VALUES(7)')
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=8'))
-        .rowCount
-    ) {
-      await db.query(`
+    await db.query('INSERT INTO migrations(version) VALUES(7)')
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=8')).rowCount
+  ) {
+    await db.query(`
         ALTER TABLE connectors ADD COLUMN capabilities text[] NOT NULL DEFAULT '{}';
         CREATE TABLE service_revisions (
           id uuid PRIMARY KEY, project text NOT NULL, service text NOT NULL,
@@ -197,13 +191,12 @@ export async function migrate() {
           desired text, applied text, error text, updated timestamptz NOT NULL DEFAULT now()
         );
       `)
-      await db.query('INSERT INTO migrations(version) VALUES(8)')
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=9'))
-        .rowCount
-    ) {
-      await db.query(`
+    await db.query('INSERT INTO migrations(version) VALUES(8)')
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=9')).rowCount
+  ) {
+    await db.query(`
         ALTER TABLE connectors ADD COLUMN docker_seen timestamptz;
         UPDATE connectors SET docker_seen=seen;
         ALTER TABLE connectors ADD COLUMN pm2_seen timestamptz;
@@ -225,23 +218,23 @@ export async function migrate() {
         );
         INSERT INTO migrations(version) VALUES(9);
       `)
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=10'))
-        .rowCount
-    ) {
-      await db.query(`
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=10'))
+      .rowCount
+  ) {
+    await db.query(`
         ALTER TABLE users DROP CONSTRAINT users_capabilities_check;
         ALTER TABLE users ADD CONSTRAINT users_capabilities_check CHECK
           (capabilities <@ ARRAY['dns.manage','users.manage','projects.create','projects.manage','connectors.manage','connectors.operate','inventory.manage']::text[]);
         INSERT INTO migrations(version) VALUES(10);
       `)
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=11'))
-        .rowCount
-    ) {
-      await db.query(`
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=11'))
+      .rowCount
+  ) {
+    await db.query(`
         ALTER TABLE users ADD COLUMN security_version integer NOT NULL DEFAULT 0;
         ALTER TABLE users ADD COLUMN email text;
         ALTER TABLE users ADD COLUMN email_2fa boolean NOT NULL DEFAULT false;
@@ -271,22 +264,22 @@ export async function migrate() {
         DELETE FROM setup_challenges;
         INSERT INTO migrations(version) VALUES(11);
       `)
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=12'))
-        .rowCount
-    ) {
-      await db.query('ALTER TABLE passkeys ADD COLUMN rp_id text')
-      // Preserve the RP configured for existing credentials before adding origins.
-      await db.query('UPDATE passkeys SET rp_id=$1', [rpID])
-      await db.query('DELETE FROM auth_pending')
-      await db.query('INSERT INTO migrations(version) VALUES(12)')
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=13'))
-        .rowCount
-    ) {
-      await db.query(`
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=12'))
+      .rowCount
+  ) {
+    await db.query('ALTER TABLE passkeys ADD COLUMN rp_id text')
+    // Preserve the RP configured for existing credentials before adding origins.
+    await db.query('UPDATE passkeys SET rp_id=$1', [rpID])
+    await db.query('DELETE FROM auth_pending')
+    await db.query('INSERT INTO migrations(version) VALUES(12)')
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=13'))
+      .rowCount
+  ) {
+    await db.query(`
         ALTER TABLE service_grants DROP CONSTRAINT service_grants_capability_check;
         ALTER TABLE service_grants ADD CONSTRAINT service_grants_capability_check
           CHECK(capability IN ('read','create','update','delete','deploy','reveal'));
@@ -294,38 +287,42 @@ export async function migrate() {
         CREATE INDEX service_revisions_latest ON service_revisions(project,service,revision_number DESC);
         INSERT INTO migrations(version) VALUES(13);
       `)
-    }
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=14'))
-        .rowCount
-    ) {
-      await db.query(
-        `ALTER TABLE service_domains ADD COLUMN dns_status jsonb NOT NULL DEFAULT '{}'; ALTER TABLE proxy_status ADD COLUMN certificates jsonb NOT NULL DEFAULT '{}'; ALTER TABLE connectors ADD COLUMN public_addresses jsonb; ALTER TABLE connectors ADD COLUMN dns_targets jsonb NOT NULL DEFAULT '{}'; ALTER TABLE connectors ADD COLUMN private_addresses jsonb NOT NULL DEFAULT '[]'; INSERT INTO migrations(version) VALUES(14);`,
-      )
-    }
-    await migrateGit(db)
-    await migrateGithubCallbacks(db)
-    await migrateRollouts(db)
-    await migrateRecovery(db)
-    await migrateForwarding(db)
-    if (
-      !(await db.query('SELECT version FROM migrations WHERE version=27'))
-        .rowCount
-    ) {
-      await db.query(`
+  }
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=14'))
+      .rowCount
+  ) {
+    await db.query(
+      `ALTER TABLE service_domains ADD COLUMN dns_status jsonb NOT NULL DEFAULT '{}'; ALTER TABLE proxy_status ADD COLUMN certificates jsonb NOT NULL DEFAULT '{}'; ALTER TABLE connectors ADD COLUMN public_addresses jsonb; ALTER TABLE connectors ADD COLUMN dns_targets jsonb NOT NULL DEFAULT '{}'; ALTER TABLE connectors ADD COLUMN private_addresses jsonb NOT NULL DEFAULT '[]'; INSERT INTO migrations(version) VALUES(14);`,
+    )
+  }
+  await migrateGit(db)
+  await migrateGithubCallbacks(db)
+  await migrateConnectorUpdates(db)
+  await migrateRollouts(db)
+  await migrateRecovery(db)
+  await migrateForwarding(db)
+  if (
+    !(await db.query('SELECT version FROM migrations WHERE version=27'))
+      .rowCount
+  ) {
+    await db.query(`
         ALTER TABLE connectors ADD COLUMN created_at timestamptz;
         ALTER TABLE connectors ALTER COLUMN created_at SET DEFAULT now();
         INSERT INTO migrations(version) VALUES(27);
       `)
-    }
-  })
+  }
+}
+export async function migrate() {
+  await transaction(migrateDatabase)
 }
 if (
   process.argv[1]?.endsWith('migrate.ts') ||
   process.argv[1]?.endsWith('migrate.js')
 ) {
   try {
-    await migrate()
+    const { migrateAllOrganizations } = await import('./organizations.js')
+    await migrateAllOrganizations(migrate)
     console.log('Migrations complete')
   } finally {
     await pool.end()

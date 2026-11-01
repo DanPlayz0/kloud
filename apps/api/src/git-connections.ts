@@ -1,3 +1,4 @@
+import { scopedApiUrl } from './organization-context.js'
 import {
   validateGitAvailability,
   saveGitAvailability,
@@ -664,7 +665,7 @@ gitConnections.post(`${path}/:id/webhook`, async (c) => {
           message:
             'Save this repository as the app source before configuring its webhook.',
         })
-      const url = `${publicOrigin}/api/hooks/github/${deployment.id}`
+      const url = scopedApiUrl(publicOrigin, `/hooks/github/${deployment.id}`)
       let mode: 'automatic' | 'manual' | 'unavailable' = body.mode
       let message: string | null = null
       if (mode === 'automatic') {

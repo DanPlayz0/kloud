@@ -8,13 +8,13 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { markFieldInvalid } from '@/components/ui/field-control'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, type FormEvent } from 'react'
-import { api } from '../api'
+import { api, currentOrganization, organizationPath } from '../api'
 import { ErrorMessage, Icon } from '../components'
 export const Route = createFileRoute('/enroll')({ component: Enroll })
 function Enroll() {
   const [invitation] = useState(() => location.hash.slice(1))
   useEffect(() => {
-    history.replaceState(null, '', '/enroll')
+    history.replaceState(null, '', organizationPath('/enroll'))
   }, [])
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
@@ -78,7 +78,10 @@ function Enroll() {
             </Alert>
           ) : (
             <>
-              <p>Choose a password to activate your account.</p>
+              <p>
+                Choose a password to activate your account in{' '}
+                {currentOrganization()}.
+              </p>
               <Form
                 onSubmit={(e) => {
                   void submit(e)

@@ -16,6 +16,7 @@ async function fixtures(
   admin = false,
 ) {
   const operations: { path: string; action: string }[] = []
+  const assignments: { path: string; value: unknown }[] = []
   const connector = {
     id: hostId,
     name: 'Production host',
@@ -32,6 +33,13 @@ async function fixtures(
       route.request().method() === 'POST'
         ? route.request().postDataJSON()
         : undefined
+    if (
+      route.request().method() === 'PUT' &&
+      path.startsWith('/admin/containers/')
+    ) {
+      assignments.push({ path, value: route.request().postDataJSON() })
+      return route.fulfill({ json: { ok: true } })
+    }
     const allowed = admin || capabilities.includes('connectors.operate')
     if (path.endsWith('/logs'))
       return route.fulfill({
@@ -95,7 +103,7 @@ async function fixtures(
     const data =
       path === '/auth/me'
         ? { id: 'owner', username: 'operator', admin, capabilities }
-        : path === '/projects'
+        : path === '/projects' || path === '/admin/containers/projects'
           ? [project]
           : path === '/connectors' || path === '/admin/connectors'
             ? [connector]
@@ -146,7 +154,7 @@ async function fixtures(
                       : { ok: true }
     return route.fulfill({ json: data })
   })
-  return { operations, connector }
+  return { operations, connector, assignments }
 }
 
 test('shared picker searches hosts and switches between project and connector workspaces with keyboard', async ({
@@ -355,3 +363,38 @@ for (const width of [390, 1280]) {
     },
   )
 }
+
+test('inventory managers assign discovered containers from the connector view', async ({
+  page,
+}) => {
+  const { assignments } = await fixtures(page, ['inventory.manage'])
+  await page.goto(base + '/compute/containers')
+  await page
+    .getByRole('button', { name: 'Assign to project for unassigned-worker' })
+    .click()
+  const dialog = page.getByRole('dialog', { name: 'Assign unassigned-worker' })
+  await dialog.getByLabel('Project', { exact: true }).selectOption('alpha')
+  await dialog.getByLabel('Application slug', { exact: true }).fill('worker')
+  await dialog.getByRole('button', { name: 'Assign', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  expect(assignments).toEqual([
+    {
+      path: '/admin/containers/' + hostId + '/' + 'b'.repeat(64),
+      value: { project: 'alpha', application: 'worker' },
+    },
+  ])
+  await page.getByRole('button', { name: 'Change assignment for web' }).click()
+  await page
+    .getByRole('dialog', { name: 'Assign web' })
+    .getByRole('button', { name: 'Unassign', exact: true })
+    .click()
+  expect(assignments.at(-1)?.value).toBeNull()
+})
+
+test('runtime operators cannot assign containers', async ({ page }) => {
+  await fixtures(page, ['connectors.operate'])
+  await page.goto(base + '/compute/containers')
+  await expect(
+    page.getByRole('button', { name: /Assign to project|Change assignment/ }),
+  ).toHaveCount(0)
+})

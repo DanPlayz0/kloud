@@ -1,15 +1,22 @@
+import { findOrganization } from './organizations.js'
+import {
+  organizationContext,
+  organizationBrowserQuery,
+} from './organization-context.js'
 import { randomUUID } from 'node:crypto'
 import { pool, transaction } from './db.js'
 import { token, digest, publicOrigin } from './security.js'
 import { clearFactors } from './auth-factors.js'
-const [command, username] = process.argv.slice(2)
+const [command, username, organization] = process.argv.slice(2)
 try {
   if (
     !['bootstrap', 'recover'].includes(command ?? '') ||
     !username ||
     !/^[a-zA-Z0-9_.@-]{1,100}$/.test(username)
   )
-    throw new Error('Usage: cli bootstrap|recover <username>')
+    throw new Error('Usage: cli bootstrap|recover <username> [organization]')
+  if (organization)
+    organizationContext.enterWith(await findOrganization(organization))
   const invitation = token()
   await transaction(async (db) => {
     await db.query('SELECT pg_advisory_xact_lock(842192)')
@@ -41,7 +48,9 @@ try {
       [digest(invitation), id],
     )
   })
-  console.log(`${publicOrigin}/enroll#${invitation}`)
+  console.log(
+    `${publicOrigin}/enroll${organizationBrowserQuery()}#${invitation}`,
+  )
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'Command failed')
   process.exitCode = 1

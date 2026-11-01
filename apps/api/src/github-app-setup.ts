@@ -1,3 +1,4 @@
+import { scopedApiUrl } from './organization-context.js'
 import { Hono, type Context } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { randomUUID } from 'node:crypto'
@@ -45,8 +46,8 @@ export function appManifest(name: string) {
   return {
     name,
     url: publicOrigin,
-    redirect_url: `${publicOrigin}/api/git/github/manifest`,
-    setup_url: `${publicOrigin}/api/git/github/setup`,
+    redirect_url: scopedApiUrl(publicOrigin, '/git/github/manifest'),
+    setup_url: scopedApiUrl(publicOrigin, '/git/github/setup'),
     // This integration authenticates installations with the App ID and private
     // key. It does not request user OAuth or register an unused OAuth callback.
     public: false,

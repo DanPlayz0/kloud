@@ -5,7 +5,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { DatabaseAccess } from './database-access'
 import { useState, type FormEvent } from 'react'
 import { Database, Download, RotateCcw, ShieldCheck, Plus } from 'lucide-react'
-import { api } from './api'
+import { api, organizationApiPath } from './api'
 import { ErrorMessage, usePolling, bytes } from './components'
 import { Card } from './components/ui/card'
 import {
@@ -140,7 +140,7 @@ export function ProjectDatabases({ project }: { project: string }) {
     setBusy(true)
     setError('')
     try {
-      const response = await fetch(`/api${base}/imports`, {
+      const response = await fetch(organizationApiPath(`${base}/imports`), {
         method: 'POST',
         credentials: 'same-origin',
         headers: {

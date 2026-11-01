@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { HTTPException } from 'hono/http-exception'
 import type { WebSocket } from 'ws'
+import { organizationResourceKey } from './organization-context.js'
 const connections = new Map<string, WebSocket>()
 export function disconnectConnector(connector: string) {
+  connector = organizationResourceKey(connector)
   const socket = connections.get(connector)
   connections.delete(connector)
   socket?.terminate()
@@ -18,6 +20,7 @@ const pending = new Map<
   }
 >()
 export function registerRpc(connector: string, socket: WebSocket) {
+  connector = organizationResourceKey(connector)
   connections.set(connector, socket)
   socket.once('close', () => {
     if (connections.get(connector) === socket) connections.delete(connector)
@@ -34,6 +37,7 @@ export function registerRpc(connector: string, socket: WebSocket) {
   })
 }
 export function acceptRpc(connector: string, message: any) {
+  connector = organizationResourceKey(connector)
   const entry = pending.get(message.id)
   if (!entry || entry.connector !== connector) return
   pending.delete(message.id)
@@ -49,6 +53,7 @@ export function connectorRpc(
   operation: unknown,
   timeout = 35000,
 ): Promise<any> {
+  connector = organizationResourceKey(connector)
   const socket = connections.get(connector)
   if (!socket || socket.readyState !== 1)
     throw new HTTPException(503, { message: 'Host is disconnected' })

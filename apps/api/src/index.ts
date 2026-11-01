@@ -1,3 +1,4 @@
+import { cleanOrganizationExpirations } from './organizations.js'
 import { serve } from '@hono/node-server'
 import { app } from './app.js'
 import { attachConnectors } from './connectors.js'
@@ -14,11 +15,9 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
 })
 const closeConnectors = attachConnectors(server as import('node:http').Server)
 const cleanup = setInterval(() => {
-  void pool
-    .query(
-      `WITH a AS (DELETE FROM challenges WHERE expires<now()), b AS (DELETE FROM sessions WHERE expires<now()), c AS (DELETE FROM invitations WHERE expires<now()), d AS (DELETE FROM setup_challenges WHERE expires<now()) DELETE FROM login_attempts WHERE expires<now()`,
-    )
-    .catch((error) => console.error('Expiry cleanup failed:', error.message))
+  void cleanOrganizationExpirations().catch((error) =>
+    console.error('Expiry cleanup failed:', error.message),
+  )
 }, 60000)
 cleanup.unref()
 

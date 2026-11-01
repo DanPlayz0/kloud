@@ -3,6 +3,8 @@ import { Check, Copy, KeyRound, X } from 'lucide-react'
 import { Alert, AlertTitle, AlertDescription } from './ui/alert'
 import { Button, Input } from './ui/controls'
 import { Field, FieldLabel } from './ui/field'
+import { usePolling } from '../components'
+import type { Organization } from '../api'
 
 export function ConnectorToken({
   token,
@@ -13,6 +15,9 @@ export function ConnectorToken({
   onDismiss: () => void
   rotated?: boolean
 }) {
+  const { data: organization } = usePolling<Organization>(
+    '/organizations/current',
+  )
   const descriptionId = useId()
   const input = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState('')
@@ -92,6 +97,15 @@ export function ConnectorToken({
             </Button>
           </div>
         </Field>
+        {organization?.api_url && (
+          <Field className="mt-3">
+            <FieldLabel>Connector API URL</FieldLabel>
+            <Input value={organization.api_url} readOnly />
+            <p>
+              Set API_URL to this organization-specific address on your host.
+            </p>
+          </Field>
+        )}
         <p role="status">{status}</p>
         <Button type="button" variant="ghost" onClick={onDismiss}>
           <X data-icon="inline-start" aria-hidden="true" />

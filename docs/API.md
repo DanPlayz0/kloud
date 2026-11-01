@@ -13,6 +13,14 @@ authentication required/failed, 403 forbidden, 404 missing or inaccessible proje
 409 conflict, 429 throttled login, and 503 unavailable dependency. Requests are
 limited to 64 KiB, apart from the separately bounded WebSocket protocol.
 
+## Organization scope
+
+Existing paths select the default organization. For another organization, prefix any path with `/organizations/<slug>` (after `/api` in browser URLs), or send `X-Kloud-Organization: <slug>`. A conflicting prefix/header is rejected. This applies to authentication, worker endpoints, SSE logs, WebSockets, provider callbacks, and the protected OpenAPI document. Accounts, sessions, permissions, resources and saved connections are isolated per organization. See [organization setup](ORGANIZATIONS.md).
+
+`GET /organizations/current` returns `{ slug, name, api_url }`. `GET /organizations/lookup/<slug>` resolves a known slug without returning resources. An authenticated organization administrator can `POST /organizations` with `{ slug, name, username, password }` to atomically create an organization and its initial administrator. Sign in separately in the new organization.
+
+Connector management adds `PUT /connectors/:connector/updates` with `{ enabled: boolean }` and `POST /connectors/:connector/updates/check` with `{}`. Both require connector management authority; enabling/checking requires a trusted updater already configured on the host. Connector metadata includes `agent_status` (running version, revision, start time, updater status) and `auto_update` policy. See [connector updates](CONNECTOR_UPDATES.md).
+
 ## Authentication
 
 | Method/path                          | Input                                                | Result                                                                                                                                                                        |

@@ -14,6 +14,7 @@ import { StatusBadge } from './components/ui/status-badge'
 import { usePolling, ErrorMessage, Notice, bytes } from './components'
 import {
   resourceBase,
+  hasServer,
   type ResourceScope,
   type Connector,
   type User,
@@ -22,6 +23,7 @@ import {
 } from './api'
 import QuickTip from './components/quickTip'
 import { ContainerOperations } from './container-operations'
+import { ContainerAssignment } from './components/container-assignment'
 
 export function Compute({
   user,
@@ -37,8 +39,10 @@ export function Compute({
   const scope: ResourceScope = connector
     ? { kind: 'connector', connector: connector.id }
     : { kind: 'project', project: project! }
+  const [revision, setRevision] = useState(0)
   const { data, error, now } = usePolling<ContainerRow[]>(
     resourceBase(scope) + '/containers',
+    revision,
   )
   const isStale = (row: ContainerRow) =>
     row.stale || !row.seen || now - Date.parse(row.seen) > 20000
@@ -101,6 +105,11 @@ export function Compute({
                       scope={scope}
                       projects={projects}
                       stale={isStale(row)}
+                      assignable={
+                        !!connector?.discovery &&
+                        hasServer(user, 'inventory.manage')
+                      }
+                      onAssigned={() => setRevision((value) => value + 1)}
                     />
                   ))}
                 </TableBody>
@@ -124,11 +133,15 @@ function ContainerInventoryRow({
   scope,
   projects,
   stale,
+  assignable,
+  onAssigned,
 }: {
   row: ContainerRow
   scope: ResourceScope
   projects: Project[]
   stale: boolean
+  assignable: boolean
+  onAssigned: () => void
 }) {
   const [open, setOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
@@ -185,6 +198,16 @@ function ContainerInventoryRow({
               {row.host ?? row.connector_name}
             </QuickTip>
           )}
+          {scope.kind === 'connector' &&
+            assignable &&
+            row.assignment !== 'label' && (
+              <div
+                className="mt-2"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <ContainerAssignment container={row} onSaved={onAssigned} />
+              </div>
+            )}
         </TableCell>
         <TableCell className="p-3 whitespace-nowrap">
           <StatusBadge>{stale ? 'Stale' : row.data.state}</StatusBadge>

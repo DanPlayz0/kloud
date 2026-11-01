@@ -34,6 +34,7 @@ import {
 import { Button } from './components/ui/controls'
 import QuickTip from './components/quickTip'
 import { ProjectPicker } from './components/project-picker'
+import { OrganizationSwitcher } from './organization-switcher'
 
 import {
   Breadcrumb,
@@ -163,6 +164,7 @@ export function Shell({
           open ? 'open' : '',
         )}
       >
+        <OrganizationSwitcher admin={user.admin} />
         <ProjectPicker
           user={user}
           projects={projects}

@@ -1,3 +1,4 @@
+import { connectorStatusSchema } from '@kloud/protocol/connector'
 import type { Server } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
 import { snapshotSchema } from '@kloud/protocol'
@@ -5,6 +6,12 @@ import { pool, transaction } from './db.js'
 import { digest } from './security.js'
 import { registerRpc, acceptRpc } from './connector-rpc.js'
 import { acceptPm2Snapshot } from './pm2-inventory.js'
+import { findOrganization } from './organizations.js'
+import {
+  bindOrganization,
+  organizationResourceKey,
+  runWithOrganization,
+} from './organization-context.js'
 
 export async function acceptSnapshot(
   connector: string,
@@ -67,163 +74,211 @@ export function attachConnectors(server: Server) {
   const connections = new Map<string, import('ws').WebSocket>()
   server.on('upgrade', (request, socket, head) => {
     void (async () => {
-      if (request.url !== '/connectors/ws') {
+      const path = request.url?.match(
+        /^(?:\/organizations\/([a-z0-9]+(?:-[a-z0-9]+)*))?\/connectors\/ws$/,
+      )
+      if (!path) {
         socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n')
         return
       }
-      const value = request.headers.authorization?.match(
-        /^Bearer ([A-Za-z0-9_-]{43})$/,
-      )?.[1]
-      const connector = value
-        ? (
-            await pool.query(
-              'SELECT id FROM connectors WHERE token=$1 AND NOT revoked',
-              [digest(value)],
-            )
-          ).rows[0]
-        : null
-      if (!connector) {
-        socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
-        return
-      }
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        connections.get(connector.id)?.terminate()
-        connections.set(connector.id, ws)
-        registerRpc(connector.id, ws)
-        let alive = true
-        const busy = new Set<string>()
-        ws.on('pong', () => {
-          alive = true
-        })
-        ws.on('error', () => ws.terminate())
-        const heartbeat = setInterval(() => {
-          void (async () => {
-            if (
-              !alive ||
-              !(
-                await pool.query(
-                  'SELECT 1 FROM connectors WHERE id=$1 AND token=$2 AND NOT revoked',
-                  [connector.id, digest(value!)],
-                )
-              ).rowCount
-            ) {
-              ws.terminate()
-              return
-            }
-            alive = false
-            ws.ping()
-          })().catch(() => ws.terminate())
-        }, 10000)
-        // Recheck after registration to cover rotation during the upgrade query.
-        void pool
-          .query(
-            'SELECT 1 FROM connectors WHERE id=$1 AND token=$2 AND NOT revoked',
-            [connector.id, digest(value!)],
-          )
-          .then((result) => {
-            if (!result.rowCount) ws.terminate()
-          })
-          .catch(() => ws.terminate())
-        ws.on('close', () => {
-          clearInterval(heartbeat)
-          if (connections.get(connector.id) === ws)
-            connections.delete(connector.id)
-        })
-        ws.on('message', (data, binary) => {
-          if (
-            binary ||
-            connections.get(connector.id) !== ws ||
-            ws.readyState !== WebSocket.OPEN
-          ) {
-            ws.close(1008, 'Invalid message')
-            return
-          }
-          let message: any
-          try {
-            message = JSON.parse(data.toString())
-          } catch {
-            ws.close(1008)
-            return
-          }
-          if (
-            !message ||
-            typeof message !== 'object' ||
-            Array.isArray(message)
-          ) {
-            ws.close(1008, 'Invalid message')
-            return
-          }
-          if (message.type === 'operation-result') {
-            acceptRpc(connector.id, message)
-            return
-          }
-          if (message.type === 'capabilities') {
-            const allowed = [
-              'runtime',
-              'deploy',
-              'rollout-v1',
-              'proxy',
-              'pm2',
-              'host-terminal',
-              'postgres',
-              'forwarding',
-            ]
-            if (
-              !Array.isArray(message.capabilities) ||
-              message.capabilities.some(
-                (v: unknown) => !allowed.includes(String(v)),
+      const organization =
+        path[1] && path[1] !== 'default'
+          ? await findOrganization(path[1])
+          : undefined
+      const upgrade = async () => {
+        const value = request.headers.authorization?.match(
+          /^Bearer ([A-Za-z0-9_-]{43})$/,
+        )?.[1]
+        const connector = value
+          ? (
+              await pool.query(
+                'SELECT id FROM connectors WHERE token=$1 AND NOT revoked',
+                [digest(value)],
               )
-            ) {
-              ws.close(1008)
-              return
-            }
+            ).rows[0]
+          : null
+        if (!connector) {
+          socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+          return
+        }
+        const key = organizationResourceKey(connector.id)
+        wss.handleUpgrade(
+          request,
+          socket,
+          head,
+          bindOrganization((ws) => {
+            connections.get(key)?.terminate()
+            connections.set(key, ws)
+            registerRpc(connector.id, ws)
+            let alive = true
+            const busy = new Set<string>()
+            ws.on('pong', () => {
+              alive = true
+            })
+            ws.on('error', () => ws.terminate())
+            const heartbeat = setInterval(() => {
+              void (async () => {
+                if (
+                  !alive ||
+                  !(
+                    await pool.query(
+                      'SELECT 1 FROM connectors WHERE id=$1 AND token=$2 AND NOT revoked',
+                      [connector.id, digest(value!)],
+                    )
+                  ).rowCount
+                ) {
+                  ws.terminate()
+                  return
+                }
+                alive = false
+                ws.ping()
+              })().catch(() => ws.terminate())
+            }, 10000)
+            // Recheck after registration to cover rotation during the upgrade query.
             void pool
               .query(
-                'UPDATE connectors SET capabilities=$2 WHERE id=$1 AND token=$3 AND NOT revoked',
-                [connector.id, message.capabilities, digest(value!)],
+                'SELECT 1 FROM connectors WHERE id=$1 AND token=$2 AND NOT revoked',
+                [connector.id, digest(value!)],
               )
+              .then((result) => {
+                if (!result.rowCount) ws.terminate()
+              })
               .catch(() => ws.terminate())
-            return
-          }
-          if (
-            !['snapshot', 'pm2-snapshot'].includes(message.type) ||
-            busy.has(message.type)
-          ) {
-            ws.close(1008, 'Invalid message')
-            return
-          }
-          const type: string = message.type
-          busy.add(type)
-          void (async () => {
-            const accepted = await (
-              message.type === 'pm2-snapshot'
-                ? acceptPm2Snapshot
-                : acceptSnapshot
-            )(
-              connector.id,
-              message,
-              () =>
-                connections.get(connector.id) === ws &&
-                ws.readyState === WebSocket.OPEN,
-            )
-            if (!accepted) ws.close(1008, 'Credential revoked')
-            else if (ws.readyState === WebSocket.OPEN)
-              ws.send(
-                JSON.stringify({
-                  type: 'accepted',
-                  version: 1,
-                  ...(message.type === 'pm2-snapshot'
-                    ? { runtime: 'pm2' }
-                    : {}),
-                }),
-              )
-          })()
-            .catch(() => ws.close(1008, 'Snapshot rejected'))
-            .finally(() => {
-              busy.delete(type)
+            ws.on('close', () => {
+              clearInterval(heartbeat)
+              if (connections.get(key) === ws) connections.delete(key)
             })
-        })
-      })
+            ws.on(
+              'message',
+              bindOrganization((data, binary) => {
+                if (
+                  binary ||
+                  connections.get(key) !== ws ||
+                  ws.readyState !== WebSocket.OPEN
+                ) {
+                  ws.close(1008, 'Invalid message')
+                  return
+                }
+                let message: any
+                try {
+                  message = JSON.parse(data.toString())
+                } catch {
+                  ws.close(1008)
+                  return
+                }
+                if (
+                  !message ||
+                  typeof message !== 'object' ||
+                  Array.isArray(message)
+                ) {
+                  ws.close(1008, 'Invalid message')
+                  return
+                }
+                if (message.type === 'operation-result') {
+                  acceptRpc(connector.id, message)
+                  return
+                }
+                if (message.type === 'connector-status') {
+                  const status = connectorStatusSchema.safeParse(message)
+                  if (!status.success) {
+                    ws.close(1008, 'Invalid connector status')
+                    return
+                  }
+                  void pool
+                    .query(
+                      'UPDATE connectors SET agent_status=$2,seen=now() WHERE id=$1 AND token=$3 AND NOT revoked',
+                      [connector.id, status.data, digest(value!)],
+                    )
+                    .catch(() => ws.terminate())
+                  return
+                }
+                if (message.type === 'capabilities') {
+                  const allowed = [
+                    'connector-update-v1',
+                    'runtime',
+                    'deploy',
+                    'rollout-v1',
+                    'proxy',
+                    'pm2',
+                    'host-terminal',
+                    'postgres',
+                    'forwarding',
+                  ]
+                  if (
+                    !Array.isArray(message.capabilities) ||
+                    message.capabilities.some(
+                      (v: unknown) => !allowed.includes(String(v)),
+                    )
+                  ) {
+                    ws.close(1008)
+                    return
+                  }
+                  void pool
+                    .query(
+                      'UPDATE connectors SET capabilities=$2 WHERE id=$1 AND token=$3 AND NOT revoked RETURNING auto_update',
+                      [connector.id, message.capabilities, digest(value!)],
+                    )
+                    .then((result) => {
+                      const enabled = result.rows[0]?.auto_update
+                      if (
+                        typeof enabled === 'boolean' &&
+                        ws.readyState === WebSocket.OPEN &&
+                        message.capabilities.includes('connector-update-v1')
+                      )
+                        ws.send(
+                          JSON.stringify({
+                            type: 'connector-settings',
+                            auto_update: enabled,
+                          }),
+                        )
+                    })
+                    .catch(() => ws.terminate())
+                  return
+                }
+                if (
+                  !['snapshot', 'pm2-snapshot'].includes(message.type) ||
+                  busy.has(message.type)
+                ) {
+                  ws.close(1008, 'Invalid message')
+                  return
+                }
+                const type: string = message.type
+                busy.add(type)
+                void (async () => {
+                  const accepted = await (
+                    message.type === 'pm2-snapshot'
+                      ? acceptPm2Snapshot
+                      : acceptSnapshot
+                  )(
+                    connector.id,
+                    message,
+                    () =>
+                      connections.get(key) === ws &&
+                      ws.readyState === WebSocket.OPEN,
+                  )
+                  if (!accepted) ws.close(1008, 'Credential revoked')
+                  else if (ws.readyState === WebSocket.OPEN)
+                    ws.send(
+                      JSON.stringify({
+                        type: 'accepted',
+                        version: 1,
+                        ...(message.type === 'pm2-snapshot'
+                          ? { runtime: 'pm2' }
+                          : {}),
+                      }),
+                    )
+                })()
+                  .catch(() => ws.close(1008, 'Snapshot rejected'))
+                  .finally(() => {
+                    busy.delete(type)
+                  })
+              }),
+            )
+          }),
+        )
+      }
+      if (organization) await runWithOrganization(organization, upgrade)
+      else await upgrade()
     })().catch(() => socket.destroy())
   })
   return () => {

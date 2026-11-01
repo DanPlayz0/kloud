@@ -3,6 +3,10 @@ import { test } from 'node:test'
 import { app } from './app.js'
 import { pool } from './db.js'
 import { publicOrigin } from './security.js'
+import {
+  currentOrganization,
+  runWithOrganization,
+} from './organization-context.js'
 
 test('health endpoint responds with a healthy status', async () => {
   const response = await app.request('/health')
@@ -31,14 +35,21 @@ test('mutations reject foreign origins before accessing storage', async () => {
   assert.equal(response.status, 403)
 })
 
-test('setup coalesces database checks and permanently caches an existing account', async (t) => {
+test('setup checks account state in the current organization without a process-wide positive cache', async (t) => {
   let populated = false
   let fail = true
   const query = t.mock.method(pool, 'query', async () => {
     if (fail) throw new Error('Database unavailable')
-    // Keep the query pending while concurrent requests arrive.
+    // Concurrent organizations must not share pending queries or cached state.
     await new Promise((resolve) => setImmediate(resolve))
-    return { rows: [{ populated }] }
+    return {
+      rows: [
+        {
+          populated:
+            currentOrganization()?.slug === 'empty' ? false : populated,
+        },
+      ],
+    }
   })
   assert.equal((await app.request('/auth/setup')).status, 503)
   fail = false
@@ -55,12 +66,19 @@ test('setup coalesces database checks and permanently caches an existing account
   )
   for (const response of results)
     assert.deepEqual(await response.json(), { required: false })
-  assert.equal(query.mock.callCount(), 4)
-  // Later requests must work without storage, including setup POSTs.
-  fail = true
+  assert.equal(query.mock.callCount(), 23)
+  const empty = await runWithOrganization(
+    { slug: 'empty', schema: 'org_empty' },
+    () => app.request('/auth/setup'),
+  )
+  assert.deepEqual(await empty.json(), { required: true })
   assert.deepEqual(await (await app.request('/auth/setup')).json(), {
     required: false,
   })
+  // Storage failures cannot be hidden by another organization's positive result.
+  fail = true
+  assert.equal((await app.request('/auth/setup')).status, 503)
+  fail = false
   for (const path of ['/auth/setup']) {
     const response = await app.request(path, {
       method: 'POST',
@@ -69,5 +87,5 @@ test('setup coalesces database checks and permanently caches an existing account
     })
     assert.equal(response.status, 409)
   }
-  assert.equal(query.mock.callCount(), 4)
+  assert.equal(query.mock.callCount(), 27)
 })

@@ -35,6 +35,10 @@
     "./forwarding": {
       "types": "./forwarding.d.ts",
       "default": "./forwarding.js"
+    },
+    "./connector": {
+      "types": "./connector.d.ts",
+      "default": "./connector.js"
     }
   },
   "dependencies": {

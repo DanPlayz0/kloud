@@ -15,11 +15,20 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import type { AuthenticationResult } from '@kloud/protocol/auth'
 import { FactorVerification } from '../components/factor-verification'
-import { api } from '../api'
+import { api, ApiError, currentOrganization, organizationPath } from '../api'
+import { OrganizationSelector } from '../organization-switcher'
 import { ErrorMessage, Icon } from '../components'
 import { loginDestination } from '../navigation'
 export const Route = createFileRoute('/login')({
-  loader: () => api<{ required: boolean }>('/auth/setup'),
+  loader: async () => {
+    try {
+      return await api<{ required: boolean }>('/auth/setup')
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404)
+        return { required: false }
+      throw error
+    }
+  },
   staleTime: 0,
   validateSearch: (search: Record<string, unknown>) => ({
     next: loginDestination(search.next),
@@ -65,7 +74,8 @@ function Login() {
         username: data.get('username'),
         password: data.get('password'),
       })
-      if (result.status === 'authenticated') location.assign(next)
+      if (result.status === 'authenticated')
+        location.assign(organizationPath(next))
       else {
         setChallenge(result)
         setBusy(false)
@@ -100,10 +110,16 @@ function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-6 border-b border-border pb-4">
+            <p className="mb-3 text-sm text-muted-foreground">
+              Signing in to {currentOrganization()}
+            </p>
+            <OrganizationSelector />
+          </div>
           {challenge ? (
             <FactorVerification
               challenge={challenge}
-              onComplete={() => location.assign(next)}
+              onComplete={() => location.assign(organizationPath(next))}
               onCancel={() => {
                 setChallenge(undefined)
                 setError('')

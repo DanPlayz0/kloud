@@ -23,7 +23,7 @@ export const connectorWorkspace = new Hono<Env>()
 connectorWorkspace.use('*', requireUser)
 const uuid = z.string().uuid()
 const containerId = z.string().regex(/^[a-f0-9]{64}$/)
-const metadataQuery = `SELECT id,name,created_at,host,seen,discovery,revoked,capabilities,public_addresses,dns_targets,private_addresses,
+const metadataQuery = `SELECT id,name,created_at,host,seen,discovery,revoked,capabilities,agent_status,auto_update,public_addresses,dns_targets,private_addresses,
   (seen IS NULL OR seen<now()-interval '20 seconds' OR revoked) AS stale
   FROM connectors`
 export function canBrowseConnector(user: User) {

@@ -22,6 +22,8 @@ bootstrap, account enrollment, Docker connectors, and deployment. See
 
 See [implementation status and remaining release gates](docs/FEATURE_IMPLEMENTATION.md).
 
+- [Organizations, isolated accounts and server/project scope](docs/ORGANIZATIONS.md)
+- [Connector versions and automatic updates](docs/CONNECTOR_UPDATES.md)
 - [Repository connections, PAT/App onboarding, Dockerfile suggestions and private credentials](docs/REPOSITORIES.md)
 - [Readiness-gated rollouts, FIFO queues and selective Compose deployment](docs/ROLLOUTS.md)
 - [Normal and developer variable editors](docs/VARIABLES.md)

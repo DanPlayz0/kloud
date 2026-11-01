@@ -1,3 +1,4 @@
+import { organizationBrowserQuery } from './organization-context.js'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { randomUUID } from 'node:crypto'
@@ -181,7 +182,9 @@ dashboard.post('/admin/users', async (c) => {
     )
   })
   return c.json(
-    { enrollmentUrl: `${browserOrigin(c)}/enroll#${invitation}` },
+    {
+      enrollmentUrl: `${browserOrigin(c)}/enroll${organizationBrowserQuery()}#${invitation}`,
+    },
     201,
   )
 })
@@ -283,13 +286,15 @@ dashboard.post('/admin/users/:id/enrollment', async (c) => {
       [digest(invitation), id],
     )
   })
-  return c.json({ enrollmentUrl: `${browserOrigin(c)}/enroll#${invitation}` })
+  return c.json({
+    enrollmentUrl: `${browserOrigin(c)}/enroll${organizationBrowserQuery()}#${invitation}`,
+  })
 })
 dashboard.get('/admin/connectors', async (c) =>
   c.json(
     (
       await pool.query(
-        `SELECT id,name,created_at,discovery,revoked,host,seen,capabilities,(seen IS NULL OR seen<now()-interval '20 seconds') AS stale FROM connectors WHERE NOT revoked ORDER BY created_at DESC NULLS LAST,name,id`,
+        `SELECT id,name,created_at,discovery,revoked,host,seen,capabilities,agent_status,auto_update,(seen IS NULL OR seen<now()-interval '20 seconds') AS stale FROM connectors WHERE NOT revoked ORDER BY created_at DESC NULLS LAST,name,id`,
       )
     ).rows.map((row) => connectorView(row)),
   ),
@@ -432,6 +437,13 @@ dashboard.put('/admin/containers/:connector/:container', async (c) => {
       ).rows[0]
       if (!enabled?.discovery || !current || current.assignment === 'label')
         return false
+      if (
+        body &&
+        !(
+          await db.query('SELECT 1 FROM projects WHERE slug=$1', [body.project])
+        ).rowCount
+      )
+        throw new HTTPException(404, { message: 'Project not found' })
       if (body)
         await db.query(
           'INSERT INTO assignments(connector_id,container_id,project_slug,application) VALUES($1,$2,$3,$4) ON CONFLICT(connector_id,container_id) DO UPDATE SET project_slug=$3,application=$4',
