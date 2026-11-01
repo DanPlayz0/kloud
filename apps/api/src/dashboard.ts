@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { slug } from '@kloud/protocol'
 import { pool } from './db.js'
-import { requireUser, type Env } from './auth.js'
+import { requireUser, currentUser, type Env } from './auth.js'
+import { runtimeRequestSchema } from '@kloud/protocol/platform'
+import { connectorRpc } from './connector-rpc.js'
 import { digest, token, publicOrigin } from './security.js'
 import {
   hasServer,
@@ -278,11 +280,53 @@ dashboard.get('/admin/connectors', async (c) =>
   c.json(
     (
       await pool.query(
-        `SELECT id,name,discovery,revoked,host,seen,(seen IS NULL OR seen<now()-interval '20 seconds' OR revoked) AS stale FROM connectors ORDER BY name`,
+        `SELECT id,name,discovery,revoked,host,seen,capabilities,(seen IS NULL OR seen<now()-interval '20 seconds') AS stale FROM connectors WHERE NOT revoked ORDER BY name`,
       )
     ).rows,
   ),
 )
+dashboard.post('/admin/connectors/:id/terminal', async (c) => {
+  const connector = uuid.parse(c.req.param('id'))
+  const body = runtimeRequestSchema.parse(await c.req.json())
+  if (!body.action.startsWith('terminal-'))
+    throw new HTTPException(400, { message: 'Invalid host terminal action' })
+  const check = async () => {
+    const user = await currentUser(c)
+    if (!user) throw new HTTPException(401)
+    demandServer(user, 'connectors.manage')
+    const host = (
+      await pool.query(
+        'SELECT capabilities FROM connectors WHERE id=$1 AND NOT revoked',
+        [connector],
+      )
+    ).rows[0]
+    if (!host?.capabilities.includes('host-terminal'))
+      throw new HTTPException(409, {
+        message: 'Host SSH terminal is not enabled on this connector',
+      })
+    return user
+  }
+  const user = await check()
+  const result = await connectorRpc(connector, {
+    kind: 'host-terminal',
+    ...body,
+    owner: user.id,
+  })
+  try {
+    await check()
+  } catch (error) {
+    if (body.action === 'terminal-open' && result.session)
+      void connectorRpc(connector, {
+        kind: 'host-terminal',
+        action: 'terminal-close',
+        session: result.session,
+        owner: user.id,
+      }).catch(() => {})
+    throw error
+  }
+  return c.json(result)
+})
+
 dashboard.post('/admin/connectors', async (c) => {
   const body = z
     .object({ name: z.string().min(1).max(100) })

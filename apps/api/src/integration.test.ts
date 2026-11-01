@@ -647,11 +647,36 @@ test(
             close()
             await new Promise<void>((resolve) => server.close(() => resolve()))
           }
-          await request(
+          const listedBefore = await request(
+            '/admin/connectors',
+            'GET',
+            undefined,
+            adminCookie,
+          )
+          assert.equal(listedBefore.status, 200)
+          assert.ok(
+            (await listedBefore.json()).some(
+              (c: { id: string }) => c.id === connector.id,
+            ),
+          )
+          const revoked = await request(
             `/admin/connectors/${connector.id}`,
             'PUT',
             { discovery: true, revoked: true },
             adminCookie,
+          )
+          assert.equal(revoked.status, 200)
+          const listedAfter = await request(
+            '/admin/connectors',
+            'GET',
+            undefined,
+            adminCookie,
+          )
+          assert.equal(listedAfter.status, 200)
+          assert.ok(
+            !(await listedAfter.json()).some(
+              (c: { id: string }) => c.id === connector.id,
+            ),
           )
           assert.equal(
             await acceptSnapshot(connector.id, snapshot([raw])),

@@ -75,7 +75,7 @@ preserve their creation access; subsequent grants are independent.
 | `POST /admin/users`                             | `{ username, admin?: boolean, capabilities?: string[] }`; returns `{ enrollmentUrl }`        |
 | `PUT /admin/users/{id}`                         | `{ disabled, projects?: string[], admin?: boolean, capabilities?: string[] }`                |
 | `POST /admin/users/{id}/enrollment`             | Resets credentials and returns `{ enrollmentUrl }`; self-reset uses CLI                      |
-| `GET /admin/connectors`                         | Names, host, discovery/revocation status and last-seen time; never tokens                    |
+| `GET /admin/connectors`                         | Non-revoked connectors: names, host, discovery status and last-seen time; never tokens        |
 | `POST /admin/connectors`                        | `{ name }`; returns `{ id, token }` once                                                     |
 | `PUT /admin/connectors/{id}`                    | `{ discovery, revoked }`; revocation is permanent                                            |
 | `GET /admin/containers`                         | Assigned inventory plus unassigned inventory from discovery-enabled connectors               |

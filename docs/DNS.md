@@ -14,9 +14,12 @@ Keep the key stable and back it up separately from the database. Without it the
 rest of the dashboard works, but DNS credentials cannot be stored or used.
 Changing or losing it requires replacing every provider token. Never commit it.
 
-Create a Cloudflare API token with Zone Read and DNS Read/Edit for the desired
-zones. Use Administration → DNS providers for shared connections, or Project →
-Cloud DNS → Private providers for a connection restricted to one project.
+Use **Create Cloudflare API token** in the provider setup form to open Cloudflare
+with Zone Read, DNS Edit (which includes read), and the name `Kloud DNS`
+prefilled. The template includes all zones; optionally restrict it to the desired
+zones before creating the token, then copy and paste the token into the form.
+Use Administration → DNS providers for shared connections, or Project → Cloud
+DNS → Private providers for a connection restricted to one project.
 Tokens are encrypted with AES-256-GCM and are never returned by any API.
 
 ## Delegation and member access

@@ -2,6 +2,13 @@ import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 
 export interface ConnectorConfig {
+  hostTerminal?: {
+    host: string
+    port: number
+    username: string
+    privateKeyPath: string
+    fingerprint: string
+  }
   dockerEnabled: boolean
   pm2Enabled: boolean
   pm2Home: string
@@ -50,7 +57,28 @@ export function readConfig(
   }
   if (!apiUrl.pathname.endsWith('/')) apiUrl.pathname += '/'
 
+  let hostTerminal: ConnectorConfig['hostTerminal']
+  if (env.HOST_TERMINAL_ENABLED === 'true') {
+    if (
+      !env.HOST_SSH_HOST ||
+      !env.HOST_SSH_USER ||
+      !env.HOST_SSH_PRIVATE_KEY_PATH ||
+      !/^SHA256:[A-Za-z0-9+/]{43}$/.test(env.HOST_SSH_FINGERPRINT ?? '')
+    )
+      throw new Error(
+        'Host terminal requires HOST_SSH_HOST, HOST_SSH_USER, HOST_SSH_PRIVATE_KEY_PATH and a SHA256 HOST_SSH_FINGERPRINT',
+      )
+    hostTerminal = {
+      host: env.HOST_SSH_HOST,
+      port: integer(env.HOST_SSH_PORT, 22, 'HOST_SSH_PORT', 65535),
+      username: env.HOST_SSH_USER,
+      privateKeyPath: env.HOST_SSH_PRIVATE_KEY_PATH,
+      fingerprint: env.HOST_SSH_FINGERPRINT!,
+    }
+  }
+
   return {
+    hostTerminal,
     dockerEnabled: env.DOCKER_ENABLED !== 'false',
     pm2Enabled: env.PM2_ENABLED === 'true',
     pm2Home: resolve(env.PM2_HOME ?? `${homedir()}/.pm2`),

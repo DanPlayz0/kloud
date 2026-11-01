@@ -1,6 +1,6 @@
 import { TableCard, Card } from './components/ui/card'
 import { useEffect, useState, type FormEvent } from 'react'
-import { Globe, Plus, Trash2, Pencil } from 'lucide-react'
+import { Globe, Plus, Trash2, Pencil, ExternalLink } from 'lucide-react'
 import {
   dnsActions,
   dnsFields,
@@ -41,6 +41,17 @@ type ManagedZone = {
   name: string
   delegations: { project: string; rules: DnsRule[] }[]
 }
+const cloudflareTokenUrl = `https://dash.cloudflare.com/profile/api-tokens?${new URLSearchParams(
+  {
+    permissionGroupKeys: JSON.stringify([
+      { key: 'zone', type: 'read' },
+      { key: 'dns', type: 'edit' },
+    ]),
+    accountId: '*',
+    zoneId: 'all',
+    name: 'Kloud DNS',
+  },
+)}`
 const fullRule = (): DnsRule => ({
   kind: 'zone',
   target: null,
@@ -283,11 +294,25 @@ export function DnsProviders({
     <div className="space-y-5">
       <ErrorMessage message={error || loadError || projectChoices.error} />
       {notice && <p role="status">{notice}</p>}
-      <p className="text-muted-foreground">
-        Connect a Cloudflare API token with Zone Read and DNS Read/Edit for the
-        zones you want to manage. Discover zones, then explicitly grant project
-        access.
-      </p>
+      <div className="space-y-3">
+        <p className="text-muted-foreground">
+          Create a Cloudflare API token with Zone Read and DNS Edit (includes
+          read) preselected. The template includes all zones; you can limit it
+          to the zones you want to manage before creating the token. Copy the
+          token and paste it below. Discover zones, then explicitly grant
+          project access.
+        </p>
+        <Button asChild>
+          <a
+            href={cloudflareTokenUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ExternalLink size={14} aria-hidden="true" />
+            Create Cloudflare API token
+          </a>
+        </Button>
+      </div>
       <form
         className="flex flex-wrap items-end gap-3"
         onSubmit={async (e) => {

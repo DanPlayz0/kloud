@@ -1,0 +1,10 @@
+# docker compose -f compose.connector.yaml -f compose.connector.ssh.yaml up -d
+services:
+  connector:
+    environment:
+      HOST_TERMINAL_ENABLED: 'true'
+      HOST_SSH_PRIVATE_KEY_PATH: /run/secrets/host_ssh_key
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ${HOST_SSH_PRIVATE_KEY_PATH:?Set the absolute SSH private key path}:/run/secrets/host_ssh_key:ro

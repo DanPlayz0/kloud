@@ -6,6 +6,7 @@ import { createCollector } from './docker.js'
 import { deploymentWorker } from './deployments.js'
 import { serviceWorker } from './platform.js'
 import { runtimeOperations } from './runtime.js'
+import { hostTerminalOperations } from './host-terminal.js'
 import { proxyWorker } from './proxy.js'
 import { pm2Operations, socketTransport } from './pm2.js'
 
@@ -24,6 +25,7 @@ const runtimeEnabled =
 const proxyEnabled =
   config.dockerEnabled && process.env.PROXY_ENABLED === 'true'
 const runtime = runtimeOperations(config)
+const hostTerminal = hostTerminalOperations(config)
 const services =
   config.dockerEnabled && config.deploymentsEnabled
     ? serviceWorker(config, shutdown.signal)
@@ -154,6 +156,7 @@ try {
                 : []),
               ...(proxyEnabled ? ['proxy'] : []),
               ...(pm2 ? ['pm2'] : []),
+              ...(config.hostTerminal ? ['host-terminal'] : []),
             ],
           }),
         )
@@ -166,6 +169,32 @@ try {
         try {
           const message = JSON.parse(raw.toString())
           if (message.type === 'operation') {
+            if (message.operation?.kind === 'host-terminal') {
+              void hostTerminal
+                .execute(message.operation)
+                .then((result) => {
+                  if (ws.readyState === WebSocket.OPEN)
+                    ws.send(
+                      JSON.stringify({
+                        type: 'operation-result',
+                        id: message.id,
+                        result,
+                      }),
+                    )
+                })
+                .catch(() => {
+                  if (ws.readyState === WebSocket.OPEN)
+                    ws.send(
+                      JSON.stringify({
+                        type: 'operation-result',
+                        id: message.id,
+                        error:
+                          'Host SSH terminal unavailable; check connector SSH configuration and host access',
+                      }),
+                    )
+                })
+              return
+            }
             if (message.operation?.kind === 'pm2') {
               void (
                 pm2
@@ -245,6 +274,7 @@ try {
         console.error('Connector connection failed:', error.message),
       )
       ws.on('close', () => {
+        hostTerminal.close()
         runtime.close()
         pm2?.close()
         clearTimeout(timer)
@@ -267,6 +297,7 @@ try {
   await services
   await proxy
   runtime.close()
+  hostTerminal.close()
   pm2?.close()
   health.close()
 }

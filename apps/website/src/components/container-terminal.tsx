@@ -7,9 +7,11 @@ import { api } from '../api'
 export function ContainerTerminal({
   path,
   onError,
+  label = 'Container terminal',
 }: {
   path: string
   onError: (error: string) => void
+  label?: string
 }) {
   const element = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -95,7 +97,7 @@ export function ContainerTerminal({
     <div
       ref={element}
       className="h-96 w-full min-w-0 overflow-hidden rounded-md border border-border bg-background p-2"
-      aria-label="Container terminal"
+      aria-label={label}
     />
   )
 }

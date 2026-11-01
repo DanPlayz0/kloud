@@ -143,7 +143,13 @@ export function attachConnectors(server: Server) {
             return
           }
           if (message.type === 'capabilities') {
-            const allowed = ['runtime', 'deploy', 'proxy', 'pm2']
+            const allowed = [
+              'runtime',
+              'deploy',
+              'proxy',
+              'pm2',
+              'host-terminal',
+            ]
             if (
               !Array.isArray(message.capabilities) ||
               message.capabilities.some(

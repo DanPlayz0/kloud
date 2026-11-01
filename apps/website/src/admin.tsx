@@ -1,6 +1,13 @@
 import { Card, FormCard } from './components/ui/card'
 import { StatusBadge } from './components/ui/status-badge'
-import { Container } from 'lucide-react'
+import { Container, Terminal } from 'lucide-react'
+import { ContainerTerminal } from './components/container-terminal'
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from './components/ui/dialog'
 import { InventoryCard } from './components/inventory-card'
 import { ProjectFields, projectFormValues } from './components/project-fields'
 import {
@@ -23,6 +30,7 @@ import { Users } from './components/users'
 import { DnsProviders } from './dns'
 import { Pm2Inventory } from './pm2'
 type Connector = {
+  capabilities: string[]
   id: string
   name: string
   host: string | null
@@ -229,6 +237,8 @@ function Connectors({
     `/admin/connectors?revision=${revision}`,
   )
   const [pending, setPending] = useState<Record<string, boolean>>({})
+  const [terminal, setTerminal] = useState<Connector | null>(null)
+  const [terminalError, setTerminalError] = useState('')
   useEffect(() => {
     if (data)
       setPending((p) =>
@@ -280,6 +290,20 @@ function Connectors({
             </small>
           </div>
           <div className="row-actions">
+            <Button
+              disabled={c.revoked || !c.capabilities?.includes('host-terminal')}
+              title={
+                c.capabilities?.includes('host-terminal')
+                  ? 'Open host SSH terminal'
+                  : 'Enable HOST_TERMINAL_ENABLED and configure SSH on the connector'
+              }
+              onClick={() => {
+                setTerminalError('')
+                setTerminal(c)
+              }}
+            >
+              <Terminal size={14} /> Host terminal
+            </Button>
             <Label className="checkbox">
               <Checkbox
                 checked={pending[c.id] ?? c.discovery}
@@ -327,6 +351,31 @@ function Connectors({
           Create a token to get started.
         </Notice>
       )}
+      <Dialog
+        open={!!terminal}
+        onOpenChange={(open) => {
+          if (!open) setTerminal(null)
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogTitle>Host terminal — {terminal?.name}</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            SSH shell on the configured host, using the connector's SSH account.
+          </DialogDescription>
+          <ErrorMessage message={terminalError} />
+          {terminal && (
+            <ContainerTerminal
+              key={terminal.id}
+              path={`/admin/connectors/${terminal.id}/terminal`}
+              onError={setTerminalError}
+              label="Host SSH terminal"
+            />
+          )}
+          <Button type="button" onClick={() => setTerminal(null)}>
+            Disconnect
+          </Button>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

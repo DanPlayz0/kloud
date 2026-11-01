@@ -1,9 +1,5 @@
 import { z, type OpenAPIHono } from '@hono/zod-openapi'
-import {
-  slug,
-  deploymentSchema,
-  deploymentJobSchema,
-} from '@kloud/protocol'
+import { slug, deploymentSchema, deploymentJobSchema } from '@kloud/protocol'
 import { serverCapabilities, grantSchema } from './permissions.js'
 import { serviceGrantsSchema } from './service-permissions.js'
 import { dnsGrantsSchema, dnsRecordSchema } from '@kloud/protocol/dns'
@@ -338,7 +334,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'get',
     '/admin/connectors',
-    'List connector status (connectors.manage)',
+    'List non-revoked connector status (connectors.manage)',
     z.array(flexible),
   )
   route(
@@ -356,6 +352,13 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     'Set discovery or permanently revoke credential (connectors.manage)',
     ok,
     z.object({ discovery: z.boolean(), revoked: z.boolean() }),
+  )
+  route(
+    'post',
+    '/admin/connectors/{id}/terminal',
+    'Operate host SSH terminal (connectors.manage; host-terminal capability required)',
+    flexible,
+    runtimeRequestSchema.refine((body) => body.action.startsWith('terminal-')),
   )
   route(
     'get',

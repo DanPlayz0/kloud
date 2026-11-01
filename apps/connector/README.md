@@ -1,5 +1,8 @@
 # Server connector
 
+For an opt-in browser SSH shell on the host, see
+[host terminal setup](../../docs/HOST_TERMINAL.md).
+
 For prebuilt GHCR images and a standalone Compose deployment on a separate server,
 see [published container images](../../docs/CONTAINER_IMAGES.md).
 
