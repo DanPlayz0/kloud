@@ -42,7 +42,15 @@ export function GithubAppConnect({
   projectAccess?: boolean
   onConnected: (id: string) => Promise<void>
 }) {
-  const [name, setName] = useState('Kloud')
+  const [name, setName] = useState(() => {
+    const now = new Date()
+    const date = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-')
+    return `Kloud-${date}-${Math.random().toString(36).slice(2, 8)}`
+  })
   const [organization, setOrganization] = useState('')
   const [scope, setScope] = useState(administration ? 'shared' : 'personal')
   const [busy, setBusy] = useState(false)

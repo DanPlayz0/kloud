@@ -74,6 +74,7 @@ Server Administrators (`admin: true`, formerly super-admin) can use every route.
 Other accounts need the matching server capability: `projects.create` for creating
 projects, `projects.manage` for server-wide project administration, `users.manage` for account administration, `connectors.manage` for
 connector administration, and `inventory.manage` for inventory and assignments.
+Git connections use `git.create` for creation and `git.manage` for server-wide connection administration. These permissions are independent; non-administrators are denied creation unless explicitly granted it. Existing authorized connections remain usable with service deployment permission. Preparing connections before a service exists requires both Git permissions.
 Project managers also have full access to all projects' members and containers.
 Creation and management are independent permissions. A creator without global
 project management receives Project Administrator membership in the new project,
@@ -95,6 +96,9 @@ preserve their creation access; subsequent grants are independent.
 | `GET /admin/containers`                         | Assigned inventory plus unassigned inventory from discovery-enabled connectors               |
 | `PUT /admin/containers/{connector}/{container}` | `{ project, application }` to assign; JSON `null` to unassign                                |
 | `GET /admin/containers/projects`                | Project slug/name choices for inventory assignment (`inventory.manage`)                      |
+| `GET /admin/git-connections`                    | Connections across projects, with ownership, availability, and status; excludes credentials (`git.manage`) |
+| `GET /admin/git-connections/projects`           | Project choices for preparing Git connections (`git.manage`) |
+| `PUT /admin/git-connections/{id}`               | `{ name?, project_access?, revoked?: true }`; shared connections alone support project availability (`git.manage`); returns `{ saved: true }` |
 | `PUT /admin/projects/{project}`                 | `{ name }`; changes display name, retaining the slug                                         |
 | `DELETE /admin/projects/{project}`              | Deletes project records, memberships, assignments and grants; Docker containers keep running |
 

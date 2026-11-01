@@ -54,6 +54,9 @@ test('administration prepares a connection without a service, edits availability
   await expect(
     page.getByText('No Git connections', { exact: true }),
   ).toBeVisible()
+  await expect(page.getByLabel('GitHub App name', { exact: true })).toHaveValue(
+    /^Kloud-\d{4}-\d{2}-\d{2}-[a-z0-9]{6}$/,
+  )
   await page.getByLabel('Connection type').selectOption('github')
   await page
     .getByLabel('Connection name', { exact: true })

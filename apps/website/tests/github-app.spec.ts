@@ -118,6 +118,9 @@ test('GitHub App creation returns to service setup for repository and branch sel
     .click()
   await expect(page.getByLabel('GitHub App ID', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('App private key (PEM)')).toHaveCount(0)
+  await expect(page.getByLabel('GitHub App name', { exact: true })).toHaveValue(
+    /^Kloud-\d{4}-\d{2}-\d{2}-[a-z0-9]{6}$/,
+  )
   await page.getByLabel('GitHub App name', { exact: true }).fill('My Kloud')
   await page.getByLabel('GitHub organization (optional)').fill('my-org')
   await page
