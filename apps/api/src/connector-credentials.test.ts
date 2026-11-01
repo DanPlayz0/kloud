@@ -7,6 +7,49 @@ import { pool } from './db.js'
 import { digest, publicOrigin, token } from './security.js'
 import { connectorRpc, registerRpc } from './connector-rpc.js'
 
+test('connector read responses discard credential columns even if storage queries expand', async (t) => {
+  const id = randomUUID()
+  const row = {
+    id,
+    name: 'Host',
+    host: 'docker',
+    capabilities: [],
+    stale: true,
+    token: 'stored-hash',
+    private_key: 'private-key',
+    encrypted_credentials: 'ciphertext',
+    future_credential: 'future-secret',
+    private_addresses: ['10.0.0.1'],
+  }
+  t.mock.method(pool, 'query', async (sql: string) => {
+    if (sql.includes('FROM sessions'))
+      return { rows: [{ id: randomUUID(), admin: true, capabilities: [] }] }
+    if (sql.includes('FROM connectors')) return { rows: [row] }
+    throw new Error('Unexpected query: ' + sql)
+  })
+  for (const path of [
+    '/admin/connectors',
+    '/connectors',
+    '/connectors/' + id,
+  ]) {
+    const response = await app.request(path, {
+      headers: { cookie: 'session=test' },
+    })
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('cache-control'), 'no-store')
+    const body = await response.json()
+    const metadata = Array.isArray(body) ? body[0] : body
+    assert.equal(metadata.id, id)
+    for (const key of [
+      'token',
+      'private_key',
+      'encrypted_credentials',
+      'future_credential',
+    ])
+      assert.equal(Object.hasOwn(metadata, key), false)
+  }
+})
+
 test('credential rotation requires current management authority, hashes a new secret and disconnects the host', async (t) => {
   const id = randomUUID()
   const user = {

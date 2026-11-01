@@ -82,7 +82,7 @@ services.get(`${base}/:service/connectors`, async (c) => {
       await pool.query(
         'SELECT id,name FROM connectors WHERE NOT revoked ORDER BY name',
       )
-    ).rows,
+    ).rows.map(({ id, name }) => ({ id, name })),
   )
 })
 services.put(`${base}/:service`, async (c) => {

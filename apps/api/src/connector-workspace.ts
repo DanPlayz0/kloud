@@ -17,6 +17,7 @@ import { pool } from './db.js'
 import { inventoryQuery } from './dashboard.js'
 import { pm2InventoryQuery } from './pm2-inventory.js'
 import { connectorRpc } from './connector-rpc.js'
+import { connectorView } from './connector-view.js'
 
 export const connectorWorkspace = new Hono<Env>()
 connectorWorkspace.use('*', requireUser)
@@ -57,12 +58,14 @@ connectorWorkspace.get('/connectors', async (c) => {
         metadataQuery +
           ' WHERE NOT revoked ORDER BY created_at DESC NULLS LAST,name,id',
       )
-    ).rows,
+    ).rows.map((row) => connectorView(row, true)),
   )
 })
 connectorWorkspace.get('/connectors/:connector', async (c) => {
   demandBrowse(c.get('user'))
-  return c.json(await host(uuid.parse(c.req.param('connector'))))
+  return c.json(
+    connectorView(await host(uuid.parse(c.req.param('connector'))), true),
+  )
 })
 
 connectorWorkspace.put('/connectors/:connector/addresses', async (c) => {

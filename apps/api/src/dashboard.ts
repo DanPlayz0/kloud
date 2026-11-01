@@ -23,6 +23,7 @@ import { projectPermissions } from './project-permissions.js'
 import { services } from './services.js'
 import { serviceAccess } from './service-permissions.js'
 import { dns } from './dns.js'
+import { connectorView } from './connector-view.js'
 
 export const dashboard = new Hono<Env>()
 dashboard.use('*', requireUser)
@@ -290,7 +291,7 @@ dashboard.get('/admin/connectors', async (c) =>
       await pool.query(
         `SELECT id,name,created_at,discovery,revoked,host,seen,capabilities,(seen IS NULL OR seen<now()-interval '20 seconds') AS stale FROM connectors WHERE NOT revoked ORDER BY created_at DESC NULLS LAST,name,id`,
       )
-    ).rows,
+    ).rows.map((row) => connectorView(row)),
   ),
 )
 dashboard.post('/admin/connectors/:id/terminal', async (c) => {
