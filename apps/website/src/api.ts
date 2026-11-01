@@ -140,7 +140,10 @@ export async function api<T = unknown>(
   const response = await fetch(`/api${path}`, {
     method,
     credentials: 'same-origin',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+    headers: {
+      'X-Kloud-Origin': location.origin,
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal: signal
       ? AbortSignal.any([signal, AbortSignal.timeout(timeout)])

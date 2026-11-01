@@ -7,13 +7,15 @@ export type AuthenticationResult =
       methods: FactorMethod[]
       emailAvailable: boolean
       totpAvailable: boolean
+      passkeyAvailable?: boolean
     }
 export interface SecurityStatus {
   methods: FactorMethod[]
   email: string | null
   emailAvailable: boolean
   totpAvailable: boolean
-  passkeys: { id: string; name: string }[]
+  passkeyAvailable?: boolean
+  passkeys: { id: string; name: string; rpId?: string }[]
   recoveryCodesRemaining: number
 }
 export const factorMethodSchema: z.ZodType<FactorMethod>

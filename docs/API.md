@@ -1,8 +1,9 @@
 # API contracts
 
 Browser-facing URLs use `/api`; the Hono server paths below omit that prefix.
-JSON mutations require `Origin` equal to `PUBLIC_ORIGIN`. Sessions are opaque
-HttpOnly, SameSite=Strict cookies, Secure under HTTPS. Responses are not cached.
+JSON mutations require `Origin` equal to `PUBLIC_ORIGIN` or an exact entry in
+`ALLOWED_ORIGINS`. Sessions are opaque HttpOnly, SameSite=Strict, host-only cookies,
+Secure when using an HTTPS browser origin. Responses are not cached.
 The protected OpenAPI document is available at `GET /openapi.json`.
 PM2 inventory, project grants, lifecycle RPC, and SSE log contracts are documented
 in [PM2 setup and API](PM2.md#api).
@@ -14,23 +15,23 @@ limited to 64 KiB, apart from the separately bounded WebSocket protocol.
 
 ## Authentication
 
-| Method/path                          | Input                                                | Result                                                                                                                                                      |
-| ------------------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /auth/setup`                    | None                                                 | `{ required: boolean }`                                                                                                                                     |
-| `POST /auth/setup`                   | `{ username, password }`                             | Creates the first administrator atomically; password 12–256 characters                                                                                      |
-| `POST /auth/enroll`                  | `{ token, password }`                                | Consumes an invitation and sets a password; sign in afterward                                                                                               |
-| `POST /auth/password`                | `{ username, password }`                             | `{ status: 'authenticated' }` and session, or `{ status: 'second_factor_required', methods, emailAvailable, totpAvailable }` and five-minute pending cookie |
-| `POST /auth/factor/challenge`        | `{ method: 'email'                                   | 'totp'                                                                                                                                                      | 'passkey' }`        | Sends email or returns `{ options }` for a passkey assertion        |
-| `POST /auth/factor/verify`           | `{ method: 'email'                                   | 'totp'                                                                                                                                                      | 'recovery', code }` | Verifies one-time code and issues session or reauthentication grant |
-| `POST /auth/verify`                  | SimpleWebAuthn authentication response               | Verifies passkey and issues session or reauthentication grant                                                                                               |
-| `GET /auth/security`                 | Session                                              | Enabled methods, availability, verified email, named passkeys, remaining recovery-code count                                                                |
-| `POST /auth/security/reauth`         | Session, `{ password }`                              | Same discriminated result as password login; grants five-minute security authorization after required factors                                               |
-| `POST /auth/security/enroll`         | Session + grant, `{ method, email?, name? }`         | Email sent, TOTP secret + URI, or passkey registration options; sets enrollment cookie                                                                      |
-| `POST /auth/security/confirm`        | Session + grant + enrollment, `{ code?, response? }` | Enables verified factor, rotates session, returns recovery codes when enabling the first factor                                                             |
-| `POST /auth/security/remove`         | Session + grant, `{ method: 'email'                  | 'totp'                                                                                                                                                      | 'passkey'           | 'all', credentialId? }`                                             | Removes factor(s) and rotates session |
-| `POST /auth/security/recovery-codes` | Session + grant                                      | Replaces recovery codes, returns ten plaintext codes once, rotates session                                                                                  |
-| `POST /auth/logout`                  | None                                                 | Deletes session and clears authentication cookies                                                                                                           |
-| `GET /auth/me`                       | Session                                              | `{ id, username, admin, capabilities }`                                                                                                                     |
+| Method/path                          | Input                                                | Result                                                                                                                                                                        |
+| ------------------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /auth/setup`                    | None                                                 | `{ required: boolean }`                                                                                                                                                       |
+| `POST /auth/setup`                   | `{ username, password }`                             | Creates the first administrator atomically; password 12–256 characters                                                                                                        |
+| `POST /auth/enroll`                  | `{ token, password }`                                | Consumes an invitation and sets a password; sign in afterward                                                                                                                 |
+| `POST /auth/password`                | `{ username, password }`                             | `{ status: 'authenticated' }` and session, or `{ status: 'second_factor_required', methods, emailAvailable, totpAvailable, passkeyAvailable }` and five-minute pending cookie |
+| `POST /auth/factor/challenge`        | `{ method: 'email'                                   | 'totp'                                                                                                                                                                        | 'passkey' }`        | Sends email or returns `{ options }` for a passkey assertion        |
+| `POST /auth/factor/verify`           | `{ method: 'email'                                   | 'totp'                                                                                                                                                                        | 'recovery', code }` | Verifies one-time code and issues session or reauthentication grant |
+| `POST /auth/verify`                  | SimpleWebAuthn authentication response               | Verifies passkey and issues session or reauthentication grant                                                                                                                 |
+| `GET /auth/security`                 | Session                                              | Enabled methods, availability for the accessed origin, verified email, named passkeys with RP IDs, remaining recovery-code count                                              |
+| `POST /auth/security/reauth`         | Session, `{ password }`                              | Same discriminated result as password login; grants five-minute security authorization after required factors                                                                 |
+| `POST /auth/security/enroll`         | Session + grant, `{ method, email?, name? }`         | Email sent, TOTP secret + URI, or passkey registration options; sets enrollment cookie                                                                                        |
+| `POST /auth/security/confirm`        | Session + grant + enrollment, `{ code?, response? }` | Enables verified factor, rotates session, returns recovery codes when enabling the first factor                                                                               |
+| `POST /auth/security/remove`         | Session + grant, `{ method: 'email'                  | 'totp'                                                                                                                                                                        | 'passkey'           | 'all', credentialId? }`                                             | Removes factor(s) and rotates session |
+| `POST /auth/security/recovery-codes` | Session + grant                                      | Replaces recovery codes, returns ten plaintext codes once, rotates session                                                                                                    |
+| `POST /auth/logout`                  | None                                                 | Deletes session and clears authentication cookies                                                                                                                             |
+| `GET /auth/me`                       | Session                                              | `{ id, username, admin, capabilities }`                                                                                                                                       |
 
 The former mandatory-passkey setup/enrollment endpoints are removed. Deploy API and
 website together. Users without enabled factors receive an eight-hour session after

@@ -3,7 +3,7 @@ import { HTTPException } from 'hono/http-exception'
 import { bodyLimit } from 'hono/body-limit'
 import { auth, requireUser, type Env } from './auth.js'
 import { dashboard } from './dashboard.js'
-import { publicOrigin } from './security.js'
+import { isAllowedOrigin } from './security.js'
 import { registerContracts } from './contracts.js'
 import { deploymentHooks, deployments } from './deployments.js'
 import { platform, platformWorker } from './platform.js'
@@ -26,7 +26,7 @@ app.use('*', async (c, next) => {
   c.header('Cache-Control', 'no-store')
   if (
     !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
-    c.req.header('origin') !== publicOrigin &&
+    !isAllowedOrigin(c.req.header('origin')) &&
     !(
       /^\/hooks\/github\/[0-9a-f-]+$/.test(c.req.path) &&
       c.req.method === 'POST'

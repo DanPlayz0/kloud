@@ -18,7 +18,9 @@ import {
   digest,
   hashPassword,
   verifyPassword,
-  publicOrigin,
+  browserOrigin,
+  secureCookies,
+  relyingParty,
   rpID,
 } from './security.js'
 import {
@@ -52,12 +54,12 @@ export interface User {
 }
 export type Env = { Variables: { user: User } }
 export const auth = new Hono<Env>()
-export const cookieOptions = {
+export const cookieOptions = (c: Context) => ({
   httpOnly: true,
-  secure: publicOrigin.startsWith('https:'),
+  secure: secureCookies(c),
   sameSite: 'Strict' as const,
   path: '/',
-}
+})
 const sessionHash = (c: Context) => digest(getCookie(c, 'session') ?? '')
 const pendingToken = (c: Context) => getCookie(c, 'pending') ?? ''
 export const currentUser = async (c: Context) => {
@@ -110,12 +112,21 @@ function enabled(user: any): FactorMethod[] {
     ...(user.passkey_2fa ? ['passkey' as const] : []),
   ]
 }
-function result(user: any): AuthenticationResult {
+async function result(user: any, c: Context): Promise<AuthenticationResult> {
+  const requestRP = relyingParty(browserOrigin(c))
+  const keys =
+    requestRP && user.passkey_2fa
+      ? await pool.query(
+          'SELECT 1 FROM passkeys WHERE user_id=$1 AND COALESCE(rp_id,$2)=$3 LIMIT 1',
+          [user.id, rpID, requestRP],
+        )
+      : null
   return {
     status: 'second_factor_required',
     methods: enabled(user),
     emailAvailable: smtpAvailable(),
     totpAvailable: totpAvailable(),
+    passkeyAvailable: !!keys?.rowCount,
   }
 }
 async function rateLimit(key: string, maximum: number) {
@@ -140,9 +151,10 @@ async function newSession(db: PoolClient, user: any) {
   return session
 }
 function sessionCookie(c: Context, value: string) {
-  setCookie(c, 'session', value, { ...cookieOptions, maxAge: 28800 })
+  setCookie(c, 'session', value, { ...cookieOptions(c), maxAge: 28800 })
 }
 async function newPending(
+  c: Context,
   db: PoolClient,
   user: any,
   purpose: string,
@@ -163,7 +175,7 @@ async function newPending(
       session,
       user.password_hash,
       user.security_version,
-      JSON.stringify(data),
+      JSON.stringify({ ...data, origin: browserOrigin(c) }),
     ],
   )
   return value
@@ -193,7 +205,8 @@ async function pendingUser(db: PoolClient, c: Context) {
     !user ||
     !pending ||
     pending.password_hash !== user.password_hash ||
-    pending.version !== user.security_version
+    pending.version !== user.security_version ||
+    pending.data.origin !== browserOrigin(c)
   )
     return null
   if (
@@ -308,20 +321,23 @@ auth.post('/password', async (c) => {
     if (!user || user.disabled || !valid) return null
     if (!enabled(user).length)
       return { session: await newSession(db, user), user }
-    return { pending: await newPending(db, user, 'login'), user }
+    return { pending: await newPending(c, db, user, 'login'), user }
   })
   // Replace the browser's partial-login cookie on a fresh password submission.
   if (!outcome) {
-    setCookie(c, 'pending', '', { ...cookieOptions, maxAge: 0 })
+    setCookie(c, 'pending', '', { ...cookieOptions(c), maxAge: 0 })
     return c.json({ error: 'Invalid credentials' }, 401)
   }
   if (outcome.session) {
-    setCookie(c, 'pending', '', { ...cookieOptions, maxAge: 0 })
+    setCookie(c, 'pending', '', { ...cookieOptions(c), maxAge: 0 })
     sessionCookie(c, outcome.session)
     return c.json({ status: 'authenticated' } satisfies AuthenticationResult)
   }
-  setCookie(c, 'pending', outcome.pending!, { ...cookieOptions, maxAge: 300 })
-  return c.json(result(outcome.user))
+  setCookie(c, 'pending', outcome.pending!, {
+    ...cookieOptions(c),
+    maxAge: 300,
+  })
+  return c.json(await result(outcome.user, c))
 })
 
 auth.post('/factor/challenge', async (c) => {
@@ -361,19 +377,34 @@ auth.post('/factor/challenge', async (c) => {
       return { sent: true }
     }
     if (method === 'passkey') {
+      const requestRP = relyingParty(browserOrigin(c))
+      if (!requestRP)
+        return {
+          error:
+            'Passkeys require HTTPS on a domain name or localhost. Use another factor or a recovery code for this address.',
+        }
       const keys = (
-        await db.query('SELECT id,transports FROM passkeys WHERE user_id=$1', [
-          user.id,
-        ])
+        await db.query(
+          'SELECT id,transports FROM passkeys WHERE user_id=$1 AND COALESCE(rp_id,$2)=$3',
+          [user.id, rpID, requestRP],
+        )
       ).rows
+      if (!keys.length)
+        return {
+          error:
+            'No passkey is registered for this hostname. Use another factor or a recovery code.',
+        }
       const options = await generateAuthenticationOptions({
-        rpID,
+        rpID: requestRP,
         userVerification: 'required',
         allowCredentials: keys,
       })
       await db.query(
         'UPDATE auth_pending SET data=data || $2::jsonb WHERE token=$1',
-        [pending.token, JSON.stringify({ challenge: options.challenge })],
+        [
+          pending.token,
+          JSON.stringify({ challenge: options.challenge, rp_id: requestRP }),
+        ],
       )
       return { options }
     }
@@ -429,8 +460,8 @@ async function verifyFactor(
     } else if (response && pending.data.challenge) {
       const key = (
         await db.query(
-          'SELECT * FROM passkeys WHERE id=$1 AND user_id=$2 FOR UPDATE',
-          [response.id, user.id],
+          'SELECT * FROM passkeys WHERE id=$1 AND user_id=$2 AND COALESCE(rp_id,$3)=$4 FOR UPDATE',
+          [response.id, user.id, rpID, pending.data.rp_id],
         )
       ).rows[0]
       // Every WebAuthn assertion consumes its challenge, including invalid assertions.
@@ -443,8 +474,8 @@ async function verifyFactor(
           const verification = await verifyAuthenticationResponse({
             response,
             expectedChallenge: pending.data.challenge,
-            expectedOrigin: publicOrigin,
-            expectedRPID: rpID,
+            expectedOrigin: pending.data.origin,
+            expectedRPID: pending.data.rp_id,
             requireUserVerification: true,
             credential: {
               id: key.id,
@@ -469,7 +500,7 @@ async function verifyFactor(
     await db.query('DELETE FROM auth_pending WHERE token=$1', [pending.token])
     if (pending.purpose === 'reauth')
       return {
-        grant: await newPending(db, user, 'grant', pending.session_token),
+        grant: await newPending(c, db, user, 'grant', pending.session_token),
       }
     return { session: await newSession(db, user) }
   })
@@ -480,10 +511,10 @@ async function verifyFactor(
       },
       401,
     )
-  setCookie(c, 'pending', '', { ...cookieOptions, maxAge: 0 })
+  setCookie(c, 'pending', '', { ...cookieOptions(c), maxAge: 0 })
   if (outcome.grant)
     setCookie(c, 'security_grant', outcome.grant, {
-      ...cookieOptions,
+      ...cookieOptions(c),
       maxAge: 300,
     })
   if (outcome.session) sessionCookie(c, outcome.session)
@@ -514,10 +545,11 @@ auth.get('/security', requireUser, async (c) => {
     email: user.email,
     emailAvailable: smtpAvailable(),
     totpAvailable: totpAvailable(),
+    passkeyAvailable: !!relyingParty(browserOrigin(c)),
     passkeys: (
       await pool.query(
-        'SELECT id,name FROM passkeys WHERE user_id=$1 ORDER BY name,id',
-        [user.id],
+        'SELECT id,name,COALESCE(rp_id,$2) AS "rpId" FROM passkeys WHERE user_id=$1 ORDER BY name,id',
+        [user.id, rpID],
       )
     ).rows,
     recoveryCodesRemaining: Number(
@@ -552,6 +584,7 @@ auth.post('/security/reauth', async (c) => {
       user,
       needsFactor,
       value: await newPending(
+        c,
         db,
         user,
         needsFactor ? 'reauth' : 'grant',
@@ -564,11 +597,11 @@ auth.post('/security/reauth', async (c) => {
     c,
     outcome.needsFactor ? 'pending' : 'security_grant',
     outcome.value,
-    { ...cookieOptions, maxAge: 300 },
+    { ...cookieOptions(c), maxAge: 300 },
   )
   return c.json(
     outcome.needsFactor
-      ? result(outcome.user)
+      ? await result(outcome.user, c)
       : ({ status: 'authenticated' } satisfies AuthenticationResult),
   )
 })
@@ -590,6 +623,7 @@ async function securityUser(db: PoolClient, c: Context<Env>) {
     !user ||
     !grant ||
     grant.version !== user.security_version ||
+    grant.data.origin !== browserOrigin(c) ||
     grant.password_hash !== user.password_hash ||
     grant.session_token !== sessionHash(c) ||
     !(
@@ -623,8 +657,8 @@ async function finishChange(db: PoolClient, user: any) {
 }
 function changed(c: Context, outcome: { session: string; codes?: string[] }) {
   sessionCookie(c, outcome.session)
-  setCookie(c, 'security_grant', '', { ...cookieOptions, maxAge: 0 })
-  setCookie(c, 'factor_enrollment', '', { ...cookieOptions, maxAge: 0 })
+  setCookie(c, 'security_grant', '', { ...cookieOptions(c), maxAge: 0 })
+  setCookie(c, 'factor_enrollment', '', { ...cookieOptions(c), maxAge: 0 })
   return c.json({ ok: true, recoveryCodes: outcome.codes })
 }
 auth.post('/security/enroll', async (c) => {
@@ -648,7 +682,7 @@ auth.post('/security/enroll', async (c) => {
           message: 'Configure SMTP before enabling Email 2FA.',
         })
       await emailLimit(db, user.id)
-      const value = await newPending(db, user, 'email', sessionHash(c)),
+      const value = await newPending(c, db, user, 'email', sessionHash(c)),
         code = emailCode()
       try {
         await sendEmailCode(body.email, code)
@@ -657,23 +691,36 @@ auth.post('/security/enroll', async (c) => {
       }
       await db.query('UPDATE auth_pending SET data=$2 WHERE token=$1', [
         digest(value),
-        JSON.stringify({ email: body.email, hash: codeHash(code, value) }),
+        JSON.stringify({
+          email: body.email,
+          hash: codeHash(code, value),
+          origin: browserOrigin(c),
+        }),
       ])
       return { value, sent: true }
     }
     if (body.method === 'totp') {
       const totp = newTotp(user.username)
-      const value = await newPending(db, user, 'totp', sessionHash(c), {
+      const value = await newPending(c, db, user, 'totp', sessionHash(c), {
         secret: encryptSecret(totp.secret.base32),
       })
       return { value, secret: totp.secret.base32, uri: totp.toString() }
     }
+    const requestRP = relyingParty(browserOrigin(c))
+    if (!requestRP)
+      throw new HTTPException(400, {
+        message:
+          'Passkey enrollment requires HTTPS on a domain name or localhost. Use TOTP or Email for direct-IP access.',
+      })
     const keys = (
-      await db.query('SELECT id FROM passkeys WHERE user_id=$1', [user.id])
+      await db.query(
+        'SELECT id FROM passkeys WHERE user_id=$1 AND COALESCE(rp_id,$2)=$3',
+        [user.id, rpID, requestRP],
+      )
     ).rows
     const options = await generateRegistrationOptions({
       rpName: 'Kloud',
-      rpID,
+      rpID: requestRP,
       userName: user.username,
       userID: new TextEncoder().encode(user.id),
       attestationType: 'none',
@@ -683,15 +730,16 @@ auth.post('/security/enroll', async (c) => {
         userVerification: 'required',
       },
     })
-    const value = await newPending(db, user, 'passkey', sessionHash(c), {
+    const value = await newPending(c, db, user, 'passkey', sessionHash(c), {
       challenge: options.challenge,
       name: body.name ?? 'Passkey',
+      rp_id: requestRP,
     })
     return { value, options }
   })
   if ('error' in outcome) return c.json({ error: outcome.error }, 503)
   setCookie(c, 'factor_enrollment', outcome.value!, {
-    ...cookieOptions,
+    ...cookieOptions(c),
     maxAge: 300,
   })
   const { value: _value, ...response } = outcome
@@ -718,7 +766,8 @@ auth.post('/security/confirm', async (c) => {
       !pending ||
       pending.version !== user.security_version ||
       pending.password_hash !== user.password_hash ||
-      pending.session_token !== sessionHash(c)
+      pending.session_token !== sessionHash(c) ||
+      pending.data.origin !== browserOrigin(c)
     )
       return null
     await db.query(
@@ -748,15 +797,15 @@ auth.post('/security/confirm', async (c) => {
         const verification = await verifyRegistrationResponse({
           response: body.response as unknown as RegistrationResponseJSON,
           expectedChallenge: pending.data.challenge,
-          expectedOrigin: publicOrigin,
-          expectedRPID: rpID,
+          expectedOrigin: pending.data.origin,
+          expectedRPID: pending.data.rp_id,
           requireUserVerification: true,
         })
         if (!verification.verified || !verification.registrationInfo)
           return null
         const key = verification.registrationInfo.credential
         await db.query(
-          'INSERT INTO passkeys(id,user_id,public_key,counter,transports,name) VALUES($1,$2,$3,$4,$5,$6)',
+          'INSERT INTO passkeys(id,user_id,public_key,counter,transports,name,rp_id) VALUES($1,$2,$3,$4,$5,$6,$7)',
           [
             key.id,
             user.id,
@@ -764,6 +813,7 @@ auth.post('/security/confirm', async (c) => {
             key.counter,
             JSON.stringify(key.transports ?? []),
             pending.data.name,
+            pending.data.rp_id,
           ],
         )
       } catch {
@@ -833,7 +883,7 @@ auth.post('/logout', async (c) => {
     'security_grant',
     'factor_enrollment',
   ])
-    setCookie(c, name, '', { ...cookieOptions, maxAge: 0 })
+    setCookie(c, name, '', { ...cookieOptions(c), maxAge: 0 })
   return c.json({ ok: true })
 })
 auth.get('/me', requireUser, (c) => c.json(c.get('user')))

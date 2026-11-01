@@ -347,13 +347,26 @@ function AccountSecurity() {
             Passkeys{' '}
             {security.methods.includes('passkey') ? '— enabled' : '— disabled'}
           </h2>
+          {security.passkeyAvailable === false && (
+            <p className="text-muted-foreground">
+              Passkeys require HTTPS on a domain name or localhost. Enable TOTP
+              or Email, or save recovery codes, for direct-IP access.
+            </p>
+          )}
           <ul className="space-y-2">
             {security.passkeys.map((key) => (
               <li
                 key={key.id}
                 className="flex items-center justify-between gap-3"
               >
-                <span>{key.name}</span>
+                <span>
+                  {key.name}
+                  {key.rpId && (
+                    <small className="ml-2 text-muted-foreground">
+                      {key.rpId}
+                    </small>
+                  )}
+                </span>
                 <Button
                   disabled={disabled}
                   onClick={() =>
@@ -382,7 +395,10 @@ function AccountSecurity() {
               placeholder="Personal device"
             />
           </Label>
-          <Button disabled={disabled} onClick={() => void enroll('passkey')}>
+          <Button
+            disabled={disabled || security.passkeyAvailable === false}
+            onClick={() => void enroll('passkey')}
+          >
             Add passkey
           </Button>
         </Card>

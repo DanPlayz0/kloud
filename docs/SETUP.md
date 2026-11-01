@@ -177,10 +177,12 @@ reconnects, and revocation.
 
 ## Production
 
-Set `PUBLIC_ORIGIN` to the exact HTTPS website origin without a trailing slash,
-`WEBAUTHN_RP_ID` to its hostname, and `DATABASE_URL` to PostgreSQL. These settings
-are API runtime settings, not frontend build variables. Keep the RP ID stable so
-existing passkeys continue to work. HTTP is supported only for localhost testing.
+Set `PUBLIC_ORIGIN` to the canonical website origin without a trailing slash,
+`ALLOWED_ORIGINS` to additional exact localhost, IP, or domain origins, and
+`DATABASE_URL` to PostgreSQL. These are API runtime settings, not frontend build
+variables. Preserve the original `WEBAUTHN_RP_ID` during migration so existing
+passkeys retain their scope. See [login addresses and direct management access](AUTHENTICATION.md#login-addresses-and-direct-management-access)
+for tunnel setup, port 8080 recovery access, cookie behavior, and passkey limits.
 Terminate TLS at your reverse proxy and forward WebSocket upgrades to the website;
 the included Nginx configuration forwards upgrades through `/api/` to the API.
 

@@ -83,6 +83,7 @@ export function FactorVerification({
             disabled={
               busy ||
               (value === 'email' && !challenge.emailAvailable) ||
+              (value === 'passkey' && challenge.passkeyAvailable === false) ||
               (value === 'totp' && !challenge.totpAvailable)
             }
             onClick={() => void choose(value)}
@@ -145,6 +146,14 @@ export function FactorVerification({
           )}
         </form>
       )}
+      {challenge.methods.includes('passkey') &&
+        challenge.passkeyAvailable === false && (
+          <p className="text-muted-foreground">
+            No passkey is available for this address. Passkeys require HTTPS on
+            their registered domain or localhost. Use another enabled method or
+            a recovery code.
+          </p>
+        )}
       <ErrorMessage message={error} />
       <Button type="button" disabled={busy} onClick={onCancel}>
         Start again

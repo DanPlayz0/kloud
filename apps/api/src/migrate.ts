@@ -1,4 +1,5 @@
 import { pool, transaction } from './db.js'
+import { rpID } from './security.js'
 export const migration = `
 CREATE TABLE users (id uuid PRIMARY KEY, username text UNIQUE NOT NULL, password_hash text, admin boolean NOT NULL DEFAULT false, disabled boolean NOT NULL DEFAULT false);
 CREATE TABLE projects (slug text PRIMARY KEY CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'), name text NOT NULL);
@@ -265,6 +266,16 @@ export async function migrate() {
         DELETE FROM setup_challenges;
         INSERT INTO migrations(version) VALUES(11);
       `)
+    }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=12'))
+        .rowCount
+    ) {
+      await db.query('ALTER TABLE passkeys ADD COLUMN rp_id text')
+      // Preserve the RP configured for existing credentials before adding origins.
+      await db.query('UPDATE passkeys SET rp_id=$1', [rpID])
+      await db.query('DELETE FROM auth_pending')
+      await db.query('INSERT INTO migrations(version) VALUES(12)')
     }
   })
 }

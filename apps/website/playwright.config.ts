@@ -21,6 +21,7 @@ export default defineConfig({
       env: {
         DATABASE_URL: process.env.E2E_DATABASE_URL,
         PUBLIC_ORIGIN: 'http://localhost:5174',
+        ALLOWED_ORIGINS: 'http://127.0.0.1:5174,https://kloud.example.test',
         WEBAUTHN_RP_ID: 'localhost',
         PORT: '3100',
         PLATFORM_ENCRYPTION_KEY: 'ab'.repeat(32),
@@ -29,7 +30,7 @@ export default defineConfig({
       reuseExistingServer: false,
     },
     {
-      command: 'pnpm dev --port 5174 --strictPort',
+      command: 'pnpm dev --host 127.0.0.1 --port 5174 --strictPort',
       url: 'http://localhost:5174/login',
       env: { API_PROXY_TARGET: 'http://localhost:3100' },
       reuseExistingServer: false,

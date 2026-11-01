@@ -19,6 +19,8 @@ test(
     const url = new URL(process.env.TEST_DATABASE_URL!)
     url.searchParams.set('options', `-c search_path=${schema}`)
     process.env.DATABASE_URL = url.href
+    process.env.ALLOWED_ORIGINS =
+      'http://localhost:8080,http://127.0.0.1:8080,http://203.0.113.10:8080,https://kloud.example.com'
     process.env.AUTH_ENCRYPTION_KEY = 'ab'.repeat(32)
     process.env.SMTP_HOST = '127.0.0.1'
     process.env.SMTP_FROM = 'kloud@example.com'
@@ -55,7 +57,7 @@ test(
       await import('./auth-factors.js')
     const password = 'a long secure test password'
     const lastCode = () => messages.at(-1)!.match(/code is (\d{6})/)![1]!
-    const client = () => {
+    const client = (origin = publicOrigin) => {
       const jar = new Map<string, string>()
       return {
         jar,
@@ -67,7 +69,7 @@ test(
           const response = await app.request(path, {
             method,
             headers: {
-              origin: publicOrigin,
+              origin,
               'content-type': 'application/json',
               cookie: [...jar].map(([k, v]) => `${k}=${v}`).join('; '),
             },
@@ -174,6 +176,98 @@ test(
             (await owner.request('/auth/security/remove', { method: 'all' }))
               .status,
             401,
+          )
+        },
+      )
+      await t.test(
+        'password login works on localhost, direct IP and the tunnel with per-address cookies',
+        async () => {
+          for (const origin of [
+            'http://localhost:8080',
+            'http://127.0.0.1:8080',
+            'http://203.0.113.10:8080',
+            'https://kloud.example.com',
+          ]) {
+            const c = client(origin)
+            const response = await c.request('/auth/password', {
+              username: 'owner',
+              password,
+            })
+            assert.equal(response.status, 200, await response.clone().text())
+            assert.equal((await response.json()).status, 'authenticated')
+            const cookie = response.headers
+              .getSetCookie()
+              .find((value) => value.startsWith('session='))!
+            assert.equal(
+              cookie.includes('; Secure'),
+              origin.startsWith('https:'),
+            )
+            assert.match(cookie, /HttpOnly/)
+            assert.match(cookie, /SameSite=Strict/)
+            assert.doesNotMatch(cookie, /Domain=/)
+            assert.equal((await c.request('/auth/me')).status, 200)
+            const reauth = await c.request('/auth/security/reauth', {
+              password,
+            })
+            assert.equal(reauth.status, 200)
+            assert.equal(
+              reauth.headers
+                .getSetCookie()
+                .some(
+                  (value) =>
+                    value.startsWith('security_grant=') &&
+                    value.includes('; Secure'),
+                ),
+              origin.startsWith('https:'),
+            )
+            if (origin.includes('203.0.113')) {
+              assert.equal(
+                (await (await c.request('/auth/security')).json())
+                  .passkeyAvailable,
+                false,
+              )
+              assert.equal(
+                (
+                  await c.request('/auth/security/enroll', {
+                    method: 'passkey',
+                  })
+                ).status,
+                400,
+              )
+            }
+          }
+          const evil = client('https://attacker.example')
+          assert.equal(
+            (
+              await evil.request('/auth/password', {
+                username: 'owner',
+                password,
+              })
+            ).status,
+            403,
+          )
+          const missing = await app.request('/auth/password', {
+            method: 'POST',
+            headers: {
+              'x-kloud-origin': 'https://kloud.example.com',
+              'x-forwarded-proto': 'https',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ username: 'owner', password }),
+          })
+          assert.equal(missing.status, 403)
+          const direct = client('http://203.0.113.10:8080')
+          await direct.request('/auth/password', {
+            username: 'owner',
+            password,
+          })
+          const invite = await direct.request('/admin/users', {
+            username: 'direct-invitation',
+          })
+          assert.equal(invite.status, 201)
+          assert.match(
+            (await invite.json()).enrollmentUrl,
+            /^http:\/\/203\.0\.113\.10:8080\/enroll#/,
           )
         },
       )
@@ -384,6 +478,57 @@ test(
           )
           assert.equal((await c.request('/auth/me')).status, 401)
           rejectMail = false
+        },
+      )
+      await t.test(
+        'pending verification and security grants cannot move between configured origins',
+        async () => {
+          const local = client('http://localhost:8080'),
+            remote = client('https://kloud.example.com')
+          const r = await local.request('/auth/password', {
+            username: 'owner',
+            password,
+          })
+          assert.equal((await r.json()).status, 'second_factor_required')
+          for (const [key, value] of local.jar) remote.jar.set(key, value)
+          assert.equal(
+            (
+              await remote.request('/auth/factor/verify', {
+                method: 'recovery',
+                code: recovery[0],
+              })
+            ).status,
+            401,
+          )
+          assert.equal(
+            (
+              await local.request('/auth/factor/verify', {
+                method: 'recovery',
+                code: recovery.shift(),
+              })
+            ).status,
+            200,
+          )
+          const reauthResponse = await local.request('/auth/security/reauth', {
+            password,
+          })
+          assert.equal(reauthResponse.status, 200)
+          assert.equal(
+            (
+              await local.request('/auth/factor/verify', {
+                method: 'recovery',
+                code: recovery.shift(),
+              })
+            ).status,
+            200,
+          )
+          for (const [key, value] of local.jar) remote.jar.set(key, value)
+          assert.equal(
+            (await remote.request('/auth/security/enroll', { method: 'totp' }))
+              .status,
+            401,
+          )
+          await pool.query('DELETE FROM login_attempts')
         },
       )
       await t.test(

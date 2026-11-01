@@ -7,7 +7,7 @@ import { pool } from './db.js'
 import { requireUser, currentUser, type Env } from './auth.js'
 import { runtimeRequestSchema } from '@kloud/protocol/platform'
 import { connectorRpc } from './connector-rpc.js'
-import { digest, token, publicOrigin } from './security.js'
+import { digest, token, browserOrigin } from './security.js'
 import { clearFactors } from './auth-factors.js'
 import {
   hasServer,
@@ -179,7 +179,10 @@ dashboard.post('/admin/users', async (c) => {
       [digest(invitation), id],
     )
   })
-  return c.json({ enrollmentUrl: `${publicOrigin}/enroll#${invitation}` }, 201)
+  return c.json(
+    { enrollmentUrl: `${browserOrigin(c)}/enroll#${invitation}` },
+    201,
+  )
 })
 dashboard.put('/admin/users/:id', async (c) => {
   const id = uuid.parse(c.req.param('id'))
@@ -279,7 +282,7 @@ dashboard.post('/admin/users/:id/enrollment', async (c) => {
       [digest(invitation), id],
     )
   })
-  return c.json({ enrollmentUrl: `${publicOrigin}/enroll#${invitation}` })
+  return c.json({ enrollmentUrl: `${browserOrigin(c)}/enroll#${invitation}` })
 })
 dashboard.get('/admin/connectors', async (c) =>
   c.json(

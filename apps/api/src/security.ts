@@ -5,6 +5,8 @@ import {
   createHash,
 } from 'node:crypto'
 import { promisify } from 'node:util'
+import { isIP } from 'node:net'
+import type { Context } from 'hono'
 const scrypt = promisify(scryptCallback)
 export const token = () => randomBytes(32).toString('base64url')
 export const digest = (value: string) =>
@@ -20,28 +22,74 @@ export async function verifyPassword(value: string, hash: string) {
   const expected = Buffer.from(encoded, 'hex')
   return actual.length === expected.length && timingSafeEqual(actual, expected)
 }
-export const publicOrigin = process.env.PUBLIC_ORIGIN ?? 'http://localhost:5173'
-export const rpID = process.env.WEBAUTHN_RP_ID ?? new URL(publicOrigin).hostname
-const originURL = new URL(publicOrigin)
-if (
-  !['http:', 'https:'].includes(originURL.protocol) ||
-  originURL.origin !== publicOrigin ||
-  originURL.username ||
-  originURL.password
+export function parseOrigin(value: string): string {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error(
+      'Origins must be exact HTTP(S) origins without paths, wildcards, or credentials',
+    )
+  }
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.origin !== value ||
+    url.username ||
+    url.password ||
+    url.hostname.includes('*')
+  )
+    throw new Error(
+      'Origins must be exact HTTP(S) origins without paths, wildcards, or credentials',
+    )
+  return value
+}
+export function originConfiguration(primary: string, extra = '') {
+  return new Set([
+    parseOrigin(primary),
+    ...extra
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .map(parseOrigin),
+  ])
+}
+export const publicOrigin = parseOrigin(
+  process.env.PUBLIC_ORIGIN ?? 'http://localhost:5173',
 )
+export const allowedOrigins = originConfiguration(
+  publicOrigin,
+  process.env.ALLOWED_ORIGINS,
+)
+export const isAllowedOrigin = (origin: string | undefined): origin is string =>
+  !!origin && allowedOrigins.has(origin)
+// Only an explicitly configured browser origin determines cookie security; forwarded
+// headers and Host can be supplied by an untrusted client or changed by a proxy.
+export function browserOrigin(c: Context) {
+  const origin = c.req.header('origin')
+  if (isAllowedOrigin(origin)) return origin
+  // Same-origin GETs omit Origin. The UI supplies its origin for read-only
+  // capability reporting; this header never authorizes a mutation.
+  const hint = ['GET', 'HEAD'].includes(c.req.method)
+    ? c.req.header('x-kloud-origin')
+    : undefined
+  return isAllowedOrigin(hint) ? hint : publicOrigin
+}
+export const secureCookies = (c: Context) =>
+  browserOrigin(c).startsWith('https:')
+export const rpID = process.env.WEBAUTHN_RP_ID || new URL(publicOrigin).hostname
+if (process.env.NODE_ENV === 'production' && !process.env.PUBLIC_ORIGIN)
   throw new Error(
-    'PUBLIC_ORIGIN must be an HTTP(S) origin without a path or credentials',
+    'Production requires PUBLIC_ORIGIN; configure additional access addresses in ALLOWED_ORIGINS',
   )
-if (rpID !== originURL.hostname && !originURL.hostname.endsWith(`.${rpID}`))
-  throw new Error(
-    'WEBAUTHN_RP_ID must match the public hostname or a parent domain',
+export function relyingParty(origin: string, preferred = rpID): string | null {
+  const url = new URL(origin),
+    host = url.hostname
+  if (
+    isIP(host.replace(/^\[|\]$/g, '')) ||
+    (url.protocol !== 'https:' &&
+      host !== 'localhost' &&
+      !host.endsWith('.localhost'))
   )
-if (
-  process.env.NODE_ENV === 'production' &&
-  (!process.env.PUBLIC_ORIGIN ||
-    !process.env.WEBAUTHN_RP_ID ||
-    (!publicOrigin.startsWith('https://') &&
-      new URL(publicOrigin).hostname !== 'localhost'))
-) {
-  throw new Error('Production requires HTTPS PUBLIC_ORIGIN and WEBAUTHN_RP_ID')
+    return null
+  return host === preferred || host.endsWith(`.${preferred}`) ? preferred : host
 }

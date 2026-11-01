@@ -13,7 +13,7 @@ import {
   serviceGrantsSchema,
   normalizeServiceGrants,
 } from './service-permissions.js'
-import { digest, token, publicOrigin } from './security.js'
+import { digest, token, browserOrigin } from './security.js'
 import {
   administratorState,
   demandProjectAdmin,
@@ -166,7 +166,7 @@ projectPermissions.post('/projects/:project/access/members', async (c) => {
           `INSERT INTO invitations(token,user_id,expires) VALUES($1,$2,now()+interval '24 hours')`,
           [digest(invitation), user.id],
         )
-        enrollmentUrl = `${publicOrigin}/enroll#${invitation}`
+        enrollmentUrl = `${browserOrigin(c)}/enroll#${invitation}`
       }
       if (user.disabled)
         throw new HTTPException(409, {

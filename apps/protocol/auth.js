@@ -24,6 +24,7 @@ export const authenticationResultSchema = z.discriminatedUnion('status', [
     methods: z.array(factorMethodSchema),
     emailAvailable: z.boolean(),
     totpAvailable: z.boolean(),
+    passkeyAvailable: z.boolean().optional(),
   }),
 ])
 export const securityStatusSchema = z.object({
@@ -31,6 +32,9 @@ export const securityStatusSchema = z.object({
   email: z.string().nullable(),
   emailAvailable: z.boolean(),
   totpAvailable: z.boolean(),
-  passkeys: z.array(z.object({ id: z.string(), name: z.string() })),
+  passkeyAvailable: z.boolean().optional(),
+  passkeys: z.array(
+    z.object({ id: z.string(), name: z.string(), rpId: z.string().optional() }),
+  ),
   recoveryCodesRemaining: z.number(),
 })
