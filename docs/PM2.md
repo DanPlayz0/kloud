@@ -48,8 +48,8 @@ docker run -d --name kloud-connector --init \
 
 Use the host PM2 user's numeric UID/GID. Mount the PM2 home directory, rather
 than individual sockets, so socket replacement after daemon restart works.
-The directory contains `rpc.sock` and `pub.sock`; this connector uses only
-`rpc.sock` and reads recent logs from files. A read-only filesystem mount permits
+The directory contains `rpc.sock` for inventory and actions, and `pub.sock` for
+live stdout/stderr events. A read-only filesystem mount permits
 connecting to a Unix socket; the PM2 socket still authorizes lifecycle changes.
 No host PID namespace, privileged mode, inbound port, or PM2 network endpoint is
 needed.
@@ -99,8 +99,8 @@ hosts without Docker socket access, use a separate service matching the
    individual PM2 apps or all PM2 apps in the project. New members have no PM2
    access by default. Other grants imply View; Manage does not include Delete or
    Logs. Project administrators have all PM2 permissions.
-4. Open Compute / PM2. Expand applications to inspect workers, or open the app
-   for logs and lifecycle controls.
+4. Open Compute / PM2 and click an application row to inspect workers, logs,
+   and lifecycle controls.
 
 Assignments and grants survive temporary disappearance and recreation with the
 same connector, namespace, and name. Moving or unassigning an app removes its
@@ -118,18 +118,35 @@ disconnect can leave an unknown outcome: inspect host state before retrying.
 
 ## Logs and troubleshooting
 
-The viewer replaces its recent-output window every 1.5 seconds, up to 200 lines
-and 48 KB, with stdout/stderr and worker filters. It is a bounded recent tail,
-not durable log storage: output between polls may exceed this window. Shared
-worker log files appear once. Pause retains the current window; Resume reads the
-latest window. Rotation and truncation are picked up on the next read.
-The all-worker view shares its read budget across up to 200 distinct files; select
-an individual worker for a larger tail when an application has many workers.
+The default **Combined live** view captures stdout and stderr from the PM2 event
+bus over one `pub.sock` subscription. Events stay in the order PM2 publishes them,
+across both streams and all workers. Each chunk identifies its stream and worker;
+multiline errors retain their context. This is PM2 arrival order, not a guarantee
+of exact JavaScript call order across separate OS streams or processes.
+
+Capture starts when the connector collects PM2 inventory, before a viewer opens.
+The connector keeps a bounded in-memory host buffer (up to 4 MiB / 10,000 chunks;
+individual chunks are capped at 12 KB). The browser receives the latest window
+over SSE every 1.5 seconds, up to 200 lines / 48 KB. Repeated windows replace the
+display rather than duplicating entries. Worker selection filters this ordered
+feed. Pause retains the current display; Resume reads the latest window.
+
+This is not durable log storage. High-volume output can exceed retention, and
+connector or PM2 disconnections clear the live buffer. The connector reconnects
+on the next collection or log request. The **stdout file** and **stderr file**
+views retain access to older file tails, including rotation/truncation handling.
+Historical separate files cannot reliably reconstruct combined ordering without
+timestamps, so they are never silently substituted for the ordered live view.
+File tails deduplicate shared worker files and share a read budget across up to
+200 distinct files. Upgrade the API, website, and connector together for the new
+`combined` stream.
 
 - No inventory: check `PM2_ENABLED`, `PM2_HOME`, discovery, and the existing
   daemon's `rpc.sock`. Check loopback `/health` for `pm2Reachable`.
 - Apps missing from a project: assign them in inventory and grant View.
-- Logs unavailable: verify log directory mounts at identical absolute paths,
+- Live logs unavailable: verify `pub.sock` is mounted with the PM2 home and the
+  connector user can connect to it. No log-file mounts are needed for live output.
+- File logs unavailable: verify log directory mounts at identical absolute paths,
   ownership, read permissions, and regular log files. `/dev/null` and special
   files are not tailed. Environment variables and raw PM2 configuration are never
   sent as inventory; application log content is shown to users with Logs access.
@@ -150,8 +167,9 @@ an individual worker for a larger tail when an application has many workers.
 - `POST /projects/:project/pm2/:app/operation`: `{ "action": "restart" }`;
   supports start, stop, restart, reload, delete. Returns per-worker `{ id, ok }`
   results. Failed entries may have unknown outcomes.
-- `GET /projects/:project/pm2/:app/logs?stream=stdout&worker=0`: SSE output
+- `GET /projects/:project/pm2/:app/logs?stream=combined&worker=0`: SSE output
   snapshots `{ output, unavailable }`; an `unavailable` event ends access.
+  `stream` defaults to `combined`; `stdout` and `stderr` select historical file tails.
 - Project member reads and writes include optional `pm2_grants`, an array of
   `{ "capability": "logs", "app": "assignment-uuid" }`; use `app: null` for
   project-wide grants. Omitting `pm2_grants` preserves existing grants.

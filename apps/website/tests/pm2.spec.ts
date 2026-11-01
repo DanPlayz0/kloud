@@ -185,7 +185,7 @@ test('assign PM2 apps, delegate permissions, inspect workers and logs, and manag
   await opener.press('Enter')
   await expect(dialog).toBeVisible()
   await expect(dialog.getByLabel('Log output')).toContainText(
-    'stdout worker all',
+    'combined worker all',
   )
   await dialog
     .getByRole('combobox', { name: 'Log stream' })

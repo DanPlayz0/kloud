@@ -441,7 +441,7 @@ function Pm2LogViewer({
   app: Pm2App
   available: boolean
 }) {
-  const [channel, setChannel] = useState('stdout'),
+  const [channel, setChannel] = useState('combined'),
     [worker, setWorker] = useState(''),
     [paused, setPaused] = useState(false),
     [autoScroll, setAutoScroll] = useState(true)
@@ -469,7 +469,9 @@ function Pm2LogViewer({
       setReceived(true)
       setError(
         data.unavailable
-          ? 'Some log files are unavailable. Check log mounts and permissions on the connector.'
+          ? channel === 'combined'
+            ? 'Live logs are unavailable. Check the PM2 event socket (pub.sock) and reconnect.'
+            : 'Some log files are unavailable. Check log mounts and permissions on the connector.'
           : '',
       )
     }
@@ -495,8 +497,9 @@ function Pm2LogViewer({
             value={channel}
             onChange={(e) => setChannel(e.target.value)}
           >
-            <option value="stdout">stdout</option>
-            <option value="stderr">stderr</option>
+            <option value="combined">Combined live</option>
+            <option value="stdout">stdout file</option>
+            <option value="stderr">stderr file</option>
           </NativeSelect>
         </Label>
         <Label>
@@ -540,16 +543,29 @@ function Pm2LogViewer({
           ? 'Paused'
           : !available
             ? 'Unavailable'
-            : 'Recent output · refreshes every 1.5s'}{' '}
+            : channel === 'combined'
+              ? 'Live stdout + stderr · PM2 arrival order · updates every 1.5s'
+              : 'Recent file output · refreshes every 1.5s'}{' '}
         · up to 200 lines / 48 KB
       </p>
+      {channel === 'combined' && (
+        <p className="text-xs text-muted-foreground">
+          Captured while the connector is connected. Use a file view for older
+          output.
+        </p>
+      )}
       <pre
         ref={log}
         aria-label="Log output"
         tabIndex={0}
         className="h-80 overflow-auto rounded border border-border bg-background p-4 text-xs text-foreground whitespace-pre-wrap break-all"
       >
-        {output || (received ? 'No recent output.' : 'Waiting for logs…')}
+        {output ||
+          (received
+            ? channel === 'combined'
+              ? 'Waiting for new PM2 output…'
+              : 'No recent output.'
+            : 'Waiting for logs…')}
       </pre>
     </section>
   )

@@ -44,7 +44,7 @@ export const pm2OperationSchema = z
   .strict()
 export const pm2LogQuerySchema = z
   .object({
-    stream: z.enum(['stdout', 'stderr']).default('stdout'),
+    stream: z.enum(['combined', 'stdout', 'stderr']).default('combined'),
     worker: z.coerce.number().int().nonnegative().optional(),
   })
   .strict()
@@ -54,7 +54,7 @@ export const pm2RequestSchema = z
     name: label,
     namespace: label,
     action: z.enum([...pm2Actions, 'logs']),
-    stream: z.enum(['stdout', 'stderr']).optional(),
+    stream: z.enum(['combined', 'stdout', 'stderr']).optional(),
     worker: integer.optional(),
   })
   .strict()

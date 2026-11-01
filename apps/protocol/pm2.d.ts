@@ -36,7 +36,7 @@ export interface Pm2Request {
   name: string
   namespace: string
   action: Pm2Action | 'logs'
-  stream?: 'stdout' | 'stderr'
+  stream?: 'combined' | 'stdout' | 'stderr'
   worker?: number
 }
 export interface Pm2Result {
@@ -51,7 +51,7 @@ export const pm2WorkerSchema: z.ZodType<Pm2Worker>
 export const pm2SnapshotSchema: z.ZodType<Pm2Snapshot>
 export const pm2OperationSchema: z.ZodType<{ action: Pm2Action }>
 export const pm2LogQuerySchema: z.ZodType<{
-  stream: 'stdout' | 'stderr'
+  stream: 'combined' | 'stdout' | 'stderr'
   worker?: number
 }>
 export const pm2RequestSchema: z.ZodType<Pm2Request>

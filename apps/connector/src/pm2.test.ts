@@ -10,7 +10,7 @@ import {
   type Pm2Transport,
 } from './pm2.js'
 import { readConfig } from './config.js'
-import { pm2SnapshotSchema } from '@kloud/protocol/pm2'
+import { pm2SnapshotSchema, pm2LogsSchema } from '@kloud/protocol/pm2'
 import { snapshotSchema } from '@kloud/protocol'
 
 const worker = (id: number, name = 'web', namespace = 'default') => ({
@@ -284,4 +284,109 @@ test('missing PM2 home never creates files or launches a daemon', async () => {
   } finally {
     await rm(folder, { recursive: true, force: true })
   }
+})
+
+function liveMock() {
+  const fake = mock()
+  let emit!: (stream: 'stdout' | 'stderr', packet: unknown) => void
+  let disconnect!: () => void
+  let subscriptions = 0
+  const transport: Pm2Transport = {
+    ...fake.transport,
+    async subscribeLogs(receive, disconnected) {
+      subscriptions++
+      emit = receive
+      disconnect = disconnected
+      return disconnected
+    },
+  }
+  return {
+    operations: pm2Operations(transport),
+    subscriptions: () => subscriptions,
+    disconnect: () => disconnect(),
+    emit: (
+      stream: 'stdout' | 'stderr',
+      data: unknown,
+      id = 0,
+      namespace = 'default',
+      name = 'web',
+    ) => emit(stream, { process: { pm_id: id, namespace, name }, data }),
+  }
+}
+const liveRequest = {
+  kind: 'pm2',
+  name: 'web',
+  namespace: 'default',
+  action: 'logs',
+  stream: 'combined',
+}
+
+test('live logs preserve bus order across streams and workers without replay duplicates', async () => {
+  const fake = liveMock()
+  await fake.operations.collect()
+  fake.emit('stdout', 'request started\n')
+  fake.emit('stderr', 'Error: failed\n  at handler\n')
+  fake.emit('stdout', 'request finished\n', 1)
+  fake.emit('stderr', 'another namespace\n', 2, 'other')
+  fake.emit('stdout', 'another app\n', 0, 'default', 'other')
+  fake.emit('stdout', { invalid: 'not a string' })
+  const logs = pm2LogsSchema.parse(await fake.operations.execute(liveRequest))
+  assert.equal(logs.unavailable, false)
+  assert.equal(
+    logs.output,
+    '[stdout #0] request started\n[stderr #0] Error: failed\n  at handler\n[stdout #1] request finished\n',
+  )
+  assert.deepEqual(await fake.operations.execute(liveRequest), logs)
+  const selected = pm2LogsSchema.parse(
+    await fake.operations.execute({ ...liveRequest, worker: 1 }),
+  )
+  assert.equal(selected.output, '[stdout #1] request finished\n')
+  assert.equal(fake.subscriptions(), 1)
+  fake.operations.close()
+})
+
+test('live log buffers remain bounded, clear connection gaps, and recover after close', async () => {
+  const fake = liveMock()
+  await fake.operations.collect()
+  fake.emit('stdout', 'old context\n')
+  for (let i = 0; i < 11000; i++)
+    fake.emit('stderr', `${i}: ${'界'.repeat(200)}\n`)
+  const logs = pm2LogsSchema.parse(await fake.operations.execute(liveRequest))
+  assert.ok(Buffer.byteLength(logs.output) <= 48000)
+  assert.ok(logs.output.split('\n').length <= 200)
+  assert.ok(logs.output.includes('10999:'))
+  assert.ok(!logs.output.includes('old context'))
+  fake.disconnect()
+  const reconnected = await fake.operations.execute(liveRequest)
+  assert.deepEqual(reconnected, { output: '', unavailable: false })
+  assert.equal(fake.subscriptions(), 2)
+  fake.emit('stdout', 'fresh context\n')
+  fake.operations.close()
+  // Late events on a closed subscription must not survive into a new session.
+  fake.emit('stderr', 'late output\n')
+  await fake.operations.collect()
+  assert.deepEqual(await fake.operations.execute(liveRequest), {
+    output: '',
+    unavailable: false,
+  })
+  fake.emit('stderr', 'new session\n')
+  assert.match(
+    pm2LogsSchema.parse(await fake.operations.execute(liveRequest)).output,
+    /new session/,
+  )
+  fake.operations.close()
+})
+
+test('an unavailable log bus does not fall back to unordered files or break inventory', async () => {
+  const fake = mock()
+  fake.transport.subscribeLogs = async () => {
+    throw new Error('missing pub.sock')
+  }
+  const operations = pm2Operations(fake.transport)
+  assert.equal((await operations.collect()).length, 3)
+  assert.deepEqual(await operations.execute(liveRequest), {
+    output: '',
+    unavailable: true,
+  })
+  operations.close()
 })

@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 import { pm2Operations, socketTransport } from './pm2.js'
 
 const require = createRequire(import.meta.url)
@@ -17,7 +18,7 @@ async function setup(home: string) {
   const script = join(home, 'fixture.cjs')
   await writeFile(
     script,
-    "console.log('pm2-live-stdout'); console.error('pm2-live-stderr'); setInterval(() => console.log('heartbeat'), 500)",
+    "console.log('pm2-live-stdout'); console.error('pm2-live-stderr'); setInterval(() => { console.log('context-before-error'); setTimeout(() => console.error('context-error'), 50) }, 500)",
   )
   const run = (...args: string[]) =>
     execFileSync(process.execPath, [cli, ...args], {
@@ -81,6 +82,29 @@ test(
         stream: 'stderr',
       })
       assert.ok('output' in err && err.output.includes('pm2-live-stderr'))
+      await delay(1200)
+      const combined = await operations.execute({
+        kind: 'pm2',
+        name: 'fork-app',
+        namespace: 'test',
+        action: 'logs',
+        stream: 'combined',
+      })
+      assert.ok('output' in combined && !combined.unavailable)
+      assert.match(
+        combined.output,
+        /\[stdout #\d+\] context-before-error\n\[stderr #\d+\] context-error/,
+      )
+      assert.deepEqual(
+        await operations.execute({
+          kind: 'pm2',
+          name: 'fork-app',
+          namespace: 'test',
+          action: 'logs',
+          stream: 'combined',
+        }),
+        combined,
+      )
       for (const name of ['fork-app', 'cluster-app']) {
         for (const action of ['stop', 'start', 'restart', 'reload']) {
           const result = await request(name, action)

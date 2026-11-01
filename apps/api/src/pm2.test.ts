@@ -50,7 +50,7 @@ test('PM2 operations cannot accept arbitrary command, path, or script fields', (
     false,
   )
   assert.deepEqual(pm2LogQuerySchema.parse({ worker: '0' }), {
-    stream: 'stdout',
+    stream: 'combined',
     worker: 0,
   })
 })

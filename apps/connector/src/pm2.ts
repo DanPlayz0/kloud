@@ -11,6 +11,10 @@ import {
 
 export interface Pm2Transport {
   call(method: string, args: unknown, timeout?: number): Promise<any>
+  subscribeLogs?(
+    receive: (stream: 'stdout' | 'stderr', packet: unknown) => void,
+    disconnected: () => void,
+  ): Promise<() => void>
   close(): void
 }
 
@@ -22,6 +26,47 @@ export function socketTransport(home: string): Pm2Transport {
   const active = new Set<() => void>()
   let generation = 0
   return {
+    async subscribeLogs(receive, disconnected) {
+      const version = generation
+      const path = join(home, 'pub.sock')
+      if (!(await stat(path)).isSocket() || generation !== version)
+        throw new Error('PM2 log socket unavailable')
+      return new Promise<() => void>((resolve, reject) => {
+        const bus = axon.socket('sub-emitter')
+        // Manage reconnection ourselves so a replaced socket is revalidated.
+        bus.sock.set('retry timeout', 0)
+        let done = false
+        let connected = false
+        const stop = () => {
+          if (done) return
+          done = true
+          clearTimeout(timer)
+          active.delete(stop)
+          bus.close()
+          if (connected) disconnected()
+          else reject(new Error('PM2 log socket unavailable'))
+        }
+        const timer = setTimeout(stop, 10000)
+        active.add(stop)
+        bus.sock.on('error', stop)
+        bus.sock.on('socket error', stop)
+        bus.sock.on('close', stop)
+        bus.sock.once('connect', () => {
+          if (done) return bus.close()
+          if (generation !== version) return stop()
+          connected = true
+          clearTimeout(timer)
+          resolve(stop)
+        })
+        bus.on('log:out', (packet: unknown) => {
+          if (!done) receive('stdout', packet)
+        })
+        bus.on('log:err', (packet: unknown) => {
+          if (!done) receive('stderr', packet)
+        })
+        bus.connect(path)
+      })
+    },
     async call(method, args, timeout = 10000) {
       const version = generation
       const path = join(home, 'rpc.sock')
@@ -122,6 +167,88 @@ async function tail(path: string, limit: number) {
 export function pm2Operations(transport: Pm2Transport) {
   const locks = new Set<string>()
   let generation = 0
+  // A single subscription preserves PM2 bus order across both output channels.
+  // Retention is bounded across the whole host, including very noisy apps.
+  const logs: {
+    name: string
+    namespace: string
+    worker: number
+    output: string
+    bytes: number
+  }[] = []
+  let logBytes = 0
+  let stopLogs: (() => void) | undefined
+  let connectingLogs: Promise<void> | undefined
+  const clearLogs = () => {
+    logs.length = 0
+    logBytes = 0
+  }
+  const connectLogs = () => {
+    if (stopLogs) return Promise.resolve()
+    if (connectingLogs) return connectingLogs
+    if (!transport.subscribeLogs) return Promise.resolve()
+    const version = generation
+    let connected = true
+    const connecting = transport
+      .subscribeLogs(
+        (stream, raw) => {
+          if (generation !== version || !raw || typeof raw !== 'object') return
+          const packet = raw as {
+            process?: { pm_id?: unknown; name?: unknown; namespace?: unknown }
+            data?: unknown
+          }
+          const process = packet.process
+          if (
+            !process ||
+            !Number.isSafeInteger(process.pm_id) ||
+            Number(process.pm_id) < 0 ||
+            typeof process.name !== 'string' ||
+            !process.name ||
+            process.name.length > 256 ||
+            typeof process.namespace !== 'string' ||
+            !process.namespace ||
+            process.namespace.length > 256 ||
+            typeof packet.data !== 'string'
+          )
+            return
+          // Limit individual chunks before retaining them. Keep multiline errors intact.
+          const data = Buffer.from(packet.data)
+            .subarray(-12000)
+            .toString('utf8')
+          const output = `[${stream} #${process.pm_id}] ${data}${data.endsWith('\n') ? '' : '\n'}`
+          const bytes = Buffer.byteLength(output)
+          logs.push({
+            name: process.name,
+            namespace: process.namespace,
+            worker: Number(process.pm_id),
+            output,
+            bytes,
+          })
+          logBytes += bytes
+          while (logs.length > 10000 || logBytes > 4 * 1024 * 1024)
+            logBytes -= logs.shift()!.bytes
+        },
+        () => {
+          if (generation !== version) return
+          connected = false
+          stopLogs = undefined
+          // Never present output spanning a known connection gap as uninterrupted.
+          clearLogs()
+        },
+      )
+      .then((stop) => {
+        if (generation !== version || !connected) stop()
+        else stopLogs = stop
+      })
+      .catch(() => {
+        // File tails and inventory remain available when the bus cannot connect.
+      })
+      .finally(() => {
+        if (connectingLogs === connecting) connectingLogs = undefined
+      })
+    connectingLogs = connecting
+    return connecting
+  }
   const list = async (timeout = 10000) => {
     const data = await transport.call('getMonitorData', {}, timeout)
     if (!Array.isArray(data) || data.length > 5000)
@@ -137,10 +264,16 @@ export function pm2Operations(transport: Pm2Transport) {
   return {
     close: () => {
       generation++
+      stopLogs?.()
+      stopLogs = undefined
+      connectingLogs = undefined
+      clearLogs()
       transport.close()
     },
     async collect() {
-      return (await list()).map(publicWorker)
+      const workers = (await list()).map(publicWorker)
+      await connectLogs()
+      return workers
     },
     async execute(raw: unknown) {
       const request = pm2RequestSchema.parse(raw)
@@ -160,6 +293,29 @@ export function pm2Operations(transport: Pm2Transport) {
             (p) => request.worker === undefined || p.pm_id === request.worker,
           )
           if (!selected.length) throw new Error('Worker no longer exists')
+          if (request.stream === 'combined') {
+            await connectLogs()
+            if (generation !== version) throw new Error('Disconnected')
+            const ids = new Set(selected.map((p) => p.pm_id))
+            const output = logs
+              .filter(
+                (entry) =>
+                  entry.name === request.name &&
+                  entry.namespace === request.namespace &&
+                  ids.has(entry.worker),
+              )
+              .map((entry) => entry.output)
+              .join('')
+            return {
+              output: Buffer.from(output)
+                .subarray(-47996)
+                .toString('utf8')
+                .split('\n')
+                .slice(-200)
+                .join('\n'),
+              unavailable: !stopLogs,
+            }
+          }
           const files = new Map<string, number[]>()
           for (const p of selected) {
             const path =
