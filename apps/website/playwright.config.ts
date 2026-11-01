@@ -24,6 +24,7 @@ export default defineConfig({
         WEBAUTHN_RP_ID: 'localhost',
         PORT: '3100',
         PLATFORM_ENCRYPTION_KEY: 'ab'.repeat(32),
+        AUTH_ENCRYPTION_KEY: 'cd'.repeat(32),
       },
       reuseExistingServer: false,
     },

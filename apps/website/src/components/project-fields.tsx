@@ -22,7 +22,7 @@ export function ProjectFields() {
           name="name"
           required
           maxLength={100}
-          placeholder="Miki"
+          placeholder="Your project name"
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
@@ -34,7 +34,7 @@ export function ProjectFields() {
           required
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
           maxLength={100}
-          placeholder="miki"
+          placeholder="your-project-slug"
           value={customSlug ?? generatedSlug}
           onChange={(event) => setCustomSlug(event.target.value || undefined)}
         />

@@ -117,7 +117,7 @@ export interface ContainerRow {
     memoryLimit: number | null
   }
 }
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
@@ -132,7 +132,11 @@ export async function api<T = unknown>(
   signal?: AbortSignal,
 ): Promise<T> {
   const timeout =
-    path.includes('/pm2/') && path.endsWith('/operation') ? 40000 : 10000
+    path.includes('/pm2/') && path.endsWith('/operation')
+      ? 40000
+      : ['/auth/factor/challenge', '/auth/security/enroll'].includes(path)
+        ? 30000
+        : 10000
   const response = await fetch(`/api${path}`, {
     method,
     credentials: 'same-origin',

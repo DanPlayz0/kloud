@@ -13,18 +13,23 @@
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@kloud/protocol": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "@hono/zod-openapi": "^1.6.3",
+    "@kloud/protocol": "workspace:*",
     "@simplewebauthn/server": "^14.0.3",
     "hono": "^4.13.14",
+    "nodemailer": "^10.3.1",
+    "otpauth": "^9.5.2",
     "pg": "^8.23.1",
     "ws": "^8.22.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
+    "@types/smtp-server": "^3.5.13",
     "@types/ws": "^8.18.2",
+    "smtp-server": "^3.21.3",
     "tsx": "^4.23.15"
   }
 }

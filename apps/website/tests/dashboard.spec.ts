@@ -12,7 +12,7 @@ const id = randomUUID(),
   invitation = randomBytes(32).toString('base64url')
 const digest = (value: string) =>
   createHash('sha256').update(value).digest('hex')
-const project = `miki-${id.slice(0, 8)}`
+const project = `your-project-slug-${id.slice(0, 8)}`
 let connectorID: string | undefined
 test.beforeAll(async () => {
   await db.query('INSERT INTO users(id,username,admin) VALUES($1,$2,true)', [
@@ -120,7 +120,7 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
   await page
     .getByLabel('Confirm password')
     .fill('a very strong browser test password')
-  await page.getByRole('button', { name: 'Register passkey' }).click()
+  await page.getByRole('button', { name: 'Set password' }).click()
   await expect(
     page.getByRole('heading', { name: 'You’re ready' }),
   ).toBeVisible()
@@ -129,14 +129,35 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
   await page
     .getByLabel('Password', { exact: true })
     .fill('a very strong browser test password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'No projects yet' }),
+  ).toBeVisible()
+  await page.goto('/account/security')
   await page
-    .getByRole('button', { name: 'Continue with password and passkey' })
+    .getByLabel('Current password')
+    .fill('a very strong browser test password')
+  await page
+    .getByRole('button', { name: 'Confirm identity', exact: true })
     .click()
+  await page.getByLabel('Passkey name').fill('Dashboard test device')
+  await page.getByRole('button', { name: 'Add passkey', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Save your recovery codes' }),
+  ).toBeVisible()
+  await context.clearCookies()
+  await page.goto('/login')
+  await page.getByLabel('Username', { exact: true }).fill(username)
+  await page
+    .getByLabel('Password', { exact: true })
+    .fill('a very strong browser test password')
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await page.getByRole('button', { name: 'Passkey', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'No projects yet' }),
   ).toBeVisible()
   await page.getByRole('link', { name: 'Create your first project' }).click()
-  await page.getByLabel('Project name').fill('Miki')
+  await page.getByLabel('Project name').fill('Your project name')
   await page.getByLabel('Project slug').fill(project)
   await page.getByRole('button', { name: 'Create project' }).click()
   await expect(page.getByRole('status')).toContainText('Changes saved')
@@ -146,7 +167,7 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
   await expect(
     page
       .getByRole('listbox', { name: /^Projects(?: and connectors)?$/ })
-      .getByRole('option', { name: /Miki/ }),
+      .getByRole('option', { name: /Your project name/ }),
   ).toBeVisible()
   await page.keyboard.press('Escape')
   await page.getByRole('link', { name: 'Connectors', exact: true }).click()
@@ -209,7 +230,7 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
       .click()
     await page
       .getByRole('listbox', { name: /^Projects(?: and connectors)?$/ })
-      .getByRole('option', { name: /Miki/ })
+      .getByRole('option', { name: /Your project name/ })
       .click()
     await page.getByRole('link', { name: 'Containers', exact: true }).click()
     await expect(page.getByRole('link', { name: /imgen/ })).toBeVisible()
@@ -295,7 +316,7 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
       })
       .click()
     const member = page.getByRole('dialog')
-    await member.getByLabel('Miki', { exact: true }).check()
+    await member.getByLabel('Your project name', { exact: true }).check()
     await member.getByRole('button', { name: 'Save access' }).click()
     await expect(page.getByRole('status')).toContainText('Changes saved')
     await page.locator('.account-button').click()

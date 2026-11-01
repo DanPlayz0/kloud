@@ -8,6 +8,7 @@ import { requireUser, currentUser, type Env } from './auth.js'
 import { runtimeRequestSchema } from '@kloud/protocol/platform'
 import { connectorRpc } from './connector-rpc.js'
 import { digest, token, publicOrigin } from './security.js'
+import { clearFactors } from './auth-factors.js'
 import {
   hasServer,
   demandServer,
@@ -147,7 +148,7 @@ dashboard.get('/admin/users', async (c) =>
   c.json(
     (
       await pool.query(
-        `SELECT u.id,u.username,u.admin,u.capabilities,u.disabled, EXISTS(SELECT 1 FROM passkeys WHERE user_id=u.id) AS enrolled, COALESCE((SELECT json_agg(project_slug ORDER BY project_slug) FROM memberships WHERE user_id=u.id),'[]') AS projects FROM users u ORDER BY username`,
+        `SELECT u.id,u.username,u.admin,u.capabilities,u.disabled, (u.password_hash IS NOT NULL) AS enrolled, COALESCE((SELECT json_agg(project_slug ORDER BY project_slug) FROM memberships WHERE user_id=u.id),'[]') AS projects FROM users u ORDER BY username`,
       )
     ).rows,
   ),
@@ -237,6 +238,11 @@ dashboard.put('/admin/users/:id', async (c) => {
     }
     await protectAdministrators(db, before)
     if (body.disabled) {
+      await db.query(
+        'UPDATE users SET security_version=security_version+1 WHERE id=$1',
+        [id],
+      )
+      await db.query('DELETE FROM auth_pending WHERE user_id=$1', [id])
       await db.query('DELETE FROM sessions WHERE user_id=$1', [id])
       await db.query('DELETE FROM challenges WHERE user_id=$1', [id])
       await db.query('DELETE FROM invitations WHERE user_id=$1', [id])
@@ -267,8 +273,7 @@ dashboard.post('/admin/users/:id/enrollment', async (c) => {
         message: 'Cannot reset a privileged account',
       })
     await db.query('UPDATE users SET password_hash=NULL WHERE id=$1', [id])
-    for (const table of ['sessions', 'passkeys', 'challenges', 'invitations'])
-      await db.query(`DELETE FROM ${table} WHERE user_id=$1`, [id])
+    await clearFactors(db, id)
     await db.query(
       `INSERT INTO invitations(token,user_id,expires) VALUES($1,$2,now()+interval '24 hours')`,
       [digest(invitation), id],

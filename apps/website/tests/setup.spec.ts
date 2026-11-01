@@ -2,9 +2,8 @@ import { test, expect } from '@playwright/test'
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
 
-test('first Server Administrator can register a passkey and sign in', async ({
+test('first Server Administrator can set a password and sign in', async ({
   page,
-  context,
 }) => {
   const require = createRequire(
     new URL('../../api/package.json', import.meta.url),
@@ -18,18 +17,6 @@ test('first Server Administrator can register a passkey and sign in', async ({
       !(await status.json()).required,
       'Requires an empty isolated test database',
     )
-    const cdp = await context.newCDPSession(page)
-    await cdp.send('WebAuthn.enable')
-    await cdp.send('WebAuthn.addVirtualAuthenticator', {
-      options: {
-        protocol: 'ctap2',
-        transport: 'internal',
-        hasResidentKey: true,
-        hasUserVerification: true,
-        isUserVerified: true,
-        automaticPresenceSimulation: true,
-      },
-    })
     await page.goto('/login')
     await page.getByLabel('Username', { exact: true }).fill(username)
     await page
@@ -40,7 +27,7 @@ test('first Server Administrator can register a passkey and sign in', async ({
       .fill('a strong first admin password')
     await page
       .getByRole('button', {
-        name: 'Create Server Administrator and register passkey',
+        name: 'Create Server Administrator',
       })
       .click()
     await expect(
@@ -48,9 +35,7 @@ test('first Server Administrator can register a passkey and sign in', async ({
         exact: false,
       }),
     ).toBeVisible()
-    await page
-      .getByRole('button', { name: 'Continue with password and passkey' })
-      .click()
+    await page.getByRole('button', { name: 'Sign in' }).click()
     await expect(
       page.getByRole('heading', { name: 'No projects yet' }),
     ).toBeVisible()
@@ -83,7 +68,7 @@ test('empty installations prompt for Server Administrator setup and validate pas
   await page.getByLabel('Confirm password').fill('a different strong password')
   await page
     .getByRole('button', {
-      name: 'Create Server Administrator and register passkey',
+      name: 'Create Server Administrator',
     })
     .click()
   await expect(page.getByRole('alert')).toHaveText('Passwords must match')
@@ -98,7 +83,5 @@ test('populated installations show normal sign-in', async ({ page }) => {
     page.getByRole('heading', { name: 'Welcome back' }),
   ).toBeVisible()
   await expect(page.getByLabel('Confirm password')).toHaveCount(0)
-  await expect(
-    page.getByRole('button', { name: 'Continue with password and passkey' }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
 })

@@ -152,7 +152,7 @@ export function Users({
                             onClick={() => {
                               if (
                                 confirm(
-                                  `Reset ${user.username}'s password and passkey enrollment? Existing sessions will end.`,
+                                  `Reset ${user.username}'s password and all second factors? Existing sessions will end.`,
                                 )
                               )
                                 void action(

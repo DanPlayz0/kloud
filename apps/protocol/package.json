@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./auth": {
+      "types": "./auth.d.ts",
+      "default": "./auth.js"
+    },
     "./pm2": {
       "types": "./pm2.d.ts",
       "default": "./pm2.js"

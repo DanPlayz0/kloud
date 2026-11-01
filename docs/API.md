@@ -14,23 +14,36 @@ limited to 64 KiB, apart from the separately bounded WebSocket protocol.
 
 ## Authentication
 
-| Method/path                 | Input                                                | Result                                                                                         |
-| --------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `GET /auth/setup`           | None                                                 | `{ required: boolean }`; true only when no accounts exist                                      |
-| `POST /auth/setup/options`  | `{ username, password }`, password 12–256 characters | Registration options and five-minute `setup` cookie; empty installations only                  |
-| `POST /auth/setup/verify`   | SimpleWebAuthn registration response                 | Atomically creates the first Server Administrator with password and passkey; sign in afterward |
-| `POST /auth/password`       | `{ username, password }`                             | WebAuthn authentication options; sets five-minute `pending` cookie, never a session            |
-| `POST /auth/verify`         | SimpleWebAuthn authentication response               | `{ ok: true }`; sets eight-hour `session` cookie                                               |
-| `POST /auth/enroll/options` | `{ token, password }`, password 12–256 characters    | Registration options and five-minute `enrollment` cookie                                       |
-| `POST /auth/enroll/verify`  | SimpleWebAuthn registration response                 | Atomically consumes invitation, registers passkey and password; sign in afterward              |
-| `POST /auth/logout`         | None                                                 | Deletes current session and clears cookie                                                      |
-| `GET /auth/me`              | Session                                              | `{ id, username, admin, capabilities }`                                                        |
+| Method/path                          | Input                                                | Result                                                                                                                                                      |
+| ------------------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /auth/setup`                    | None                                                 | `{ required: boolean }`                                                                                                                                     |
+| `POST /auth/setup`                   | `{ username, password }`                             | Creates the first administrator atomically; password 12–256 characters                                                                                      |
+| `POST /auth/enroll`                  | `{ token, password }`                                | Consumes an invitation and sets a password; sign in afterward                                                                                               |
+| `POST /auth/password`                | `{ username, password }`                             | `{ status: 'authenticated' }` and session, or `{ status: 'second_factor_required', methods, emailAvailable, totpAvailable }` and five-minute pending cookie |
+| `POST /auth/factor/challenge`        | `{ method: 'email'                                   | 'totp'                                                                                                                                                      | 'passkey' }`        | Sends email or returns `{ options }` for a passkey assertion        |
+| `POST /auth/factor/verify`           | `{ method: 'email'                                   | 'totp'                                                                                                                                                      | 'recovery', code }` | Verifies one-time code and issues session or reauthentication grant |
+| `POST /auth/verify`                  | SimpleWebAuthn authentication response               | Verifies passkey and issues session or reauthentication grant                                                                                               |
+| `GET /auth/security`                 | Session                                              | Enabled methods, availability, verified email, named passkeys, remaining recovery-code count                                                                |
+| `POST /auth/security/reauth`         | Session, `{ password }`                              | Same discriminated result as password login; grants five-minute security authorization after required factors                                               |
+| `POST /auth/security/enroll`         | Session + grant, `{ method, email?, name? }`         | Email sent, TOTP secret + URI, or passkey registration options; sets enrollment cookie                                                                      |
+| `POST /auth/security/confirm`        | Session + grant + enrollment, `{ code?, response? }` | Enables verified factor, rotates session, returns recovery codes when enabling the first factor                                                             |
+| `POST /auth/security/remove`         | Session + grant, `{ method: 'email'                  | 'totp'                                                                                                                                                      | 'passkey'           | 'all', credentialId? }`                                             | Removes factor(s) and rotates session |
+| `POST /auth/security/recovery-codes` | Session + grant                                      | Replaces recovery codes, returns ten plaintext codes once, rotates session                                                                                  |
+| `POST /auth/logout`                  | None                                                 | Deletes session and clears authentication cookies                                                                                                           |
+| `GET /auth/me`                       | Session                                              | `{ id, username, admin, capabilities }`                                                                                                                     |
 
-WebAuthn responses must match the stored one-time challenge, configured RP ID,
-origin, and required user verification. Login permits ten password attempts per
-normalized username per 15-minute window. Successful two-factor login clears that
-username's counter. Disabled users cannot enroll or authenticate. Enrollment resets
-invalidate existing sessions. Expired state is periodically deleted.
+The former mandatory-passkey setup/enrollment endpoints are removed. Deploy API and
+website together. Users without enabled factors receive an eight-hour session after
+password verification. Users with factors must complete any one enabled method or a
+single-use recovery code. Unavailable email/TOTP never downgrade protection.
+
+WebAuthn responses must match the stored one-time challenge, RP ID, origin and user
+verification requirement. Passwords permit ten attempts per normalized username per
+15 minutes; second factors permit twenty attempts per account per 15 minutes and
+five attempts per pending challenge. Email codes expire after five minutes, and
+resends invalidate previous codes (60-second cooldown, five sends per 15 minutes).
+Disabled users cannot enroll or authenticate. Recovery clears all factors and sessions.
+See [Account security configuration](AUTHENTICATION.md) for SMTP and encryption keys.
 
 Once the API observes an existing account or commits first-account setup, it
 caches that state in memory until the process restarts. Setup status checks and
@@ -75,7 +88,7 @@ preserve their creation access; subsequent grants are independent.
 | `POST /admin/users`                             | `{ username, admin?: boolean, capabilities?: string[] }`; returns `{ enrollmentUrl }`        |
 | `PUT /admin/users/{id}`                         | `{ disabled, projects?: string[], admin?: boolean, capabilities?: string[] }`                |
 | `POST /admin/users/{id}/enrollment`             | Resets credentials and returns `{ enrollmentUrl }`; self-reset uses CLI                      |
-| `GET /admin/connectors`                         | Non-revoked connectors: names, host, discovery status and last-seen time; never tokens        |
+| `GET /admin/connectors`                         | Non-revoked connectors: names, host, discovery status and last-seen time; never tokens       |
 | `POST /admin/connectors`                        | `{ name }`; returns `{ id, token }` once                                                     |
 | `PUT /admin/connectors/{id}`                    | `{ discovery, revoked }`; revocation is permanent                                            |
 | `GET /admin/containers`                         | Assigned inventory plus unassigned inventory from discovery-enabled connectors               |
@@ -169,7 +182,7 @@ Send a full snapshot:
       "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "name": "imgen",
       "state": "running",
-      "project": "miki",
+      "project": "your-project-slug",
       "application": "imgen",
       "cpu": 12.5,
       "memory": 67108864,
@@ -252,26 +265,27 @@ Machine endpoints bypass browser origin/session checks and authenticate separate
 Connector revocation is checked against PostgreSQL on every claim/result.
 Inventory credentials now permit deployment claims when an administrator has
 configured a deployment for that connector. Keep connector credentials private.
+
 ## Cloud DNS
 
 See [DNS setup and permission semantics](DNS.md). All routes require an authenticated
 session and mutations require the configured request origin. Tokens are write-only.
 
-| Route | Methods | Purpose |
-| --- | --- | --- |
-| `/admin/dns/providers` | GET, POST | List/create shared connections (`dns.manage`) |
-| `/admin/dns/projects` | GET | List all project choices for DNS delegation (`dns.manage`) |
-| `/projects/:project/dns/providers` | GET, POST | List/create private connections (project admin) |
-| Either provider base + `/:id` | PUT, DELETE | Rename, replace token, enable/disable, disconnect |
-| Either provider base + `/:id/test` | POST | Check provider credentials |
-| Either provider base + `/:id/discover` | POST | Import zone choices without granting access |
-| Either provider base + `/:id/zones` | GET | Zones and project delegations |
-| Either provider base + `/:id/zones/:zone/records` | GET | Owner-only record choices for delegation |
-| Either provider base + `/:id/zones/:zone/projects/:target` | PUT | Replace `{rules}`; `[]` revokes access |
-| `/projects/:project/dns` | GET | Accessible zones and `can_manage_providers` |
-| `/projects/:project/dns/access-scopes` | GET | Project-admin delegation limits |
-| `/projects/:project/dns/zones/:zone/records` | GET, POST | Authorized records/creation scopes; create |
-| Record base + `/:record` | GET, PUT, DELETE | Read/update/delete authorized record |
+| Route                                                      | Methods          | Purpose                                                    |
+| ---------------------------------------------------------- | ---------------- | ---------------------------------------------------------- |
+| `/admin/dns/providers`                                     | GET, POST        | List/create shared connections (`dns.manage`)              |
+| `/admin/dns/projects`                                      | GET              | List all project choices for DNS delegation (`dns.manage`) |
+| `/projects/:project/dns/providers`                         | GET, POST        | List/create private connections (project admin)            |
+| Either provider base + `/:id`                              | PUT, DELETE      | Rename, replace token, enable/disable, disconnect          |
+| Either provider base + `/:id/test`                         | POST             | Check provider credentials                                 |
+| Either provider base + `/:id/discover`                     | POST             | Import zone choices without granting access                |
+| Either provider base + `/:id/zones`                        | GET              | Zones and project delegations                              |
+| Either provider base + `/:id/zones/:zone/records`          | GET              | Owner-only record choices for delegation                   |
+| Either provider base + `/:id/zones/:zone/projects/:target` | PUT              | Replace `{rules}`; `[]` revokes access                     |
+| `/projects/:project/dns`                                   | GET              | Accessible zones and `can_manage_providers`                |
+| `/projects/:project/dns/access-scopes`                     | GET              | Project-admin delegation limits                            |
+| `/projects/:project/dns/zones/:zone/records`               | GET, POST        | Authorized records/creation scopes; create                 |
+| Record base + `/:record`                                   | GET, PUT, DELETE | Read/update/delete authorized record                       |
 
 Connection creation accepts `{name,token}`; updates accept optional `name`, `token`,
 and `enabled`. Rules contain `kind`, `target`, `types`, and `actions`. Member
@@ -283,4 +297,3 @@ and typed `content`/`data` fields; structured URI priority lives in `data` in th
 dashboard contract. Complete schemas are in authenticated `/openapi.json`.
 Hidden resources return 404; forbidden actions on visible records return 403.
 Provider errors are sanitized. After an uncertain write, refresh before retrying.
-

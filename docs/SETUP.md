@@ -33,9 +33,9 @@ the new `kloud-nginx` container, reusing the proxy and certificate storage.
 The source rename does not migrate running infrastructure automatically.
 Existing passkeys remain valid when the origin and relying-party ID stay the same.
 
-The website requires password **and** passkey authentication. PostgreSQL stores
+The website supports passwords with optional Email, TOTP, and Passkey second factors. PostgreSQL stores
 accounts, sessions, project access, connector credentials, inventory, and manual
-assignments. There is no public signup, password-only login, or demo-data fallback.
+assignments. There is no public signup or demo-data fallback. See [Account security](AUTHENTICATION.md) for optional factor configuration.
 
 ## Local Docker Compose
 
@@ -43,9 +43,8 @@ assignments. There is no public signup, password-only login, or demo-data fallba
 2. Run `docker compose up --build -d`. PostgreSQL starts first, then the one-shot
    migration service, then the API and website.
 3. Open `http://localhost:8080`. With no accounts, the website prompts you to
-   create the Server Administrator with a username, a password of at least 12 characters,
-   and a passkey. The account is created only after successful passkey registration.
-4. Sign in using both factors. Setup is unavailable once any account exists.
+   create the Server Administrator with a username and a password of at least 12 characters.
+4. Sign in using your password. Optionally enable second factors in Account security. Setup is unavailable once any account exists.
 5. In **Administration → Projects**, create a project. In **Connectors**, create
    a connector and copy its token immediately; it cannot be retrieved later.
 
@@ -98,7 +97,7 @@ For automatic assignment, label containers when creating them:
 
 ```yaml
 labels:
-  kloud.project: miki
+  kloud.project: your-project-slug
   kloud.application: imgen
 ```
 
@@ -122,14 +121,14 @@ Share them manually. Resetting enrollment invalidates the user's current session
 and credentials. Ordinary users see only their assigned projects; Server Administrators
 see all projects. Users cannot disable themselves through the UI.
 
-Recover an administrator's lost passkey using server access:
+Recover an administrator's lost credentials or second factors using server access:
 
 ```sh
 docker compose run --rm api node apps/api/dist/cli.js recover owner
 ```
 
 This revokes the user's sessions and credentials, re-enables the account, and prints
-a fresh enrollment link. It never grants a password-only session.
+a fresh password-enrollment link. All second factors and recovery codes are cleared.
 
 ## Development and verification
 

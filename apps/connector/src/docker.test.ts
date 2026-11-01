@@ -23,7 +23,7 @@ test('collector excludes dashboard infrastructure, sanitizes labels, handles sto
       Names: ['/worker'],
       State: 'running',
       Labels: {
-        'kloud.project': 'miki',
+        'kloud.project': 'your-project-slug',
         'kloud.application': 'imgen',
         secret: 'never-send',
       },

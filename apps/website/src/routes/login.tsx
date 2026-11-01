@@ -2,7 +2,8 @@ import { Button, Input, Label } from '../components/ui/controls'
 import { Card } from '../components/ui/card'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
-import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
+import type { AuthenticationResult } from '@kloud/protocol/auth'
+import { FactorVerification } from '../components/factor-verification'
 import { api } from '../api'
 import { ErrorMessage, Icon } from '../components'
 import { loginDestination } from '../navigation'
@@ -20,7 +21,11 @@ function Login() {
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [phase, setPhase] = useState('Sign in'),
-    [created, setCreated] = useState(false)
+    [created, setCreated] = useState(false),
+    [challenge, setChallenge] =
+      useState<
+        Extract<AuthenticationResult, { status: 'second_factor_required' }>
+      >()
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setBusy(true)
@@ -30,33 +35,25 @@ function Login() {
       if (setup && !created) {
         if (data.get('password') !== data.get('confirm'))
           throw new Error('Passwords must match')
-        setPhase('Registering passkey')
-        const optionsJSON = await api<
-          Parameters<typeof startRegistration>[0]['optionsJSON']
-        >('/auth/setup/options', 'POST', {
+        setPhase('Creating account')
+        await api('/auth/setup', 'POST', {
           username: data.get('username'),
           password: data.get('password'),
         })
-        await api(
-          '/auth/setup/verify',
-          'POST',
-          await startRegistration({ optionsJSON }),
-        )
         setCreated(true)
         setBusy(false)
         setPhase('Sign in')
         return
       }
-      const optionsJSON = await api<
-        Parameters<typeof startAuthentication>[0]['optionsJSON']
-      >('/auth/password', 'POST', {
+      const result = await api<AuthenticationResult>('/auth/password', 'POST', {
         username: data.get('username'),
         password: data.get('password'),
       })
-      setPhase('Verify your passkey')
-      const response = await startAuthentication({ optionsJSON })
-      await api('/auth/verify', 'POST', response)
-      location.assign(next)
+      if (result.status === 'authenticated') location.assign(next)
+      else {
+        setChallenge(result)
+        setBusy(false)
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Sign in failed')
       setBusy(false)
@@ -77,70 +74,81 @@ function Login() {
         </h1>
         <p className="text-muted-foreground">
           {created
-            ? 'Your Server Administrator account is ready. Sign in with your password and passkey.'
+            ? 'Your Server Administrator account is ready. Sign in with your password.'
             : setup
-              ? 'No accounts exist yet. Choose a username and password, then register a passkey to get started.'
+              ? 'No accounts exist yet. Choose a username and password to get started. You can enable two-factor authentication in account security.'
               : 'Sign in to your infrastructure.'}
         </p>
-        <form
-          onSubmit={(e) => {
-            void submit(e)
-          }}
-        >
-          <Label>
-            Username
-            <Input
-              name="username"
-              autoComplete="username"
-              required
-              maxLength={100}
-              pattern={setup && !created ? '[a-zA-Z0-9_.@\\-]+' : undefined}
-            />
-          </Label>
-          <Label>
-            Password
-            <Input
-              name="password"
-              type="password"
-              autoComplete={
-                setup && !created ? 'new-password' : 'current-password'
-              }
-              required
-              minLength={setup && !created ? 12 : undefined}
-              maxLength={256}
-            />
-          </Label>
-          {setup && !created && (
-            <>
-              <Label>
-                Confirm password
-                <Input
-                  name="confirm"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={12}
-                  maxLength={256}
-                />
-              </Label>
-              <small className="text-muted-foreground">
-                Use at least 12 characters. Usernames may contain letters,
-                numbers, underscores, periods, @, and hyphens.
-              </small>
-            </>
-          )}
-          <ErrorMessage message={error} />
-          <Button className="primary" disabled={busy}>
-            {busy
-              ? phase + '…'
-              : setup && !created
-                ? 'Create Server Administrator and register passkey'
-                : 'Continue with password and passkey'}
-            <Icon name="arrow" />
-          </Button>
-        </form>
+        {challenge ? (
+          <FactorVerification
+            challenge={challenge}
+            onComplete={() => location.assign(next)}
+            onCancel={() => {
+              setChallenge(undefined)
+              setError('')
+            }}
+          />
+        ) : (
+          <form
+            onSubmit={(e) => {
+              void submit(e)
+            }}
+          >
+            <Label>
+              Username
+              <Input
+                name="username"
+                autoComplete="username"
+                required
+                maxLength={100}
+                pattern={setup && !created ? '[a-zA-Z0-9_.@\\-]+' : undefined}
+              />
+            </Label>
+            <Label>
+              Password
+              <Input
+                name="password"
+                type="password"
+                autoComplete={
+                  setup && !created ? 'new-password' : 'current-password'
+                }
+                required
+                minLength={setup && !created ? 12 : undefined}
+                maxLength={256}
+              />
+            </Label>
+            {setup && !created && (
+              <>
+                <Label>
+                  Confirm password
+                  <Input
+                    name="confirm"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={256}
+                  />
+                </Label>
+                <small className="text-muted-foreground">
+                  Use at least 12 characters. Usernames may contain letters,
+                  numbers, underscores, periods, @, and hyphens.
+                </small>
+              </>
+            )}
+            <ErrorMessage message={error} />
+            <Button className="primary" disabled={busy}>
+              {busy
+                ? phase + '…'
+                : setup && !created
+                  ? 'Create Server Administrator'
+                  : 'Sign in'}
+              <Icon name="arrow" />
+            </Button>
+          </form>
+        )}
         <p className="auth-foot">
-          <Icon name="shield" /> Password and passkey required
+          <Icon name="shield" /> Optional two-factor authentication
         </p>
       </Card>
     </main>

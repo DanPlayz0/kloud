@@ -231,6 +231,41 @@ export async function migrate() {
         INSERT INTO migrations(version) VALUES(10);
       `)
     }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=11'))
+        .rowCount
+    ) {
+      await db.query(`
+        ALTER TABLE users ADD COLUMN security_version integer NOT NULL DEFAULT 0;
+        ALTER TABLE users ADD COLUMN email text;
+        ALTER TABLE users ADD COLUMN email_2fa boolean NOT NULL DEFAULT false;
+        ALTER TABLE users ADD COLUMN totp_secret text;
+        ALTER TABLE users ADD COLUMN totp_last_step bigint;
+        ALTER TABLE users ADD COLUMN passkey_2fa boolean NOT NULL DEFAULT false;
+        UPDATE users SET passkey_2fa=true WHERE EXISTS(SELECT 1 FROM passkeys WHERE user_id=users.id);
+        ALTER TABLE passkeys ADD COLUMN name text NOT NULL DEFAULT 'Passkey';
+        CREATE TABLE auth_pending (
+          token text PRIMARY KEY, user_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+          purpose text NOT NULL CHECK(purpose IN ('login','reauth','grant','email','totp','passkey')),
+          session_token text, password_hash text NOT NULL, version integer NOT NULL,
+          data jsonb NOT NULL DEFAULT '{}', attempts integer NOT NULL DEFAULT 0,
+          expires timestamptz NOT NULL
+        );
+        CREATE INDEX auth_pending_user ON auth_pending(user_id);
+        CREATE INDEX auth_pending_expiry ON auth_pending(expires);
+        CREATE TABLE recovery_codes (
+          user_id uuid NOT NULL REFERENCES users ON DELETE CASCADE, hash text NOT NULL,
+          PRIMARY KEY(user_id,hash)
+        );
+        CREATE TABLE auth_email_limits (
+          user_id uuid PRIMARY KEY REFERENCES users ON DELETE CASCADE,
+          sent_at timestamptz NOT NULL, window_start timestamptz NOT NULL, sends integer NOT NULL
+        );
+        DELETE FROM challenges;
+        DELETE FROM setup_challenges;
+        INSERT INTO migrations(version) VALUES(11);
+      `)
+    }
   })
 }
 if (

@@ -15,7 +15,7 @@ See [service platform setup and limitations](docs/PLATFORM.md) for encrypted dra
 Git/image/Compose deployment, runtime permissions, rollback, and managed NGINX.
 
 See [dashboard setup](docs/SETUP.md) for PostgreSQL, migrations, administrator
-bootstrap, passkey enrollment, Docker connectors, and deployment. See
+bootstrap, account enrollment, Docker connectors, and deployment. See
 [API contracts](docs/API.md) for endpoint and connector protocol details.
 
 ## Getting started
@@ -34,7 +34,7 @@ The website runs at http://localhost:5173 and the API at http://localhost:3000.
 Vite proxies `/api/*` requests to the API during development (removing the `/api` prefix).
 Configure PostgreSQL and `apps/api/.env` first as described in the setup guide.
 On an empty installation, open the website to create your Server Administrator account
-with a username, password, and passkey. Setup closes as soon as an account exists.
+with a username and password. Optional second factors can be enabled in Account security. Setup closes as soon as an account exists.
 The API offers public `GET /health` and authenticated `GET /openapi.json`.
 Set the `PORT` environment variable to change the API port; update the Vite proxy target to match.
 
@@ -74,7 +74,7 @@ Git and Docker build contexts; do not edit the generated route tree manually.
 - `__root.tsx`: shared layout and not-found page; `<Outlet />` renders the current page.
 - `index.tsx`: `/`.
 - `about.tsx`: `/about`.
-- `/login` and `/enroll`: password and passkey authentication.
+- `/login` and `/enroll`: password authentication with optional Email, TOTP, or Passkey second factors.
 - `/projects/$projectSlug/compute/containers`: Docker compute.
 - `/projects/$projectSlug/compute/serverless`: Kubernetes placeholder.
 - `/projects/$projectSlug/services`: Dockerfile applications and Compose services.
@@ -152,3 +152,5 @@ docker compose down
 Cloudflare connections support shared server providers, private project providers,
 and DNS delegation down to individual records. See [Cloud DNS setup](docs/DNS.md)
 for the required encryption key, token permissions, and sharing model.
+
+See [Account security](docs/AUTHENTICATION.md) for optional 2FA, SMTP configuration, encryption keys, and recovery.

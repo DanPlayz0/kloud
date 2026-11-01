@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { pool, transaction } from './db.js'
 import { token, digest, publicOrigin } from './security.js'
+import { clearFactors } from './auth-factors.js'
 const [command, username] = process.argv.slice(2)
 try {
   if (
@@ -33,10 +34,7 @@ try {
         'UPDATE users SET disabled=false,password_hash=NULL WHERE id=$1',
         [id],
       )
-      await db.query('DELETE FROM sessions WHERE user_id=$1', [id])
-      await db.query('DELETE FROM passkeys WHERE user_id=$1', [id])
-      await db.query('DELETE FROM challenges WHERE user_id=$1', [id])
-      await db.query('DELETE FROM invitations WHERE user_id=$1', [id])
+      await clearFactors(db, id)
     }
     await db.query(
       `INSERT INTO invitations(token,user_id,expires) VALUES($1,$2,now()+interval '24 hours')`,

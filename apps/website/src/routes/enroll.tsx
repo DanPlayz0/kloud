@@ -2,7 +2,6 @@ import { Button, Input, Label } from '../components/ui/controls'
 import { Card } from '../components/ui/card'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState, type FormEvent } from 'react'
-import { startRegistration } from '@simplewebauthn/browser'
 import { api } from '../api'
 import { ErrorMessage, Icon } from '../components'
 export const Route = createFileRoute('/enroll')({ component: Enroll })
@@ -24,17 +23,10 @@ function Enroll() {
     setBusy(true)
     setError('')
     try {
-      const optionsJSON = await api<
-        Parameters<typeof startRegistration>[0]['optionsJSON']
-      >('/auth/enroll/options', 'POST', {
+      await api('/auth/enroll', 'POST', {
         token: invitation,
         password: form.get('password'),
       })
-      await api(
-        '/auth/enroll/verify',
-        'POST',
-        await startRegistration({ optionsJSON }),
-      )
       setDone(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Enrollment failed')
@@ -52,7 +44,10 @@ function Enroll() {
         <h1>{done ? 'You’re ready' : 'Set up your account'}</h1>
         {done ? (
           <>
-            <p>Your password and passkey are registered.</p>
+            <p>
+              Your password is registered. You can enable two-factor
+              authentication in account security after signing in.
+            </p>
             <Button asChild variant="primary">
               <a href="/login">
                 Continue to sign in <Icon name="arrow" />
@@ -65,7 +60,7 @@ function Enroll() {
           </p>
         ) : (
           <>
-            <p>Choose a password, then register your passkey.</p>
+            <p>Choose a password to activate your account.</p>
             <form
               onSubmit={(e) => {
                 void submit(e)
@@ -96,7 +91,7 @@ function Enroll() {
               <small>Use at least 12 characters.</small>
               <ErrorMessage message={error} />
               <Button className="primary" disabled={busy}>
-                {busy ? 'Registering passkey…' : 'Register passkey'}
+                {busy ? 'Creating account…' : 'Set password'}
                 <Icon name="key" />
               </Button>
             </form>

@@ -138,7 +138,7 @@ test(
     }
     try {
       await t.test(
-        'empty installations create exactly one super-admin after passkey verification',
+        'password-only setup creates exactly one administrator',
         async () => {
           await migrate()
           assert.deepEqual(await (await request('/auth/setup')).json(), {
@@ -146,82 +146,35 @@ test(
           })
           assert.equal(
             (
-              await request('/auth/setup/options', 'POST', {
+              await request('/auth/setup', 'POST', {
                 username: 'owner',
                 password: 'short',
               })
             ).status,
             400,
           )
-          const begin = () =>
-            request('/auth/setup/options', 'POST', {
-              username: 'First.Admin',
-              password: 'correct horse battery staple',
-            })
-          const cancelled = await begin()
-          assert.equal(cancelled.status, 200)
-          assert.deepEqual(await (await request('/auth/setup')).json(), {
-            required: true,
-          })
-          assert.equal(
-            (
-              await request(
-                '/auth/setup/verify',
-                'POST',
-                {},
-                cookie(cancelled, 'setup'),
-              )
-            ).status,
-            400,
-          )
-          const expired = await begin()
-          await pool.query(
-            "UPDATE setup_challenges SET expires=now()-interval '1 second'",
-          )
-          assert.equal(
-            (
-              await request(
-                '/auth/setup/verify',
-                'POST',
-                registration((await expired.json()).challenge),
-                cookie(expired, 'setup'),
-              )
-            ).status,
-            400,
-          )
-          const first = await begin(),
-            second = await begin()
           const attempts = await Promise.all(
-            [first, second].map(async (response) =>
-              request(
-                '/auth/setup/verify',
-                'POST',
-                registration((await response.json()).challenge),
-                cookie(response, 'setup'),
-              ),
+            [1, 2].map(() =>
+              request('/auth/setup', 'POST', {
+                username: 'First.Admin',
+                password: 'correct horse battery staple',
+              }),
             ),
           )
           assert.deepEqual(attempts.map((r) => r.status).sort(), [200, 409])
-          const users = await pool.query(
-            'SELECT id,username,admin,password_hash FROM users',
-          )
+          const users = await pool.query('SELECT * FROM users')
           assert.equal(users.rowCount, 1)
           assert.equal(users.rows[0].username, 'first.admin')
           assert.equal(users.rows[0].admin, true)
-          assert.ok(users.rows[0].password_hash)
-          assert.equal((await pool.query('SELECT 1 FROM passkeys')).rowCount, 1)
+          assert.equal((await pool.query('SELECT 1 FROM passkeys')).rowCount, 0)
           assert.deepEqual(await (await request('/auth/setup')).json(), {
             required: false,
           })
-          assert.equal((await begin()).status, 409)
-          // Any existing account blocks setup, including disabled non-admins.
-          await pool.query('UPDATE users SET admin=false,disabled=true')
-          assert.equal((await begin()).status, 409)
-          await pool.query('DELETE FROM users WHERE id=$1', [users.rows[0].id])
+          await pool.query('DELETE FROM users')
         },
       )
       await t.test(
-        'migrations are idempotent and invitation enrollment verifies a real credential',
+        'invitation is single-use; passkey enrollment is optional and verified',
         async () => {
           await migrate()
           await migrate()
@@ -230,61 +183,48 @@ test(
             [adminID, memberID, strangerID],
           )
           await pool.query(
-            `INSERT INTO invitations(token,user_id,expires) VALUES($1,$2,now()+interval '24 hours')`,
+            "INSERT INTO invitations(token,user_id,expires) VALUES($1,$2,now()+interval '24 hours')",
             [digest(invitation), adminID],
           )
-          const optionsResponse = await request(
-            '/auth/enroll/options',
-            'POST',
-            { token: invitation, password: 'correct horse battery staple' },
-          )
-          assert.equal(optionsResponse.status, 200)
-          const options = await optionsResponse.json(),
-            pending = cookie(optionsResponse, 'enrollment')
-          const verificationResults = await Promise.all(
+          const attempts = await Promise.all(
             [1, 2].map(() =>
-              request(
-                '/auth/enroll/verify',
-                'POST',
-                registration(options.challenge),
-                pending,
-              ),
-            ),
-          )
-          assert.deepEqual(
-            verificationResults.map((r) => r.status).sort(),
-            [200, 400],
-          )
-          assert.equal(
-            (
-              await request(
-                '/auth/enroll/verify',
-                'POST',
-                registration(options.challenge),
-                pending,
-              )
-            ).status,
-            400,
-          )
-          assert.equal(
-            (
-              await request('/auth/enroll/options', 'POST', {
+              request('/auth/enroll', 'POST', {
                 token: invitation,
                 password: 'correct horse battery staple',
-              })
-            ).status,
-            400,
+              }),
+            ),
           )
-          const other = new pg.Pool({ connectionString: url.href })
-          try {
-            assert.equal(
-              (await other.query('SELECT count(*) FROM passkeys')).rows[0]
-                .count,
-              '1',
-            )
-          } finally {
-            await other.end()
-          }
+          assert.deepEqual(attempts.map((r) => r.status).sort(), [200, 400])
+          const login = await request('/auth/password', 'POST', {
+            username: 'owner',
+            password: 'correct horse battery staple',
+          })
+          assert.deepEqual(await login.json(), { status: 'authenticated' })
+          const session = cookie(login, 'session')
+          const reauth = await request(
+            '/auth/security/reauth',
+            'POST',
+            { password: 'correct horse battery staple' },
+            session,
+          )
+          const authorized = session + '; ' + cookie(reauth, 'security_grant')
+          const begin = await request(
+            '/auth/security/enroll',
+            'POST',
+            { method: 'passkey', name: 'Test device' },
+            authorized,
+          )
+          assert.equal(begin.status, 200, await begin.clone().text())
+          const options = (await begin.json()).options
+          const complete = await request(
+            '/auth/security/confirm',
+            'POST',
+            { response: registration(options.challenge) },
+            authorized + '; ' + cookie(begin, 'factor_enrollment'),
+          )
+          assert.equal(complete.status, 200, await complete.clone().text())
+          assert.equal((await complete.json()).recoveryCodes.length, 10)
+          assert.equal((await pool.query('SELECT 1 FROM passkeys')).rowCount, 1)
         },
       )
       await t.test(
@@ -296,7 +236,16 @@ test(
           })
           assert.equal(response.status, 200)
           const pending = cookie(response, 'pending'),
-            options = await response.json()
+            options = (
+              await (
+                await request(
+                  '/auth/factor/challenge',
+                  'POST',
+                  { method: 'passkey' },
+                  pending,
+                )
+              ).json()
+            ).options
           assert.equal(
             (await request('/auth/me', 'GET', undefined, pending)).status,
             401,
@@ -340,7 +289,7 @@ test(
           )
           assert.equal(
             (
-              await request('/auth/enroll/options', 'POST', {
+              await request('/auth/enroll', 'POST', {
                 token: expiredInvitation,
                 password: 'correct horse battery staple',
               })
@@ -361,11 +310,20 @@ test(
               username: 'owner',
               password: 'correct horse battery staple',
             })
-            const options = await response.json(),
-              pending = cookie(response, 'pending')
+            const pending = cookie(response, 'pending'),
+              options = (
+                await (
+                  await request(
+                    '/auth/factor/challenge',
+                    'POST',
+                    { method: 'passkey' },
+                    pending,
+                  )
+                ).json()
+              ).options
             if (expired)
               await pool.query(
-                `UPDATE challenges SET expires=now()-interval '1 second'`,
+                `UPDATE auth_pending SET expires=now()-interval '1 second'`,
               )
             assert.equal(
               (
@@ -384,7 +342,7 @@ test(
       await t.test(
         'membership and super-admin restrictions are enforced by APIs',
         async () => {
-          for (const slug of ['miki', 'private'])
+          for (const slug of ['your-project-slug', 'private'])
             assert.equal(
               (
                 await request(
@@ -402,7 +360,7 @@ test(
               await request(
                 '/admin/projects',
                 'POST',
-                { slug: 'miki', name: 'Duplicate' },
+                { slug: 'your-project-slug', name: 'Duplicate' },
                 adminCookie,
               )
             ).status,
@@ -414,11 +372,11 @@ test(
           )
           memberCookie = `session=${session}`
           await pool.query(
-            `INSERT INTO memberships(user_id,project_slug) VALUES($1,'miki')`,
+            `INSERT INTO memberships(user_id,project_slug) VALUES($1,'your-project-slug')`,
             [memberID],
           )
           await pool.query(
-            `INSERT INTO container_grants(id,user_id,project_slug,capability,kind) VALUES($1,$2,'miki','view','all')`,
+            `INSERT INTO container_grants(id,user_id,project_slug,capability,kind) VALUES($1,$2,'your-project-slug','view','all')`,
             [randomUUID(), memberID],
           )
           assert.equal(
@@ -443,7 +401,7 @@ test(
                 await request('/projects', 'GET', undefined, memberCookie)
               ).json()
             ).map((p: any) => p.slug),
-            ['miki'],
+            ['your-project-slug'],
           )
         },
       )
@@ -452,7 +410,7 @@ test(
         id: 'a'.repeat(64),
         name: 'imgen',
         state: 'running',
-        project: 'miki',
+        project: 'your-project-slug',
         application: 'imgen',
         cpu: 10,
         memory: 1024,
@@ -489,7 +447,7 @@ test(
           assert.equal(
             (
               await request(
-                '/projects/miki/applications/imgen',
+                '/projects/your-project-slug/applications/imgen',
                 'GET',
                 undefined,
                 memberCookie,
@@ -537,7 +495,7 @@ test(
               await request(
                 `/admin/containers/${connector.id}/${'b'.repeat(64)}`,
                 'PUT',
-                { project: 'miki', application: 'manual' },
+                { project: 'your-project-slug', application: 'manual' },
                 adminCookie,
               )
             ).status,
@@ -545,7 +503,7 @@ test(
           )
           let rows = await (
             await request(
-              '/projects/miki/containers',
+              '/projects/your-project-slug/containers',
               'GET',
               undefined,
               memberCookie,
@@ -558,7 +516,7 @@ test(
           )
           rows = await (
             await request(
-              '/projects/miki/containers',
+              '/projects/your-project-slug/containers',
               'GET',
               undefined,
               memberCookie,
@@ -703,7 +661,7 @@ test(
           await request(
             `/admin/users/${memberID}`,
             'PUT',
-            { disabled: true, projects: ['miki'] },
+            { disabled: true, projects: ['your-project-slug'] },
             adminCookie,
           )
           assert.equal(

@@ -345,6 +345,7 @@ export function Shell({
         <div className="account border-border">
           {account && (
             <Card className="account-menu">
+              <Button asChild><a href="/account/security">Account security</a></Button>
               <Button
                 onClick={() => {
                   void api('/auth/logout', 'POST')

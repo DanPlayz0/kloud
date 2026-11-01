@@ -61,7 +61,7 @@ test('setup coalesces database checks and permanently caches an existing account
   assert.deepEqual(await (await app.request('/auth/setup')).json(), {
     required: false,
   })
-  for (const path of ['/auth/setup/options', '/auth/setup/verify']) {
+  for (const path of ['/auth/setup']) {
     const response = await app.request(path, {
       method: 'POST',
       headers: { origin: publicOrigin, 'content-type': 'application/json' },

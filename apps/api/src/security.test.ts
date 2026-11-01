@@ -15,7 +15,7 @@ test('snapshot protocol rejects unknown versions, secrets, duplicate IDs and inv
     id: 'a'.repeat(64),
     name: 'worker',
     state: 'running',
-    project: 'miki',
+    project: 'your-project-slug',
     application: 'imgen',
     cpu: null,
     memory: null,

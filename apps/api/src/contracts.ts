@@ -1,4 +1,13 @@
 import { z, type OpenAPIHono } from '@hono/zod-openapi'
+import {
+  setupSchema,
+  enrollmentSchema,
+  credentialsSchema,
+  authenticationResultSchema,
+  factorRequestSchema,
+  factorVerificationSchema,
+  securityStatusSchema,
+} from '@kloud/protocol/auth'
 import { slug, deploymentSchema, deploymentJobSchema } from '@kloud/protocol'
 import { serverCapabilities, grantSchema } from './permissions.js'
 import { serviceGrantsSchema } from './service-permissions.js'
@@ -56,7 +65,6 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
     workers: z.array(pm2WorkerSchema),
   })
   const flexible = z.record(z.string(), z.unknown())
-  const credentials = z.object({ username: z.string(), password: z.string() })
   const enrollment = z.object({ enrollmentUrl: z.string().url() })
   const row = z
     .object({
@@ -285,51 +293,106 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   )
   route(
     'post',
-    '/auth/setup/options',
-    'Begin first Server Administrator password and passkey setup (empty installation only)',
-    flexible,
-    credentials,
+    '/auth/setup',
+    'Create first Server Administrator with a password',
+    ok,
+    setupSchema,
     false,
   )
   route(
     'post',
-    '/auth/setup/verify',
-    'Verify passkey and create the first Server Administrator atomically',
+    '/auth/enroll',
+    'Accept invitation and set password',
     ok,
-    flexible,
+    enrollmentSchema,
     false,
   )
   route(
     'post',
     '/auth/password',
-    'Verify password and start a five-minute passkey challenge',
-    flexible,
-    credentials,
+    'Verify password; authenticate or require a second factor',
+    authenticationResultSchema,
+    credentialsSchema,
     false,
   )
   route(
     'post',
-    '/auth/verify',
-    'Verify passkey and issue eight-hour session',
+    '/auth/factor/challenge',
+    'Send email code or request passkey assertion options',
+    z.object({
+      options: flexible.optional(),
+      sent: z.boolean().optional(),
+      ok: z.boolean().optional(),
+    }),
+    factorRequestSchema,
+    false,
+  )
+  route(
+    'post',
+    '/auth/factor/verify',
+    'Verify email, TOTP or recovery code',
     ok,
-    flexible,
+    factorVerificationSchema,
     false,
+  )
+  route('post', '/auth/verify', 'Verify passkey assertion', ok, flexible, false)
+  route(
+    'get',
+    '/auth/security',
+    'Read personal security settings',
+    securityStatusSchema,
   )
   route(
     'post',
-    '/auth/enroll/options',
-    'Begin invitation-based password and passkey enrollment',
-    flexible,
-    z.object({ token: z.string(), password: z.string().min(12).max(256) }),
-    false,
+    '/auth/security/reauth',
+    'Confirm password and optionally require an existing factor',
+    authenticationResultSchema,
+    z.object({ password: z.string().min(1).max(256) }),
   )
   route(
     'post',
-    '/auth/enroll/verify',
-    'Consume invitation and register passkey',
-    ok,
-    flexible,
-    false,
+    '/auth/security/enroll',
+    'Begin second-factor enrollment',
+    z.object({
+      sent: z.boolean().optional(),
+      secret: z.string().optional(),
+      uri: z.string().optional(),
+      options: flexible.optional(),
+    }),
+    factorRequestSchema.extend({
+      email: z.email().max(254).optional(),
+      name: z.string().trim().min(1).max(100).optional(),
+    }),
+  )
+  const securityChanged = z.object({
+    ok: z.literal(true),
+    recoveryCodes: z.array(z.string()).optional(),
+  })
+  route(
+    'post',
+    '/auth/security/confirm',
+    'Verify and enable factor; rotate session',
+    securityChanged,
+    z.object({
+      code: z.string().max(100).optional(),
+      response: flexible.optional(),
+    }),
+  )
+  route(
+    'post',
+    '/auth/security/remove',
+    'Remove factors; rotate session',
+    securityChanged,
+    z.object({
+      method: z.enum(['email', 'totp', 'passkey', 'all']),
+      credentialId: z.string().max(2048).optional(),
+    }),
+  )
+  route(
+    'post',
+    '/auth/security/recovery-codes',
+    'Replace recovery codes; rotate session',
+    securityChanged,
   )
   route(
     'post',

@@ -14,7 +14,7 @@ test('login redirects reject external URLs and normalization bypasses', () => {
   ])
     assert.equal(loginDestination(value), '/')
   assert.equal(
-    loginDestination('/projects/miki/compute/containers'),
-    '/projects/miki/compute/containers',
+    loginDestination('/projects/your-project-slug/compute/containers'),
+    '/projects/your-project-slug/compute/containers',
   )
 })

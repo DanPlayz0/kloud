@@ -1,8 +1,9 @@
 import { Hono, type Context } from 'hono'
 import { randomUUID } from 'node:crypto'
 import { getCookie, setCookie } from 'hono/cookie'
-import { z } from 'zod'
 import { HTTPException } from 'hono/http-exception'
+import { z } from 'zod'
+import type { PoolClient } from 'pg'
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -20,6 +21,28 @@ import {
   publicOrigin,
   rpID,
 } from './security.js'
+import {
+  codeHash,
+  decryptSecret,
+  emailCode,
+  encryptSecret,
+  matchesCode,
+  newTotp,
+  recoveryCodes,
+  smtpAvailable,
+  sendEmailCode,
+  totpAvailable,
+  totpStep,
+} from './auth-factors.js'
+import {
+  factorRequestSchema,
+  factorVerificationSchema,
+  credentialsSchema,
+  enrollmentSchema,
+  setupSchema,
+  type FactorMethod,
+  type AuthenticationResult,
+} from '@kloud/protocol/auth'
 
 export interface User {
   id: string
@@ -29,21 +52,23 @@ export interface User {
 }
 export type Env = { Variables: { user: User } }
 export const auth = new Hono<Env>()
-const password = z.string().min(12).max(256)
-const cookieOptions = {
+export const cookieOptions = {
   httpOnly: true,
   secure: publicOrigin.startsWith('https:'),
   sameSite: 'Strict' as const,
   path: '/',
 }
+const sessionHash = (c: Context) => digest(getCookie(c, 'session') ?? '')
+const pendingToken = (c: Context) => getCookie(c, 'pending') ?? ''
 export const currentUser = async (c: Context) => {
   const value = getCookie(c, 'session')
   if (!value) return undefined
-  const result = await pool.query<User>(
-    'SELECT u.id,u.username,u.admin,u.capabilities FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=$1 AND s.expires>now() AND NOT u.disabled',
-    [digest(value)],
-  )
-  return result.rows[0]
+  return (
+    await pool.query<User>(
+      'SELECT u.id,u.username,u.admin,u.capabilities FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=$1 AND s.expires>now() AND NOT u.disabled',
+      [digest(value)],
+    )
+  ).rows[0]
 }
 export const requireUser = async (
   c: Context<Env>,
@@ -62,376 +87,753 @@ export const requireAdmin = async (
     return c.json({ error: 'Administrator access required' }, 403)
   await next()
 }
-
-// Once populated, setup stays closed for this process's lifetime. Only cache
-// positive results so an empty installation can still detect CLI bootstrap.
 let accountsExist = false
 let accountCheck: Promise<boolean> | undefined
 async function hasAccounts(): Promise<boolean> {
   if (accountsExist) return true
-  if (!accountCheck) {
+  if (!accountCheck)
     accountCheck = pool
       .query('SELECT EXISTS(SELECT 1 FROM users) AS populated')
-      .then((result) => {
-        accountsExist ||= result.rows[0].populated
+      .then((r) => {
+        accountsExist ||= r.rows[0].populated
         return accountsExist
       })
       .finally(() => {
         accountCheck = undefined
       })
-  }
   return accountCheck
+}
+function enabled(user: any): FactorMethod[] {
+  return [
+    ...(user.email_2fa ? ['email' as const] : []),
+    ...(user.totp_secret ? ['totp' as const] : []),
+    ...(user.passkey_2fa ? ['passkey' as const] : []),
+  ]
+}
+function result(user: any): AuthenticationResult {
+  return {
+    status: 'second_factor_required',
+    methods: enabled(user),
+    emailAvailable: smtpAvailable(),
+    totpAvailable: totpAvailable(),
+  }
+}
+async function rateLimit(key: string, maximum: number) {
+  const r = await pool.query(
+    `INSERT INTO login_attempts(key,attempts,expires) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN login_attempts.expires<=now() THEN 1 ELSE login_attempts.attempts+1 END, expires=CASE WHEN login_attempts.expires<=now() THEN now()+interval '15 minutes' ELSE login_attempts.expires END RETURNING attempts`,
+    [key],
+  )
+  if (r.rows[0].attempts > maximum)
+    throw new HTTPException(429, {
+      message: 'Too many attempts. Try again in 15 minutes.',
+    })
+}
+async function newSession(db: PoolClient, user: any) {
+  const session = token()
+  await db.query(
+    `INSERT INTO sessions(token,user_id,expires) VALUES($1,$2,now()+interval '8 hours')`,
+    [digest(session), user.id],
+  )
+  await db.query('DELETE FROM login_attempts WHERE key=$1', [
+    digest(user.username.toLowerCase()),
+  ])
+  return session
+}
+function sessionCookie(c: Context, value: string) {
+  setCookie(c, 'session', value, { ...cookieOptions, maxAge: 28800 })
+}
+async function newPending(
+  db: PoolClient,
+  user: any,
+  purpose: string,
+  session: string | null = null,
+  data = {},
+) {
+  const value = token()
+  await db.query(
+    'DELETE FROM auth_pending WHERE user_id=$1 AND expires<=now()',
+    [user.id],
+  )
+  await db.query(
+    `INSERT INTO auth_pending(token,user_id,purpose,session_token,password_hash,version,data,expires) VALUES($1,$2,$3,$4,$5,$6,$7,now()+interval '5 minutes')`,
+    [
+      digest(value),
+      user.id,
+      purpose,
+      session,
+      user.password_hash,
+      user.security_version,
+      JSON.stringify(data),
+    ],
+  )
+  return value
+}
+// Always lock user before pending rows: reset, login and security changes serialize.
+async function pendingUser(db: PoolClient, c: Context) {
+  const value = pendingToken(c)
+  const ref = (
+    await db.query('SELECT user_id FROM auth_pending WHERE token=$1', [
+      digest(value),
+    ])
+  ).rows[0]
+  if (!ref) return null
+  const user = (
+    await db.query(
+      'SELECT * FROM users WHERE id=$1 AND NOT disabled FOR UPDATE',
+      [ref.user_id],
+    )
+  ).rows[0]
+  const pending = (
+    await db.query(
+      `SELECT * FROM auth_pending WHERE token=$1 AND purpose IN ('login','reauth') AND expires>now() AND attempts<5 FOR UPDATE`,
+      [digest(value)],
+    )
+  ).rows[0]
+  if (
+    !user ||
+    !pending ||
+    pending.password_hash !== user.password_hash ||
+    pending.version !== user.security_version
+  )
+    return null
+  if (
+    pending.purpose === 'reauth' &&
+    (pending.session_token !== sessionHash(c) ||
+      !(
+        await db.query(
+          'SELECT 1 FROM sessions WHERE token=$1 AND expires>now()',
+          [sessionHash(c)],
+        )
+      ).rowCount)
+  )
+    return null
+  return { user, pending, value }
+}
+async function pendingRate(c: Context) {
+  const ref = (
+    await pool.query('SELECT user_id FROM auth_pending WHERE token=$1', [
+      digest(pendingToken(c)),
+    ])
+  ).rows[0]
+  if (ref) await rateLimit(digest('factor:' + ref.user_id), 20)
+}
+async function emailLimit(db: PoolClient, user: string) {
+  const r = await db.query(
+    `INSERT INTO auth_email_limits(user_id,sent_at,window_start,sends) VALUES($1,now(),now(),1)
+    ON CONFLICT(user_id) DO UPDATE SET sent_at=now(),window_start=CASE WHEN auth_email_limits.window_start<=now()-interval '15 minutes' THEN now() ELSE auth_email_limits.window_start END,
+    sends=CASE WHEN auth_email_limits.window_start<=now()-interval '15 minutes' THEN 1 ELSE auth_email_limits.sends+1 END
+    WHERE auth_email_limits.sent_at<=now()-interval '60 seconds' AND (auth_email_limits.sends<5 OR auth_email_limits.window_start<=now()-interval '15 minutes') RETURNING user_id`,
+    [user],
+  )
+  if (!r.rowCount)
+    throw new HTTPException(429, {
+      message:
+        'Wait 60 seconds before resending. At most five emails can be sent every 15 minutes.',
+    })
 }
 
 auth.get('/setup', async (c) => c.json({ required: !(await hasAccounts()) }))
-
-// Reject repeated setup submissions before opening a database transaction.
-auth.use('/setup/*', async (c, next) => {
+auth.post('/setup', async (c) => {
   if (await hasAccounts())
     return c.json({ error: 'Setup is complete. Sign in to your account.' }, 409)
-  await next()
+  const body = setupSchema.parse(await c.req.json()),
+    hashed = await hashPassword(body.password)
+  await transaction(async (db) => {
+    await db.query('SELECT pg_advisory_xact_lock(842192)')
+    await db.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE')
+    if ((await db.query('SELECT 1 FROM users LIMIT 1')).rowCount)
+      throw new HTTPException(409, {
+        message: 'Setup is complete. Sign in to your account.',
+      })
+    await db.query(
+      'INSERT INTO users(id,username,password_hash,admin) VALUES($1,$2,$3,true)',
+      [randomUUID(), body.username.toLowerCase(), hashed],
+    )
+  })
+  accountsExist = true
+  return c.json({ ok: true })
+})
+auth.post('/enroll', async (c) => {
+  const body = enrollmentSchema.parse(await c.req.json()),
+    hashed = await hashPassword(body.password)
+  const success = await transaction(async (db) => {
+    const ref = (
+      await db.query('SELECT user_id FROM invitations WHERE token=$1', [
+        digest(body.token),
+      ])
+    ).rows[0]
+    if (!ref) return false
+    const user = (
+      await db.query(
+        'SELECT * FROM users WHERE id=$1 AND NOT disabled FOR UPDATE',
+        [ref.user_id],
+      )
+    ).rows[0]
+    const invitation = await db.query(
+      'DELETE FROM invitations WHERE token=$1 AND expires>now() RETURNING token',
+      [digest(body.token)],
+    )
+    if (!user || user.password_hash || !invitation.rowCount) return false
+    await db.query(
+      'UPDATE users SET password_hash=$1,security_version=security_version+1 WHERE id=$2',
+      [hashed, user.id],
+    )
+    for (const table of [
+      'sessions',
+      'auth_pending',
+      'challenges',
+      'invitations',
+    ])
+      await db.query(`DELETE FROM ${table} WHERE user_id=$1`, [user.id])
+    return true
+  })
+  return success
+    ? c.json({ ok: true })
+    : c.json({ error: 'Invitation is invalid or expired' }, 400)
+})
+auth.post('/password', async (c) => {
+  const body = credentialsSchema.parse(await c.req.json())
+  await rateLimit(digest(body.username.toLowerCase()), 10)
+  const outcome = await transaction(async (db) => {
+    const user = (
+      await db.query(
+        'SELECT * FROM users WHERE lower(username)=$1 FOR UPDATE',
+        [body.username.toLowerCase()],
+      )
+    ).rows[0]
+    const valid = await verifyPassword(
+      body.password,
+      user?.password_hash ?? '0'.repeat(32) + ':' + '00'.repeat(64),
+    )
+    if (!user || user.disabled || !valid) return null
+    if (!enabled(user).length)
+      return { session: await newSession(db, user), user }
+    return { pending: await newPending(db, user, 'login'), user }
+  })
+  // Replace the browser's partial-login cookie on a fresh password submission.
+  if (!outcome) {
+    setCookie(c, 'pending', '', { ...cookieOptions, maxAge: 0 })
+    return c.json({ error: 'Invalid credentials' }, 401)
+  }
+  if (outcome.session) {
+    setCookie(c, 'pending', '', { ...cookieOptions, maxAge: 0 })
+    sessionCookie(c, outcome.session)
+    return c.json({ status: 'authenticated' } satisfies AuthenticationResult)
+  }
+  setCookie(c, 'pending', outcome.pending!, { ...cookieOptions, maxAge: 300 })
+  return c.json(result(outcome.user))
 })
 
-// Lock against every user-creation path, including CLI bootstrap and invitations.
-async function requireEmptyUsers(db: import('pg').PoolClient) {
-  await db.query('SELECT pg_advisory_xact_lock(842192)')
-  await db.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE')
-  if ((await db.query('SELECT 1 FROM users LIMIT 1')).rowCount) {
-    accountsExist = true
-    throw new HTTPException(409, {
-      message: 'Setup is complete. Sign in to your account.',
-    })
-  }
-}
+auth.post('/factor/challenge', async (c) => {
+  const { method } = factorRequestSchema.parse(await c.req.json())
+  const outcome = await transaction(async (db) => {
+    const state = await pendingUser(db, c)
+    if (!state || !enabled(state.user).includes(method)) return null
+    const { pending, user, value } = state
+    if (method === 'email') {
+      if (!smtpAvailable())
+        return {
+          error:
+            'Email verification is unavailable. Use another factor or recovery code.',
+        }
+      await emailLimit(db, user.id)
+      const code = emailCode()
+      // Commit invalidation and rate counters even when SMTP fails.
+      await db.query(
+        `UPDATE auth_pending SET data=data-'email_hash'-'email_expires' WHERE token=$1`,
+        [pending.token],
+      )
+      try {
+        await sendEmailCode(user.email, code)
+      } catch (e) {
+        return { error: (e as Error).message }
+      }
+      await db.query(
+        `UPDATE auth_pending SET data=data || $2::jsonb WHERE token=$1`,
+        [
+          pending.token,
+          JSON.stringify({
+            email_hash: codeHash(code, value),
+            email_expires: Date.now() + 300000,
+          }),
+        ],
+      )
+      return { sent: true }
+    }
+    if (method === 'passkey') {
+      const keys = (
+        await db.query('SELECT id,transports FROM passkeys WHERE user_id=$1', [
+          user.id,
+        ])
+      ).rows
+      const options = await generateAuthenticationOptions({
+        rpID,
+        userVerification: 'required',
+        allowCredentials: keys,
+      })
+      await db.query(
+        'UPDATE auth_pending SET data=data || $2::jsonb WHERE token=$1',
+        [pending.token, JSON.stringify({ challenge: options.challenge })],
+      )
+      return { options }
+    }
+    return { ok: true }
+  })
+  if (!outcome)
+    return c.json({ error: 'Verification expired. Start again.' }, 401)
+  if ('error' in outcome) return c.json({ error: outcome.error }, 503)
+  return c.json(outcome)
+})
 
-auth.post('/setup/options', async (c) => {
+async function verifyFactor(
+  c: Context,
+  method: FactorMethod | 'recovery',
+  code?: string,
+  response?: AuthenticationResponseJSON,
+) {
+  await pendingRate(c)
+  const outcome = await transaction(async (db) => {
+    const state = await pendingUser(db, c)
+    if (!state) return null
+    const { user, pending, value } = state
+    await db.query(
+      'UPDATE auth_pending SET attempts=attempts+1 WHERE token=$1',
+      [pending.token],
+    )
+    let valid = false
+    if (method === 'recovery') {
+      valid = !!(
+        await db.query(
+          'DELETE FROM recovery_codes WHERE user_id=$1 AND hash=$2 RETURNING hash',
+          [user.id, digest(code ?? '')],
+        )
+      ).rowCount
+    } else if (!enabled(user).includes(method)) return null
+    else if (method === 'email') {
+      valid =
+        smtpAvailable() &&
+        pending.data.email_expires > Date.now() &&
+        matchesCode(code ?? '', value, pending.data.email_hash ?? '')
+    } else if (method === 'totp') {
+      const step = totpStep(decryptSecret(user.totp_secret), code ?? '')
+      if (
+        step !== null &&
+        (user.totp_last_step === null || step > Number(user.totp_last_step))
+      ) {
+        await db.query('UPDATE users SET totp_last_step=$1 WHERE id=$2', [
+          step,
+          user.id,
+        ])
+        valid = true
+      }
+    } else if (response && pending.data.challenge) {
+      const key = (
+        await db.query(
+          'SELECT * FROM passkeys WHERE id=$1 AND user_id=$2 FOR UPDATE',
+          [response.id, user.id],
+        )
+      ).rows[0]
+      // Every WebAuthn assertion consumes its challenge, including invalid assertions.
+      await db.query(
+        `UPDATE auth_pending SET data=data-'challenge' WHERE token=$1`,
+        [pending.token],
+      )
+      if (key) {
+        try {
+          const verification = await verifyAuthenticationResponse({
+            response,
+            expectedChallenge: pending.data.challenge,
+            expectedOrigin: publicOrigin,
+            expectedRPID: rpID,
+            requireUserVerification: true,
+            credential: {
+              id: key.id,
+              publicKey: new Uint8Array(key.public_key),
+              counter: Number(key.counter),
+              transports: key.transports,
+            },
+          })
+          if (verification.verified) {
+            await db.query('UPDATE passkeys SET counter=$1 WHERE id=$2', [
+              verification.authenticationInfo.newCounter,
+              key.id,
+            ])
+            valid = true
+          }
+        } catch {
+          /* Invalid assertions count as failed attempts. */
+        }
+      }
+    }
+    if (!valid) return null
+    await db.query('DELETE FROM auth_pending WHERE token=$1', [pending.token])
+    if (pending.purpose === 'reauth')
+      return {
+        grant: await newPending(db, user, 'grant', pending.session_token),
+      }
+    return { session: await newSession(db, user) }
+  })
+  if (!outcome)
+    return c.json(
+      {
+        error: 'Verification failed or expired. Check the code or start again.',
+      },
+      401,
+    )
+  setCookie(c, 'pending', '', { ...cookieOptions, maxAge: 0 })
+  if (outcome.grant)
+    setCookie(c, 'security_grant', outcome.grant, {
+      ...cookieOptions,
+      maxAge: 300,
+    })
+  if (outcome.session) sessionCookie(c, outcome.session)
+  return c.json({ ok: true })
+}
+auth.post('/factor/verify', async (c) => {
+  const body = factorVerificationSchema.parse(await c.req.json())
+  return verifyFactor(c, body.method, body.code)
+})
+auth.post('/verify', async (c) =>
+  verifyFactor(
+    c,
+    'passkey',
+    undefined,
+    z
+      .record(z.string(), z.any())
+      .parse(await c.req.json()) as unknown as AuthenticationResponseJSON,
+  ),
+)
+
+auth.use('/security/*', requireUser)
+auth.get('/security', requireUser, async (c) => {
+  const user = (
+    await pool.query('SELECT * FROM users WHERE id=$1', [c.get('user').id])
+  ).rows[0]
+  return c.json({
+    methods: enabled(user),
+    email: user.email,
+    emailAvailable: smtpAvailable(),
+    totpAvailable: totpAvailable(),
+    passkeys: (
+      await pool.query(
+        'SELECT id,name FROM passkeys WHERE user_id=$1 ORDER BY name,id',
+        [user.id],
+      )
+    ).rows,
+    recoveryCodesRemaining: Number(
+      (
+        await pool.query(
+          'SELECT count(*) AS count FROM recovery_codes WHERE user_id=$1',
+          [user.id],
+        )
+      ).rows[0].count,
+    ),
+  })
+})
+auth.post('/security/reauth', async (c) => {
   const body = z
-    .object({
-      username: z.string().regex(/^[a-zA-Z0-9_.@-]{1,100}$/),
-      password,
+    .object({ password: z.string().min(1).max(256) })
+    .parse(await c.req.json())
+  await rateLimit(digest('reauth:' + c.get('user').id), 10)
+  const outcome = await transaction(async (db) => {
+    const user = (
+      await db.query(
+        'SELECT * FROM users WHERE id=$1 AND NOT disabled FOR UPDATE',
+        [c.get('user').id],
+      )
+    ).rows[0]
+    if (
+      !user?.password_hash ||
+      !(await verifyPassword(body.password, user.password_hash))
+    )
+      return null
+    const needsFactor = enabled(user).length > 0
+    return {
+      user,
+      needsFactor,
+      value: await newPending(
+        db,
+        user,
+        needsFactor ? 'reauth' : 'grant',
+        sessionHash(c),
+      ),
+    }
+  })
+  if (!outcome) return c.json({ error: 'Invalid credentials' }, 401)
+  setCookie(
+    c,
+    outcome.needsFactor ? 'pending' : 'security_grant',
+    outcome.value,
+    { ...cookieOptions, maxAge: 300 },
+  )
+  return c.json(
+    outcome.needsFactor
+      ? result(outcome.user)
+      : ({ status: 'authenticated' } satisfies AuthenticationResult),
+  )
+})
+
+async function securityUser(db: PoolClient, c: Context<Env>) {
+  const user = (
+    await db.query(
+      'SELECT * FROM users WHERE id=$1 AND NOT disabled FOR UPDATE',
+      [c.get('user').id],
+    )
+  ).rows[0]
+  const grant = (
+    await db.query(
+      `SELECT * FROM auth_pending WHERE token=$1 AND user_id=$2 AND purpose='grant' AND expires>now()`,
+      [digest(getCookie(c, 'security_grant') ?? ''), user?.id],
+    )
+  ).rows[0]
+  if (
+    !user ||
+    !grant ||
+    grant.version !== user.security_version ||
+    grant.password_hash !== user.password_hash ||
+    grant.session_token !== sessionHash(c) ||
+    !(
+      await db.query(
+        'SELECT 1 FROM sessions WHERE token=$1 AND expires>now()',
+        [sessionHash(c)],
+      )
+    ).rowCount
+  )
+    throw new HTTPException(401, {
+      message:
+        'Confirm your password and second factor again before changing security settings.',
+    })
+  return user
+}
+async function finishChange(db: PoolClient, user: any) {
+  const after = (await db.query('SELECT * FROM users WHERE id=$1', [user.id]))
+    .rows[0]
+  let codes: string[] | undefined
+  if (!enabled(user).length && enabled(after).length)
+    codes = await recoveryCodes(db, user.id)
+  if (!enabled(after).length)
+    await db.query('DELETE FROM recovery_codes WHERE user_id=$1', [user.id])
+  await db.query(
+    'UPDATE users SET security_version=security_version+1 WHERE id=$1',
+    [user.id],
+  )
+  for (const table of ['auth_pending', 'sessions', 'challenges'])
+    await db.query(`DELETE FROM ${table} WHERE user_id=$1`, [user.id])
+  return { session: await newSession(db, user), codes }
+}
+function changed(c: Context, outcome: { session: string; codes?: string[] }) {
+  sessionCookie(c, outcome.session)
+  setCookie(c, 'security_grant', '', { ...cookieOptions, maxAge: 0 })
+  setCookie(c, 'factor_enrollment', '', { ...cookieOptions, maxAge: 0 })
+  return c.json({ ok: true, recoveryCodes: outcome.codes })
+}
+auth.post('/security/enroll', async (c) => {
+  const body = factorRequestSchema
+    .extend({
+      email: z.email().max(254).optional(),
+      name: z.string().trim().min(1).max(100).optional(),
     })
     .parse(await c.req.json())
-  const pending = token()
-  const options = await transaction(async (db) => {
-    await requireEmptyUsers(db)
-    const userID = randomUUID()
+  const outcome = await transaction(async (db) => {
+    const user = await securityUser(db, c)
+    await db.query(
+      `DELETE FROM auth_pending WHERE user_id=$1 AND purpose IN ('email','totp','passkey')`,
+      [user.id],
+    )
+    if (body.method === 'email') {
+      if (!body.email)
+        throw new HTTPException(400, { message: 'Enter an email address.' })
+      if (!smtpAvailable())
+        throw new HTTPException(503, {
+          message: 'Configure SMTP before enabling Email 2FA.',
+        })
+      await emailLimit(db, user.id)
+      const value = await newPending(db, user, 'email', sessionHash(c)),
+        code = emailCode()
+      try {
+        await sendEmailCode(body.email, code)
+      } catch (e) {
+        return { error: (e as Error).message }
+      }
+      await db.query('UPDATE auth_pending SET data=$2 WHERE token=$1', [
+        digest(value),
+        JSON.stringify({ email: body.email, hash: codeHash(code, value) }),
+      ])
+      return { value, sent: true }
+    }
+    if (body.method === 'totp') {
+      const totp = newTotp(user.username)
+      const value = await newPending(db, user, 'totp', sessionHash(c), {
+        secret: encryptSecret(totp.secret.base32),
+      })
+      return { value, secret: totp.secret.base32, uri: totp.toString() }
+    }
+    const keys = (
+      await db.query('SELECT id FROM passkeys WHERE user_id=$1', [user.id])
+    ).rows
     const options = await generateRegistrationOptions({
       rpName: 'Kloud',
       rpID,
-      userName: body.username.toLowerCase(),
-      userID: new TextEncoder().encode(userID),
+      userName: user.username,
+      userID: new TextEncoder().encode(user.id),
       attestationType: 'none',
+      excludeCredentials: keys,
       authenticatorSelection: {
         residentKey: 'required',
         userVerification: 'required',
       },
     })
-    await db.query(
-      'DELETE FROM setup_challenges WHERE expires<=now() OR token=$1',
-      [digest(getCookie(c, 'setup') ?? '')],
-    )
-    await db.query(
-      `INSERT INTO setup_challenges(token,user_id,username,password_hash,challenge,expires)
-       VALUES($1,$2,$3,$4,$5,now()+interval '5 minutes')`,
-      [
-        digest(pending),
-        userID,
-        body.username.toLowerCase(),
-        await hashPassword(body.password),
-        options.challenge,
-      ],
-    )
-    return options
+    const value = await newPending(db, user, 'passkey', sessionHash(c), {
+      challenge: options.challenge,
+      name: body.name ?? 'Passkey',
+    })
+    return { value, options }
   })
-  setCookie(c, 'setup', pending, { ...cookieOptions, maxAge: 300 })
-  return c.json(options)
-})
-
-auth.post('/setup/verify', async (c) => {
-  const body = z.record(z.string(), z.any()).parse(await c.req.json())
-  const success = await transaction(async (db) => {
-    await requireEmptyUsers(db)
-    const challenge = (
-      await db.query(
-        'DELETE FROM setup_challenges WHERE token=$1 AND expires>now() RETURNING *',
-        [digest(getCookie(c, 'setup') ?? '')],
-      )
-    ).rows[0]
-    if (!challenge) return false
-    let verification
-    try {
-      verification = await verifyRegistrationResponse({
-        response: body as unknown as RegistrationResponseJSON,
-        expectedChallenge: challenge.challenge,
-        expectedOrigin: publicOrigin,
-        expectedRPID: rpID,
-        requireUserVerification: true,
-      })
-    } catch {
-      return false
-    }
-    if (!verification.verified || !verification.registrationInfo) return false
-    const credential = verification.registrationInfo.credential
-    await db.query(
-      'INSERT INTO users(id,username,password_hash,admin) VALUES($1,$2,$3,true)',
-      [challenge.user_id, challenge.username, challenge.password_hash],
-    )
-    await db.query(
-      'INSERT INTO passkeys(id,user_id,public_key,counter,transports) VALUES($1,$2,$3,$4,$5)',
-      [
-        credential.id,
-        challenge.user_id,
-        Buffer.from(credential.publicKey),
-        credential.counter,
-        JSON.stringify(credential.transports ?? []),
-      ],
-    )
-    await db.query('DELETE FROM setup_challenges')
-    return true
+  if ('error' in outcome) return c.json({ error: outcome.error }, 503)
+  setCookie(c, 'factor_enrollment', outcome.value!, {
+    ...cookieOptions,
+    maxAge: 300,
   })
-  // Publish only after the account and passkey transaction has committed.
-  if (success) accountsExist = true
-  setCookie(c, 'setup', '', { ...cookieOptions, maxAge: 0 })
-  return success
-    ? c.json({ ok: true })
-    : c.json({ error: 'Setup failed or expired. Start again.' }, 400)
+  const { value: _value, ...response } = outcome
+  return c.json(response)
 })
-
-auth.post('/password', async (c) => {
+auth.post('/security/confirm', async (c) => {
   const body = z
     .object({
-      username: z.string().min(1).max(100),
-      password: z.string().min(1).max(256),
+      code: z.string().max(100).optional(),
+      response: z.record(z.string(), z.any()).optional(),
     })
     .parse(await c.req.json())
-  const key = digest(body.username.toLowerCase())
-  const attempt = await pool.query(
-    `INSERT INTO login_attempts(key,attempts,expires) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN login_attempts.expires<now() THEN 1 ELSE login_attempts.attempts+1 END, expires=CASE WHEN login_attempts.expires<now() THEN now()+interval '15 minutes' ELSE login_attempts.expires END RETURNING attempts`,
-    [key],
-  )
-  if (attempt.rows[0].attempts > 10)
-    return c.json({ error: 'Too many attempts. Try again in 15 minutes.' }, 429)
-  const result = await pool.query(
-    'SELECT * FROM users WHERE lower(username)=$1',
-    [body.username.toLowerCase()],
-  )
-  const user = result.rows[0]
-  const valid = await verifyPassword(
-    body.password,
-    user?.password_hash ??
-      '00000000000000000000000000000000:' + '00'.repeat(64),
-  )
-  if (!user || user.disabled || !valid)
-    return c.json({ error: 'Invalid credentials' }, 401)
-  const keys = await pool.query(
-    'SELECT id,transports FROM passkeys WHERE user_id=$1',
-    [user.id],
-  )
-  if (!keys.rowCount)
-    return c.json(
-      { error: 'Passkey enrollment required. Contact your administrator.' },
-      403,
+  await rateLimit(digest('enroll:' + c.get('user').id), 20)
+  const outcome = await transaction(async (db) => {
+    const user = await securityUser(db, c),
+      value = getCookie(c, 'factor_enrollment') ?? ''
+    const pending = (
+      await db.query(
+        `SELECT * FROM auth_pending WHERE token=$1 AND user_id=$2 AND purpose IN ('email','totp','passkey') AND expires>now() AND attempts<5 FOR UPDATE`,
+        [digest(value), user.id],
+      )
+    ).rows[0]
+    if (
+      !pending ||
+      pending.version !== user.security_version ||
+      pending.password_hash !== user.password_hash ||
+      pending.session_token !== sessionHash(c)
     )
-  const options = await generateAuthenticationOptions({
-    rpID,
-    userVerification: 'required',
-    allowCredentials: keys.rows.map((k) => ({
-      id: k.id,
-      transports: k.transports,
-    })),
-  })
-  const pending = token()
-  await pool.query(
-    `INSERT INTO challenges(token,user_id,kind,challenge,password_hash,expires) VALUES($1,$2,'login',$3,$4,now()+interval '5 minutes')`,
-    [digest(pending), user.id, options.challenge, user.password_hash],
-  )
-  setCookie(c, 'pending', pending, { ...cookieOptions, maxAge: 300 })
-  return c.json(options)
-})
-
-auth.post('/verify', async (c) => {
-  const pending = getCookie(c, 'pending') ?? ''
-  const body = z.record(z.string(), z.any()).parse(await c.req.json())
-  const result = await transaction(async (db) => {
-    const challenge = (
-      await db.query(
-        `SELECT * FROM challenges WHERE token=$1 AND kind='login' AND expires>now()`,
-        [digest(pending)],
-      )
-    ).rows[0]
-    if (!challenge) return null
-    const user = (
-      await db.query(
-        'SELECT * FROM users WHERE id=$1 AND NOT disabled FOR UPDATE',
-        [challenge.user_id],
-      )
-    ).rows[0]
-    if (!user || user.password_hash !== challenge.password_hash) return null
-    const consumed = await db.query(
-      `DELETE FROM challenges WHERE token=$1 AND expires>now() RETURNING token`,
-      [digest(pending)],
-    )
-    if (!consumed.rowCount) return null
-    const key = (
-      await db.query(
-        'SELECT * FROM passkeys WHERE id=$1 AND user_id=$2 FOR UPDATE',
-        [typeof body.id === 'string' ? body.id : '', challenge.user_id],
-      )
-    ).rows[0]
-    if (!key) return null
-    let verification
-    try {
-      verification = await verifyAuthenticationResponse({
-        response: body as unknown as AuthenticationResponseJSON,
-        expectedChallenge: challenge.challenge,
-        expectedOrigin: publicOrigin,
-        expectedRPID: rpID,
-        requireUserVerification: true,
-        credential: {
-          id: key.id,
-          publicKey: new Uint8Array(key.public_key),
-          counter: Number(key.counter),
-          transports: key.transports,
-        },
-      })
-    } catch {
       return null
-    }
-    if (!verification.verified) return null
-    await db.query('UPDATE passkeys SET counter=$1 WHERE id=$2', [
-      verification.authenticationInfo.newCounter,
-      key.id,
-    ])
-    const session = token()
     await db.query(
-      `INSERT INTO sessions(token,user_id,expires) VALUES($1,$2,now()+interval '8 hours')`,
-      [digest(session), user.id],
+      'UPDATE auth_pending SET attempts=attempts+1 WHERE token=$1',
+      [pending.token],
     )
-    await db.query('DELETE FROM login_attempts WHERE key=$1', [
-      digest(user.username.toLowerCase()),
-    ])
-    return session
-  })
-  setCookie(c, 'pending', '', { ...cookieOptions, maxAge: 0 })
-  if (!result)
-    return c.json({ error: 'Passkey verification failed. Start again.' }, 401)
-  setCookie(c, 'session', result, { ...cookieOptions, maxAge: 28800 })
-  return c.json({ ok: true })
-})
-
-auth.post('/enroll/options', async (c) => {
-  const body = z
-    .object({ token: z.string().min(32).max(100), password })
-    .parse(await c.req.json())
-  const invitation = (
-    await pool.query(
-      'SELECT i.*,u.username FROM invitations i JOIN users u ON u.id=i.user_id WHERE i.token=$1 AND i.expires>now() AND NOT u.disabled',
-      [digest(body.token)],
-    )
-  ).rows[0]
-  if (!invitation)
-    return c.json({ error: 'Invitation is invalid or expired' }, 400)
-  const options = await generateRegistrationOptions({
-    rpName: 'Kloud',
-    rpID,
-    userName: invitation.username,
-    userID: new TextEncoder().encode(invitation.user_id),
-    attestationType: 'none',
-    authenticatorSelection: {
-      residentKey: 'required',
-      userVerification: 'required',
-    },
-  })
-  const pending = token()
-  await pool.query(
-    `INSERT INTO challenges(token,user_id,kind,challenge,password_hash,invitation,expires) VALUES($1,$2,'enroll',$3,$4,$5,now()+interval '5 minutes')`,
-    [
-      digest(pending),
-      invitation.user_id,
-      options.challenge,
-      await hashPassword(body.password),
-      digest(body.token),
-    ],
-  )
-  setCookie(c, 'enrollment', pending, { ...cookieOptions, maxAge: 300 })
-  return c.json(options)
-})
-
-auth.post('/enroll/verify', async (c) => {
-  const pending = getCookie(c, 'enrollment') ?? ''
-  const body = z.record(z.string(), z.any()).parse(await c.req.json())
-  const success = await transaction(async (db) => {
-    const challenge = (
-      await db.query(
-        `SELECT * FROM challenges WHERE token=$1 AND kind='enroll' AND expires>now()`,
-        [digest(pending)],
+    if (pending.purpose === 'email') {
+      if (
+        !smtpAvailable() ||
+        !matchesCode(body.code ?? '', value, pending.data.hash ?? '')
       )
-    ).rows[0]
-    if (!challenge) return false
-    const user = (
-      await db.query(
-        'SELECT id FROM users WHERE id=$1 AND NOT disabled FOR UPDATE',
-        [challenge.user_id],
-      )
-    ).rows[0]
-    if (!user) return false
-    const consumed = await db.query(
-      `DELETE FROM challenges WHERE token=$1 AND expires>now() RETURNING token`,
-      [digest(pending)],
-    )
-    if (!consumed.rowCount) return false
-    const invitation = (
-      await db.query(
-        'SELECT token FROM invitations WHERE token=$1 AND expires>now() FOR UPDATE',
-        [challenge.invitation],
-      )
-    ).rows[0]
-    if (!user || !invitation) return false
-    let verification
-    try {
-      verification = await verifyRegistrationResponse({
-        response: body as unknown as RegistrationResponseJSON,
-        expectedChallenge: challenge.challenge,
-        expectedOrigin: publicOrigin,
-        expectedRPID: rpID,
-        requireUserVerification: true,
-      })
-    } catch {
-      return false
-    }
-    if (!verification.verified || !verification.registrationInfo) return false
-    const credential = verification.registrationInfo.credential
-    await db.query('DELETE FROM sessions WHERE user_id=$1', [user.id])
-    await db.query('DELETE FROM passkeys WHERE user_id=$1', [user.id])
-    await db.query(
-      'INSERT INTO passkeys(id,user_id,public_key,counter,transports) VALUES($1,$2,$3,$4,$5)',
-      [
-        credential.id,
+        return null
+      await db.query('UPDATE users SET email=$1,email_2fa=true WHERE id=$2', [
+        pending.data.email,
         user.id,
-        Buffer.from(credential.publicKey),
-        credential.counter,
-        JSON.stringify(credential.transports ?? []),
-      ],
-    )
-    await db.query('UPDATE users SET password_hash=$1 WHERE id=$2', [
-      challenge.password_hash,
-      user.id,
-    ])
-    await db.query('DELETE FROM challenges WHERE user_id=$1', [user.id])
-    await db.query('DELETE FROM invitations WHERE user_id=$1', [user.id])
-    return true
+      ])
+    } else if (pending.purpose === 'totp') {
+      const step = totpStep(decryptSecret(pending.data.secret), body.code ?? '')
+      if (step === null) return null
+      await db.query(
+        'UPDATE users SET totp_secret=$1,totp_last_step=$2 WHERE id=$3',
+        [pending.data.secret, step, user.id],
+      )
+    } else {
+      await db.query('DELETE FROM auth_pending WHERE token=$1', [pending.token])
+      try {
+        const verification = await verifyRegistrationResponse({
+          response: body.response as unknown as RegistrationResponseJSON,
+          expectedChallenge: pending.data.challenge,
+          expectedOrigin: publicOrigin,
+          expectedRPID: rpID,
+          requireUserVerification: true,
+        })
+        if (!verification.verified || !verification.registrationInfo)
+          return null
+        const key = verification.registrationInfo.credential
+        await db.query(
+          'INSERT INTO passkeys(id,user_id,public_key,counter,transports,name) VALUES($1,$2,$3,$4,$5,$6)',
+          [
+            key.id,
+            user.id,
+            Buffer.from(key.publicKey),
+            key.counter,
+            JSON.stringify(key.transports ?? []),
+            pending.data.name,
+          ],
+        )
+      } catch {
+        return null
+      }
+      await db.query('UPDATE users SET passkey_2fa=true WHERE id=$1', [user.id])
+    }
+    return finishChange(db, user)
   })
-  setCookie(c, 'enrollment', '', { ...cookieOptions, maxAge: 0 })
-  return success
-    ? c.json({ ok: true })
-    : c.json({ error: 'Enrollment failed or expired. Start again.' }, 400)
+  return outcome
+    ? changed(c, outcome)
+    : c.json(
+        { error: 'Enrollment verification failed or expired. Try again.' },
+        400,
+      )
 })
-
+auth.post('/security/remove', async (c) => {
+  const body = z
+    .object({
+      method: z.enum(['email', 'totp', 'passkey', 'all']),
+      credentialId: z.string().max(2048).optional(),
+    })
+    .parse(await c.req.json())
+  const outcome = await transaction(async (db) => {
+    const user = await securityUser(db, c)
+    if (body.method === 'email' || body.method === 'all')
+      await db.query(
+        'UPDATE users SET email=NULL,email_2fa=false WHERE id=$1',
+        [user.id],
+      )
+    if (body.method === 'totp' || body.method === 'all')
+      await db.query(
+        'UPDATE users SET totp_secret=NULL,totp_last_step=NULL WHERE id=$1',
+        [user.id],
+      )
+    if (body.method === 'passkey' || body.method === 'all') {
+      await db.query(
+        'DELETE FROM passkeys WHERE user_id=$1 AND ($2::text IS NULL OR id=$2)',
+        [user.id, body.method === 'all' ? null : (body.credentialId ?? null)],
+      )
+      await db.query(
+        'UPDATE users SET passkey_2fa=EXISTS(SELECT 1 FROM passkeys WHERE user_id=$1) WHERE id=$1',
+        [user.id],
+      )
+    }
+    return finishChange(db, user)
+  })
+  return changed(c, outcome)
+})
+auth.post('/security/recovery-codes', async (c) => {
+  const outcome = await transaction(async (db) => {
+    const user = await securityUser(db, c)
+    if (!enabled(user).length)
+      throw new HTTPException(400, {
+        message: 'Enable a second factor before generating recovery codes.',
+      })
+    const codes = await recoveryCodes(db, user.id)
+    return { ...(await finishChange(db, user)), codes }
+  })
+  return changed(c, outcome)
+})
 auth.post('/logout', async (c) => {
-  await pool.query('DELETE FROM sessions WHERE token=$1', [
-    digest(getCookie(c, 'session') ?? ''),
+  await pool.query('DELETE FROM sessions WHERE token=$1', [sessionHash(c)])
+  for (const name of [
+    'session',
+    'pending',
+    'security_grant',
+    'factor_enrollment',
   ])
-  setCookie(c, 'session', '', { ...cookieOptions, maxAge: 0 })
+    setCookie(c, name, '', { ...cookieOptions, maxAge: 0 })
   return c.json({ ok: true })
 })
 auth.get('/me', requireUser, (c) => c.json(c.get('user')))
