@@ -1,3 +1,4 @@
+import { ServerAddressDetails } from './server-addresses'
 import { useState } from 'react'
 import { api, hasServer, type Connector, type Project, type User } from './api'
 import { Shell, usePolling, ErrorMessage } from './components'
@@ -92,6 +93,12 @@ export function ConnectorOverview({
               <dd>{current.discovery ? 'Enabled' : 'Disabled'}</dd>
             </div>
           </dl>
+          <ServerAddressDetails
+            key={JSON.stringify(current.dns_targets)}
+            server={current}
+            editable={hasServer(user, 'connectors.manage')}
+            onSaved={() => setRevision((v) => v + 1)}
+          />
           {hasServer(user, 'connectors.manage') && (
             <ConnectorControls
               connector={{ ...current, stale: stale || !!error }}

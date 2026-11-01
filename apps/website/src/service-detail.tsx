@@ -1,3 +1,10 @@
+import { EnvironmentEditor } from './environment-editor'
+import { ComposeWatchFields } from './compose-watch-fields'
+import { DeploymentQueue } from './deployment-queue'
+import { ServiceListeners } from './service-listeners'
+import { DeploymentPolicyFields } from './deployment-policy-fields'
+import { DomainDns } from './domain-dns'
+import { environmentChanges } from '@kloud/protocol/environment'
 import { StatusBadge } from './components/ui/status-badge'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Plus, Trash2, RotateCcw } from 'lucide-react'
@@ -15,10 +22,18 @@ import {
   type Host,
 } from './service-configuration'
 import { Tabs } from './components/ui/tabs'
-import { Button, Input, Label, NativeSelect } from './components/ui/controls'
+import {
+  Button,
+  Input,
+  Label,
+  NativeSelect,
+  Checkbox,
+} from './components/ui/controls'
 import { Card } from './components/ui/card'
 
 interface History {
+  can_reveal: boolean
+  needs_deployment: boolean
   revisions: { id: string; created: string }[]
   runs: {
     id: string
@@ -42,19 +57,47 @@ export function ServiceDetail({
   type?: 'application' | 'compose'
   canDeploy: boolean
 }) {
-  const [tab, setTab] = useState('Overview'),
+  const [tab, setTab] = useState(() =>
+      new URLSearchParams(window.location.search).has('setup')
+        ? 'Source'
+        : 'Overview',
+    ),
     [legacyOpen, setLegacyOpen] = useState(false),
     [refresh, setRefresh] = useState(0),
     [config, setConfig] = useState<PlatformConfig>(() =>
-      type === 'compose'
-        ? { ...newConfig(), source: { type: 'compose', content: '' } }
-        : newConfig(),
+      new URLSearchParams(window.location.search).has('setup')
+        ? {
+            ...newConfig(),
+            source: {
+              type: 'github',
+              config: {
+                connector_id: '',
+                container_name: 'managed',
+                repository: '',
+                branch: 'main',
+                kind: type === 'compose' ? 'compose' : 'dockerfile',
+                build_file: type === 'compose' ? 'compose.yaml' : 'Dockerfile',
+                context: '.',
+                service: 'app',
+                enabled: true,
+                managed: true,
+              },
+            },
+          }
+        : type === 'compose'
+          ? { ...newConfig(), source: { type: 'compose', content: '' } }
+          : newConfig(),
     ),
     [loaded, setLoaded] = useState<string | undefined>(),
     [error, setError] = useState(''),
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false),
     [commit, setCommit] = useState('')
+  const [legacyImported, setLegacyImported] = useState(false)
+  const [originalEnvironment, setOriginalEnvironment] = useState<
+    Record<string, string>
+  >({})
+  const [plaintextEnvironment, setPlaintextEnvironment] = useState(false)
   const base = `/projects/${project}/services/${slug}`
   const { data: history, error: historyError } = usePolling<History>(
     type ? `${base}/configuration` : null,
@@ -78,6 +121,8 @@ export function ServiceDetail({
       .then((value) => {
         if (!cancelled) {
           setConfig(value)
+          setOriginalEnvironment(value.runtime.environment)
+          setPlaintextEnvironment(false)
           setLoaded(latest)
         }
       })
@@ -104,9 +149,24 @@ export function ServiceDetail({
             .map((i) => `${i.path.join('.')}: ${i.message}`)
             .join('; '),
         )
-      const result = await api<{ id: string }>(`${base}/configuration`, 'PUT', {
+      const changes = environmentChanges(
+        originalEnvironment,
+        parsed.data.runtime.environment,
+      )
+      if (
+        (changes.added.length ||
+          changes.changed.length ||
+          changes.removed.length) &&
+        !window.confirm(
+          `Review variable changes (values hidden):\nAdded: ${changes.added.join(', ') || 'none'}\nChanged: ${changes.changed.join(', ') || 'none'}\nRemoved: ${changes.removed.join(', ') || 'none'}\n\nSave this draft without deploying?`,
+        )
+      )
+        return
+      await api<{ id: string }>(`${base}/configuration`, 'PUT', {
         config: parsed.data,
         previous: loaded,
+        confirmed_removals: changes.removed,
+        plaintext_environment: plaintextEnvironment,
       })
       setLoaded(undefined)
       setRefresh((n) => n + 1)
@@ -166,6 +226,7 @@ export function ServiceDetail({
           'Containers',
           'Logs',
           'Domains',
+          'Listeners',
         ]}
         value={tab}
         onChange={(value) => {
@@ -180,6 +241,12 @@ export function ServiceDetail({
         <p className="text-sm text-muted-foreground">
           You have view access. Ask a project administrator for deployment
           permission.
+        </p>
+      )}
+      {history?.needs_deployment && (
+        <p role="status" className="text-sm text-muted-foreground">
+          This service has a saved configuration that has not been deployed
+          successfully.
         </p>
       )}
       {message && (
@@ -250,13 +317,35 @@ export function ServiceDetail({
         </>
       )}
       {(tab === 'Source' || tab === 'Configuration') &&
-        (canDeploy && !latest && legacy?.config ? (
+        (canDeploy && !latest && legacy?.config && !legacyImported ? (
           <Card className="space-y-3">
             <p className="text-sm text-muted-foreground">
               This service uses existing Git deployment configuration.
             </p>
-            <Button onClick={() => setTab('Deployments')}>
-              Open deployment settings
+            <p className="text-xs text-muted-foreground">
+              Upgrade this source into a versioned draft, then explicitly review
+              runtime variables, volumes, ports and deployment compatibility
+              before deploying. Existing runtime configuration is not imported
+              automatically.
+            </p>
+            <Button
+              onClick={() => {
+                setConfig({
+                  ...newConfig(),
+                  deployment: undefined,
+                  source: {
+                    type: 'github',
+                    config:
+                      legacy.config as import('@kloud/protocol').DeploymentConfig,
+                  },
+                  connector_id: (
+                    legacy.config as import('@kloud/protocol').DeploymentConfig
+                  ).connector_id,
+                })
+                setLegacyImported(true)
+              }}
+            >
+              Review source as a versioned draft
             </Button>
           </Card>
         ) : canDeploy ? (
@@ -266,6 +355,8 @@ export function ServiceDetail({
                 <>
                   <SourceFields
                     config={config}
+                    project={project}
+                    service={slug}
                     onChange={setConfig}
                     serviceType={type}
                   />
@@ -279,15 +370,60 @@ export function ServiceDetail({
                   )}
                 </>
               ) : compose ? (
-                <p className="text-muted-foreground">
-                  Compose owns this stack’s runtime configuration. Edit its
-                  source definition.
-                </p>
+                <Card className="space-y-3">
+                  <h2 className="font-semibold">Compose variables</h2>
+                  <p className="text-xs text-muted-foreground">
+                    These values resolve runtime references in the committed or
+                    pasted Compose definition. Runtime variables are not
+                    automatically passed to image builds. Save, then deploy
+                    explicitly to apply changes.
+                  </p>
+                  <EnvironmentEditor
+                    key={loaded ?? 'new'}
+                    value={config.runtime.environment}
+                    onChange={(environment) =>
+                      setConfig({
+                        ...config,
+                        runtime: { ...config.runtime, environment },
+                      })
+                    }
+                    revealUrl={
+                      loaded && history?.can_reveal
+                        ? `${base}/variables/${loaded}`
+                        : undefined
+                    }
+                    onReveal={(original) => {
+                      setOriginalEnvironment(original)
+                      setPlaintextEnvironment(true)
+                    }}
+                  />
+                </Card>
               ) : (
                 <RuntimeFields
                   key={loaded ?? 'new'}
+                  revealUrl={
+                    loaded && history?.can_reveal
+                      ? `${base}/variables/${loaded}`
+                      : undefined
+                  }
+                  onReveal={(original) => {
+                    setOriginalEnvironment(original)
+                    setPlaintextEnvironment(true)
+                  }}
                   value={config.runtime}
                   onChange={(runtime) => setConfig({ ...config, runtime })}
+                />
+              )}
+              <DeploymentPolicyFields
+                value={config.deployment}
+                onChange={(deployment) => setConfig({ ...config, deployment })}
+              />
+              {compose && config.deployment && (
+                <ComposeWatchFields
+                  value={config.deployment}
+                  onChange={(deployment) =>
+                    setConfig({ ...config, deployment })
+                  }
                 />
               )}
               <Button variant="primary" disabled={busy}>
@@ -303,6 +439,13 @@ export function ServiceDetail({
         ))}
       {tab === 'Deployments' && (
         <div className="space-y-5">
+          {type && (
+            <DeploymentQueue
+              project={project}
+              service={slug}
+              canDeploy={canDeploy}
+            />
+          )}
           {canDeploy && latest && (
             <Card className="space-y-4">
               <h2 className="font-semibold">Deploy saved draft</h2>
@@ -335,6 +478,9 @@ export function ServiceDetail({
                 <p className="text-sm">
                   <StatusBadge deployment>{run.status}</StatusBadge> ·{' '}
                   {new Date(run.created).toLocaleString()}
+                  <span className="block text-xs text-muted-foreground break-all">
+                    Configuration {run.revision}
+                  </span>
                 </p>
                 {canDeploy && run.status === 'succeeded' && run.artifacts && (
                   <Button
@@ -396,12 +542,22 @@ export function ServiceDetail({
           ))}
         </div>
       )}
+      {tab === 'Listeners' && (
+        <ServiceListeners
+          compose={type === 'compose'}
+          project={project}
+          service={slug}
+          containers={containers ?? []}
+          canDeploy={canDeploy}
+        />
+      )}
       {tab === 'Domains' && (
         <ServiceDomains
           project={project}
           slug={slug}
           canDeploy={canDeploy}
           containers={containers ?? []}
+          hosts={hosts ?? []}
         />
       )}
     </section>
@@ -409,17 +565,37 @@ export function ServiceDetail({
 }
 function GitWebhook({ project, slug }: { project: string; slug: string }) {
   const path = `/projects/${project}/applications/${slug}/deployment`
+  const [refresh, setRefresh] = useState(0)
   const { data } = usePolling<{
     webhook_url: string
     config: { enabled: boolean }
-  } | null>(path)
+  } | null>(path, refresh)
   const [secret, setSecret] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
   if (!data) return null
   return (
     <Card size="compact" className="space-y-3">
-      <h2 className="font-semibold">GitHub push deployments</h2>
+      <h2 className="font-semibold">Push deployments</h2>
+      <Label className="flex items-center gap-2">
+        <Checkbox
+          checked={data.config.enabled}
+          disabled={busy}
+          onCheckedChange={(v) => {
+            setBusy(true)
+            setError('')
+            void api(
+              `/projects/${project}/services/${slug}/automatic-deployment`,
+              'PUT',
+              { enabled: v === true },
+            )
+              .then(() => setRefresh((n) => n + 1))
+              .catch((e) => setError(e.message))
+              .finally(() => setBusy(false))
+          }}
+        />
+        Automatically deploy signed pushes to this app
+      </Label>
       <Label>
         Webhook URL
         <Input readOnly value={data.webhook_url} />
@@ -427,7 +603,7 @@ function GitWebhook({ project, slug }: { project: string; slug: string }) {
       <p className="text-xs text-muted-foreground">
         {data.config.enabled
           ? 'Signed pushes deploy the active revision.'
-          : 'Deploy a draft first to activate push deployments.'}{' '}
+          : 'Automatic deployments are disabled; manual deployments remain available.'}{' '}
         Configure a GitHub push webhook using this URL and the generated secret.
       </p>
       <Button
@@ -462,10 +638,12 @@ function ServiceDomains({
   slug,
   canDeploy,
   containers,
+  hosts,
 }: {
   project: string
   slug: string
   canDeploy: boolean
+  hosts: Host[]
   containers: ContainerRow[]
 }) {
   const [refresh, setRefresh] = useState(0),
@@ -475,6 +653,9 @@ function ServiceDomains({
   const { data, error: loadError } = usePolling<
     {
       id: string
+      connector_id: string
+      certificates?: Record<string, string>
+      dns_status?: Record<string, { status: string; address: string }>
       config: Domain
       desired: string | null
       applied: string | null
@@ -519,23 +700,49 @@ function ServiceDomains({
       </p>
       <ErrorMessage message={error || loadError} />
       {data?.map((route) => (
-        <Card
-          size="compact"
-          key={route.id}
-          className="flex flex-wrap items-center justify-between gap-3"
-        >
+        <Card size="compact" key={route.id} className="space-y-3">
           <div>
             <p>
               {route.config.hostname}
               {route.config.path}
             </p>
             <p className="text-xs text-muted-foreground">
+              Routing:{' '}
               {route.error ||
                 (route.applied && route.applied === route.desired
                   ? 'Applied'
                   : 'Pending reconciliation')}
             </p>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Certificate:{' '}
+            {route.config.https
+              ? (route.certificates?.[route.config.hostname] ?? 'pending')
+              : 'HTTPS disabled'}
+            {route.config.https &&
+            route.certificates?.[route.config.hostname] === 'ready' &&
+            route.applied === route.desired &&
+            !route.error
+              ? ' · HTTPS route applied'
+              : ''}
+          </p>
+          {canDeploy && (
+            <DomainDns
+              key={
+                route.id +
+                JSON.stringify(
+                  hosts.find((h) => h.id === route.connector_id)?.dns_targets,
+                )
+              }
+              project={project}
+              service={slug}
+              route={route.id}
+              hostname={route.config.hostname}
+              server={hosts.find((h) => h.id === route.connector_id)}
+              status={route.dns_status}
+              onSaved={() => setRefresh((n) => n + 1)}
+            />
+          )}
           {canDeploy && (
             <Button
               disabled={busy}

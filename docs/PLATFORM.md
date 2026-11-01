@@ -1,15 +1,16 @@
 # Service deployment platform
 
 Services is the default project workspace. Containers remains the runtime inventory.
-Create a service from a registry image, GitHub Dockerfile, GitHub Compose repository,
+Create a service from a registry image, a connected Git Dockerfile/Compose repository,
 or pasted image-only Compose definition. Configure its host, review, and save a draft
 or deploy explicitly. Existing application URLs and legacy Git deployment settings
 remain supported.
 
 ## Enable features
 
-Apply migrations with `pnpm --filter @kloud/api migrate`. Migration 8 adds
-encrypted configuration revisions, deployment runs, connector capabilities, and routes.
+Apply all migrations with `pnpm --filter @kloud/api migrate`. They add encrypted
+configuration revisions, provider/registry connections, durable release state,
+database recovery, connector address metadata and optional service listeners.
 Set `PLATFORM_ENCRYPTION_KEY` on the API to 32 random bytes represented as 64 hex
 characters. Keep this key stable and back it up separately from PostgreSQL. Losing
 it makes saved revisions unusable. Existing DNS encryption uses its separate key.
@@ -19,6 +20,8 @@ On each connector, opt in independently:
 - `DEPLOYMENTS_ENABLED=true`: Git, image, and Compose deployment workers.
 - `RUNTIME_ENABLED=true`: inspection, logs, start/stop/restart, and shell sessions.
 - `PROXY_ENABLED=true`: managed per-host NGINX and certificate reconciliation.
+- `DATABASES_ENABLED=true`: opt-in private PostgreSQL/recovery worker; see [recovery setup](POSTGRESQL_RECOVERY.md).
+- `FORWARDING_ENABLED=true`: opt-in host-local listeners; requires approved binds and reviewed host networking ([network setup](PRIVATE_CONNECTIVITY.md)).
 
 All default to disabled. Updated connectors advertise capabilities over their existing
 authenticated WebSocket. Older connectors continue sending inventory. Run the API as
@@ -41,8 +44,11 @@ replace the masked definition with the complete file.
 Single-container settings expose environment, named volumes, ports, networks, restart
 policy, CPU/memory limits, and health checks. Networks must already exist. Compose
 owns stack runtime settings. Pasted Compose requires image references; repository
-builds use GitHub Compose. Private image credentials are supported for image services;
-private registry authentication for Compose and isolated Git builders remains a limitation.
+builds use connected Git Compose. Private base, Compose and runtime image pulls use
+isolated registry credentials or reusable scoped connections. BuildKit secret mounts
+are separate from public build arguments and runtime values; see [repository and
+credential setup](REPOSITORIES.md). Both variable editors share one encrypted draft
+and require explicit review for deletions ([variable grammar and permissions](VARIABLES.md)).
 
 Git deployments require a full commit SHA for manual builds. Saving a draft does not
 activate or change automatic deployments; explicitly deploying selects its revision
@@ -52,13 +58,17 @@ Git webhook URLs and secret rotation continue working. New Git sources show thei
 webhook URL and one-time secret rotation in the Source tab.
 
 Both deployment queues serialize on the connector. Request keys deduplicate submitted
-deployment requests. Ambiguous worker failures are marked failed, not retried as new
-deployments. Successful image and Compose runs retain image references; Git runs retain
+deployment requests. Runs are FIFO by receipt sequence and retain exact commits and
+configuration revisions. Uncertain serving state pauses that app for reconciliation;
+ambiguous host commands are not repeated as new deployments. Successful image and Compose runs retain image references; Git runs retain
 build artifacts. Rollback reuses the selected revision and retained artifacts. It does
 not restore data. Do not prune retained images/checkouts that you intend to roll back to.
 
-Single-container startup failures attempt to restore the prior container. Compose
-failures require an explicit rollback. Named volumes survive redeployment and rollback.
+New drafts default to readiness-gated blue/green and existing drafts require
+compatibility review. Candidate startup failure preserves the serving release;
+confirmed managed proxy cutover precedes retirement. Selective Compose candidates
+keep unchanged dependencies in place. Stop-first/restart actions require explicit
+downtime authority. See [rollout support limits and reconciliation](ROLLOUTS.md). Named volumes survive redeployment and rollback.
 Removing a service removes metadata/history/routes but leaves containers and volumes.
 Removal is blocked during a running deployment.
 
@@ -94,8 +104,9 @@ use Cloud DNS separately with its existing permissions.
 
 HTTPS uses Certbot webroot HTTP-01 challenges. Public DNS must resolve to the proxy and
 port 80 must be reachable. Certificate material persists in the proxy directory. Renewal
-runs every twelve hours and reloads NGINX. Wildcards, DNS-01, TCP/UDP ingress, and
-cross-host routing are deferred. Proxy images are configurable via `PROXY_NGINX_IMAGE`
+runs every twelve hours and reloads NGINX. Wildcards, DNS-01 and cross-host routing
+remain deferred. Optional generic host-local TCP/UDP listeners are separate from
+HTTP routing; public PostgreSQL stays blocked pending verified native TLS/renewal. Proxy images are configurable via `PROXY_NGINX_IMAGE`
 and `PROXY_CERTBOT_IMAGE`; pin tested image digests for production.
 
 The routing controller is new and opt-in. Validate on a non-production host before

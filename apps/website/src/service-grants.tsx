@@ -14,6 +14,7 @@ const labels = {
   update: 'Edit service details',
   delete: 'Remove service records',
   deploy: 'Configure deployments and webhooks',
+  reveal: 'Reveal service secrets and use developer variable editor',
 }
 export function ServiceGrantsEditor({
   value,
@@ -39,7 +40,8 @@ export function ServiceGrantsEditor({
     dependentIds:
       capability === 'update' ||
       capability === 'delete' ||
-      capability === 'deploy'
+      capability === 'deploy' ||
+      capability === 'reveal'
         ? [1]
         : [],
   }))
@@ -50,7 +52,11 @@ export function ServiceGrantsEditor({
         capability: c as ServiceGrant['capability'],
         service: target || null,
       }))
-    if (next.some((g) => ['update', 'delete', 'deploy'].includes(g.capability)))
+    if (
+      next.some((g) =>
+        ['update', 'delete', 'deploy', 'reveal'].includes(g.capability),
+      )
+    )
       next.push({ capability: 'read', service: target || null })
     onChange(
       [...value, ...next].filter(
@@ -93,7 +99,7 @@ export function ServiceGrantsEditor({
                       g.service === grant.service &&
                       (g.capability === grant.capability ||
                         (grant.capability === 'read' &&
-                          ['update', 'delete', 'deploy'].includes(
+                          ['update', 'delete', 'deploy', 'reveal'].includes(
                             g.capability,
                           )))
                     ),

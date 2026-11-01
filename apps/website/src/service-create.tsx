@@ -1,3 +1,6 @@
+import { EnvironmentEditor } from './environment-editor'
+import { ComposeWatchFields } from './compose-watch-fields'
+import { DeploymentPolicyFields } from './deployment-policy-fields'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   ArrowLeft,
@@ -200,6 +203,34 @@ export function ServiceCreatePage({
     event.preventDefault()
     if (submitting.current || !selected) return
     const form = event.currentTarget
+    if (selected === 'dockerfile' || selected === 'git-compose') {
+      if (!name.trim() || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+        setFieldError('Enter a service name and valid slug.')
+        return
+      }
+      submitting.current = true
+      setBusy(true)
+      setError('')
+      try {
+        if (!created)
+          await api(`/projects/${project}/services`, 'POST', {
+            name,
+            slug,
+            type: selected === 'git-compose' ? 'compose' : 'application',
+            description: '',
+          })
+        setCreated(true)
+        location.assign(
+          `/projects/${project}/applications/${slug}?setup=repository`,
+        )
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Unable to create service')
+      } finally {
+        submitting.current = false
+        setBusy(false)
+      }
+      return
+    }
     const wantsDeploy =
       (event.nativeEvent as SubmitEvent).submitter?.getAttribute(
         'data-deploy',
@@ -226,7 +257,7 @@ export function ServiceCreatePage({
     }
     const desired: PlatformConfig = {
       ...config,
-      runtime: compose ? newConfig().runtime : config.runtime,
+      runtime: config.runtime,
       source:
         config.source.type === 'github'
           ? {
@@ -324,7 +355,7 @@ export function ServiceCreatePage({
           const revision = await api<{ id: string }>(
             `/projects/${project}/services/${slug}/configuration`,
             'PUT',
-            { config: desired },
+            { config: desired, previous: savedRevision.current?.id },
           )
           savedRevision.current = { fingerprint, id: revision.id }
           requestKey.current = crypto.randomUUID()
@@ -483,90 +514,111 @@ export function ServiceCreatePage({
                         onChange={(e) => setName(e.target.value)}
                       />
                     </Label>
-                    {canDeploy && (
-                      <SourceFields
-                        config={config}
-                        onChange={setConfig}
-                        mode="create"
-                      />
+                    {canDeploy &&
+                    (selected === 'dockerfile' ||
+                      selected === 'git-compose') ? (
+                      <p className="text-sm text-muted-foreground">
+                        Create this service, then select a GitHub App
+                        installation and repository, or connect using a
+                        repository URL and personal access token. Creating the
+                        service does not deploy it.
+                      </p>
+                    ) : (
+                      canDeploy && (
+                        <SourceFields
+                          config={config}
+                          onChange={setConfig}
+                          mode="create"
+                        />
+                      )
                     )}
                   </Card>
-                  {canDeploy && (
-                    <section className="space-y-3" aria-label="Deployment host">
-                      <div className="flex items-center justify-between">
-                        <h2 className="text-sm font-medium">Deployment host</h2>
-                        <span className="text-xs text-muted-foreground">
-                          {eligible.length} available
-                        </span>
-                      </div>
-                      <ErrorMessage message={hostError} />
-                      {!hosts && !hostError && (
-                        <p
-                          role="status"
-                          className="text-sm text-muted-foreground"
-                        >
-                          Loading hosts…
-                        </p>
-                      )}
-                      {hosts?.length === 0 && (
-                        <Card
-                          size="compact"
-                          className="text-sm text-muted-foreground"
-                        >
-                          No hosts connected. Add a connector to deploy
-                          services.
-                        </Card>
-                      )}
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {hosts?.map((host) => {
-                          const issue = hostIssue(host),
-                            active = config.connector_id === host.id
-                          return (
-                            <Button
-                              key={host.id}
-                              type="button"
-                              aria-label={`Deploy to ${host.name}`}
-                              aria-pressed={active}
-                              aria-describedby={`host-state-${host.id}`}
-                              disabled={!!issue}
-                              onClick={() =>
-                                setConfig({ ...config, connector_id: host.id })
-                              }
-                              className={`!h-auto !justify-start !p-4 text-left ${active ? '!border-foreground !bg-card' : '!bg-card'}`}
-                            >
-                              <Server
-                                size={18}
-                                className="shrink-0"
-                                aria-hidden="true"
-                              />
-                              <span className="min-w-0 flex-1">
-                                <span className="block break-all text-sm font-medium">
-                                  {host.name}
-                                </span>
-                                <span
-                                  id={`host-state-${host.id}`}
-                                  className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
-                                >
-                                  <span
-                                    className={`size-1.5 rounded-full ${issue ? 'bg-muted-foreground' : 'bg-emerald-500'}`}
-                                    aria-hidden="true"
-                                  />
-                                  {issue ?? 'Connected'}
-                                </span>
-                              </span>
-                              {active && !issue && (
-                                <Check
-                                  size={16}
+                  {canDeploy &&
+                    selected !== 'dockerfile' &&
+                    selected !== 'git-compose' && (
+                      <section
+                        className="space-y-3"
+                        aria-label="Deployment host"
+                      >
+                        <div className="flex items-center justify-between">
+                          <h2 className="text-sm font-medium">
+                            Deployment host
+                          </h2>
+                          <span className="text-xs text-muted-foreground">
+                            {eligible.length} available
+                          </span>
+                        </div>
+                        <ErrorMessage message={hostError} />
+                        {!hosts && !hostError && (
+                          <p
+                            role="status"
+                            className="text-sm text-muted-foreground"
+                          >
+                            Loading hosts…
+                          </p>
+                        )}
+                        {hosts?.length === 0 && (
+                          <Card
+                            size="compact"
+                            className="text-sm text-muted-foreground"
+                          >
+                            No hosts connected. Add a connector to deploy
+                            services.
+                          </Card>
+                        )}
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {hosts?.map((host) => {
+                            const issue = hostIssue(host),
+                              active = config.connector_id === host.id
+                            return (
+                              <Button
+                                key={host.id}
+                                type="button"
+                                aria-label={`Deploy to ${host.name}`}
+                                aria-pressed={active}
+                                aria-describedby={`host-state-${host.id}`}
+                                disabled={!!issue}
+                                onClick={() =>
+                                  setConfig({
+                                    ...config,
+                                    connector_id: host.id,
+                                  })
+                                }
+                                className={`!h-auto !justify-start !p-4 text-left ${active ? '!border-foreground !bg-card' : '!bg-card'}`}
+                              >
+                                <Server
+                                  size={18}
                                   className="shrink-0"
                                   aria-hidden="true"
                                 />
-                              )}
-                            </Button>
-                          )
-                        })}
-                      </div>
-                    </section>
-                  )}
+                                <span className="min-w-0 flex-1">
+                                  <span className="block break-all text-sm font-medium">
+                                    {host.name}
+                                  </span>
+                                  <span
+                                    id={`host-state-${host.id}`}
+                                    className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground"
+                                  >
+                                    <span
+                                      className={`size-1.5 rounded-full ${issue ? 'bg-muted-foreground' : 'bg-emerald-500'}`}
+                                      aria-hidden="true"
+                                    />
+                                    {issue ?? 'Connected'}
+                                  </span>
+                                </span>
+                                {active && !issue && (
+                                  <Check
+                                    size={16}
+                                    className="shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </Button>
+                            )
+                          })}
+                        </div>
+                      </section>
+                    )}
                   <CollapsibleSection
                     title="Advanced settings"
                     count={customSlug !== undefined ? 1 : 0}
@@ -651,6 +703,38 @@ export function ServiceCreatePage({
                   </a>
                 </Button>
               )}
+              {canDeploy &&
+                selected !== 'dockerfile' &&
+                selected !== 'git-compose' && (
+                  <DeploymentPolicyFields
+                    value={config.deployment}
+                    onChange={(deployment) =>
+                      setConfig({ ...config, deployment })
+                    }
+                  />
+                )}
+              {canDeploy && selected === 'compose' && (
+                <Card className="space-y-3">
+                  <h2 className="font-semibold">Compose runtime variables</h2>
+                  <EnvironmentEditor
+                    value={config.runtime.environment}
+                    onChange={(environment) =>
+                      setConfig({
+                        ...config,
+                        runtime: { ...config.runtime, environment },
+                      })
+                    }
+                  />
+                </Card>
+              )}
+              {canDeploy && selected === 'compose' && config.deployment && (
+                <ComposeWatchFields
+                  value={config.deployment}
+                  onChange={(deployment) =>
+                    setConfig({ ...config, deployment })
+                  }
+                />
+              )}
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background py-4">
                 <span className="text-xs text-muted-foreground">
                   {deploying
@@ -667,29 +751,34 @@ export function ServiceCreatePage({
                     {busy
                       ? 'Saving…'
                       : canDeploy
-                        ? 'Save draft'
+                        ? selected === 'dockerfile' ||
+                          selected === 'git-compose'
+                          ? 'Continue to repository setup'
+                          : 'Save draft'
                         : 'Create service'}
                   </Button>
-                  {canDeploy && (
-                    <Button
-                      type={
-                        config.source.type !== 'github' || deploying
-                          ? 'submit'
-                          : 'button'
-                      }
-                      data-deploy="true"
-                      disabled={busy}
-                      onClick={(event) => {
-                        if (config.source.type === 'github' && !deploying) {
-                          event.preventDefault()
-                          setDeploying(true)
+                  {canDeploy &&
+                    selected !== 'dockerfile' &&
+                    selected !== 'git-compose' && (
+                      <Button
+                        type={
+                          config.source.type !== 'github' || deploying
+                            ? 'submit'
+                            : 'button'
                         }
-                      }}
-                    >
-                      {deploying ? 'Deploy now' : 'Create and deploy'}
-                      <ArrowRight size={14} />
-                    </Button>
-                  )}
+                        data-deploy="true"
+                        disabled={busy}
+                        onClick={(event) => {
+                          if (config.source.type === 'github' && !deploying) {
+                            event.preventDefault()
+                            setDeploying(true)
+                          }
+                        }}
+                      >
+                        {deploying ? 'Deploy now' : 'Create and deploy'}
+                        <ArrowRight size={14} />
+                      </Button>
+                    )}
                 </div>
               </div>
             </fieldset>

@@ -213,6 +213,16 @@ export function Shell({
                 </a>
                 <a
                   className={
+                    active === 'databases' ? 'nav-item active' : 'nav-item'
+                  }
+                  href={`/projects/${project}/databases`}
+                  aria-current={active === 'databases' ? 'page' : undefined}
+                >
+                  <Icon name="box" />
+                  Databases
+                </a>
+                <a
+                  className={
                     active === 'containers' ? 'nav-item active' : 'nav-item'
                   }
                   href={
@@ -345,7 +355,9 @@ export function Shell({
         <div className="account border-border">
           {account && (
             <Card className="account-menu">
-              <Button asChild><a href="/account/security">Account security</a></Button>
+              <Button asChild>
+                <a href="/account/security">Account security</a>
+              </Button>
               <Button
                 onClick={() => {
                   void api('/auth/logout', 'POST')

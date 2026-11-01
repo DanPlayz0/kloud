@@ -18,6 +18,22 @@ See [dashboard setup](docs/SETUP.md) for PostgreSQL, migrations, administrator
 bootstrap, account enrollment, Docker connectors, and deployment. See
 [API contracts](docs/API.md) for endpoint and connector protocol details.
 
+## Deployment and recovery workflows
+
+See [implementation status and remaining release gates](docs/FEATURE_IMPLEMENTATION.md).
+
+- [Repository connections, PAT/App onboarding, Dockerfile suggestions and private credentials](docs/REPOSITORIES.md)
+- [Readiness-gated rollouts, FIFO queues and selective Compose deployment](docs/ROLLOUTS.md)
+- [Normal and developer variable editors](docs/VARIABLES.md)
+- [Managed PostgreSQL, custom archive import, backup and restore-to-new](docs/POSTGRESQL_RECOVERY.md)
+- [Private connectivity and optional TCP/UDP listeners](docs/PRIVATE_CONNECTIVITY.md)
+- [Reversible platform cutover](docs/CUTOVER.md)
+
+These workflows have explicit compatibility and acceptance requirements. Read the
+linked support limits before production use. Public PostgreSQL forwarding remains
+blocked pending verified native TLS and certificate renewal. VPN installation and
+production cutover are separate execution tasks.
+
 ## Getting started
 
 Use Node.js 22.12+ and pnpm 12.16.1 (pinned in `packageManager`).

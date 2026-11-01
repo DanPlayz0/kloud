@@ -1,7 +1,13 @@
-import { useState, type ReactNode } from 'react'
+import { RepositoryOnboarding } from './repository-onboarding'
+import { BuildInputsFields } from './build-inputs-fields'
+import { defaultDeploymentPolicy } from './deployment-policy-fields'
+import type { ServerAddresses } from './server-addresses'
+import { EnvironmentEditor } from './environment-editor'
+import { type ReactNode } from 'react'
 import type { PlatformConfig, RuntimeConfig } from '@kloud/protocol/platform'
 import {
   Button,
+  Checkbox,
   Input,
   Label,
   NativeSelect,
@@ -10,7 +16,7 @@ import {
 import { Card } from './components/ui/card'
 import { CollapsibleSection } from './components/ui/collapsible'
 
-export interface Host {
+export interface Host extends ServerAddresses {
   id: string
   name: string
   capabilities: string[]
@@ -26,6 +32,7 @@ export const emptyRuntime: RuntimeConfig = {
 export function newConfig(): PlatformConfig {
   return {
     connector_id: '',
+    deployment: defaultDeploymentPolicy(),
     source: { type: 'image', image: '' },
     runtime: { ...emptyRuntime },
   }
@@ -35,10 +42,14 @@ export function SourceFields({
   onChange,
   serviceType,
   mode,
+  project,
+  service,
 }: {
   config: PlatformConfig
   onChange: (config: PlatformConfig) => void
   serviceType?: 'application' | 'compose'
+  project?: string
+  service?: string
   mode?: 'create'
 }) {
   const source = config.source
@@ -229,22 +240,48 @@ export function SourceFields({
       )}
       {source.type === 'github' && (
         <>
-          <Label>
-            GitHub repository (owner/repo)
-            <Input
-              data-source-input
-              required
-              value={source.config.repository}
-              onChange={(e) =>
+          {project && service ? (
+            <RepositoryOnboarding
+              project={project}
+              service={service}
+              value={source.config}
+              onChange={(next) =>
+                onChange({ ...config, source: { ...source, config: next } })
+              }
+            />
+          ) : (
+            <Label>
+              GitHub repository (owner/repo)
+              <Input
+                data-source-input
+                required
+                value={source.config.repository}
+                onChange={(e) =>
+                  onChange({
+                    ...config,
+                    source: {
+                      ...source,
+                      config: { ...source.config, repository: e.target.value },
+                    },
+                  })
+                }
+              />
+            </Label>
+          )}
+          <Label className="flex items-center gap-2">
+            <Checkbox
+              checked={source.config.enabled}
+              onCheckedChange={(v) =>
                 onChange({
                   ...config,
                   source: {
                     ...source,
-                    config: { ...source.config, repository: e.target.value },
+                    config: { ...source.config, enabled: v === true },
                   },
                 })
               }
             />
+            Automatically deploy signed pushes after setup is completed
           </Label>
           <CreationSettings
             compact={mode === 'create'}
@@ -260,23 +297,45 @@ export function SourceFields({
               Number(source.config.context !== '.')
             }
           >
+            {(!project || !service || !source.config.connection_id) && (
+              <Label>
+                Branch
+                <Input
+                  data-config-path="source.config.branch"
+                  data-source-input
+                  required
+                  value={source.config.branch}
+                  onChange={(e) =>
+                    onChange({
+                      ...config,
+                      source: {
+                        ...source,
+                        config: { ...source.config, branch: e.target.value },
+                      },
+                    })
+                  }
+                />
+              </Label>
+            )}
             <Label>
-              Branch
+              Application root (repository-relative)
               <Input
-                data-config-path="source.config.branch"
-                data-source-input
+                value={source.config.app_root ?? '.'}
                 required
-                value={source.config.branch}
                 onChange={(e) =>
                   onChange({
                     ...config,
                     source: {
                       ...source,
-                      config: { ...source.config, branch: e.target.value },
+                      config: { ...source.config, app_root: e.target.value },
                     },
                   })
                 }
               />
+              <span className="text-xs text-muted-foreground">
+                The app directory is separate from its Dockerfile and build
+                context. Workspace apps may need a repository-root context.
+              </span>
             </Label>
             <Label>
               Build file
@@ -297,7 +356,7 @@ export function SourceFields({
               />
             </Label>
             <Label>
-              Build context / project directory
+              Build context (repository-relative)
               <Input
                 data-config-path="source.config.context"
                 data-source-input
@@ -314,9 +373,63 @@ export function SourceFields({
                 }
               />
             </Label>
+            {source.config.kind === 'dockerfile' && (
+              <Label>
+                Public build arguments (JSON object)
+                <Textarea
+                  defaultValue={JSON.stringify(
+                    source.config.build_arguments ?? {},
+                    null,
+                    2,
+                  )}
+                  onChange={(e) => {
+                    try {
+                      const value = JSON.parse(e.target.value || '{}')
+                      if (
+                        !value ||
+                        Array.isArray(value) ||
+                        typeof value !== 'object' ||
+                        Object.values(value).some(
+                          (v) => typeof v !== 'string',
+                        ) ||
+                        Object.keys(value).some(
+                          (k) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(k),
+                        )
+                      )
+                        throw new Error(
+                          'Use a JSON object with variable names and string values.',
+                        )
+                      e.target.setCustomValidity('')
+                      onChange({
+                        ...config,
+                        source: {
+                          ...source,
+                          config: { ...source.config, build_arguments: value },
+                        },
+                      })
+                    } catch {
+                      e.target.setCustomValidity(
+                        'Use a JSON object with variable names and string values.',
+                      )
+                    }
+                  }}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Public values such as NEXT_PUBLIC_* and VITE_*. The committed
+                  Dockerfile must declare ARG. Never enter credentials here;
+                  these values can appear in image history and browser bundles.
+                </span>
+              </Label>
+            )}
           </CreationSettings>
         </>
       )}
+      <BuildInputsFields
+        project={project}
+        service={service}
+        value={config.build_inputs}
+        onChange={(build_inputs) => onChange({ ...config, build_inputs })}
+      />
     </div>
   )
 }
@@ -324,29 +437,15 @@ export function RuntimeFields({
   value,
   onChange,
   compact = false,
+  revealUrl,
+  onReveal,
 }: {
   value: RuntimeConfig
   onChange: (value: RuntimeConfig) => void
   compact?: boolean
+  revealUrl?: string
+  onReveal?: (original: Record<string, string>) => void
 }) {
-  const [variables, setVariables] = useState(() =>
-    Object.entries(value.environment).map(([name, secret]) => ({
-      name,
-      secret,
-    })),
-  )
-  function variable(index: number, field: 'name' | 'secret', text: string) {
-    const next = variables.map((v, i) =>
-      i === index ? { ...v, [field]: text } : v,
-    )
-    setVariables(next)
-    onChange({
-      ...value,
-      environment: Object.fromEntries(
-        next.filter((v) => v.name).map((v) => [v.name, v.secret]),
-      ),
-    })
-  }
   return (
     <div className="space-y-5">
       <CreationSettings
@@ -359,50 +458,12 @@ export function RuntimeFields({
         <p className="text-xs text-muted-foreground">
           Values are encrypted and masked on later reads.
         </p>
-        {variables.map((v, i) => (
-          <div key={i} className="flex items-end gap-2">
-            <Label className="min-w-0 flex-1">
-              Variable name
-              <Input
-                pattern="[A-Za-z_][A-Za-z0-9_]*"
-                required
-                value={v.name}
-                onChange={(e) => variable(i, 'name', e.target.value)}
-              />
-            </Label>
-            <Label className="min-w-0 flex-1">
-              Value
-              <Input
-                type="password"
-                autoComplete="new-password"
-                value={v.secret}
-                onChange={(e) => variable(i, 'secret', e.target.value)}
-              />
-            </Label>
-            <Button
-              type="button"
-              aria-label={'Remove variable ' + (v.name || i)}
-              onClick={() => {
-                const next = variables.filter((_, j) => i !== j)
-                setVariables(next)
-                onChange({
-                  ...value,
-                  environment: Object.fromEntries(
-                    next.filter((v) => v.name).map((v) => [v.name, v.secret]),
-                  ),
-                })
-              }}
-            >
-              Remove
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          onClick={() => setVariables([...variables, { name: '', secret: '' }])}
-        >
-          Add variable
-        </Button>
+        <EnvironmentEditor
+          value={value.environment}
+          onChange={(environment) => onChange({ ...value, environment })}
+          revealUrl={revealUrl}
+          onReveal={onReveal}
+        />
       </CreationSettings>
       <CreationSettings
         compact={compact}

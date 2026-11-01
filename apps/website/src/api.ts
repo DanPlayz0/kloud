@@ -1,3 +1,4 @@
+import type { ServerAddresses } from './server-addresses'
 import { redirect } from '@tanstack/react-router'
 export interface User {
   id: string
@@ -63,6 +64,7 @@ export const serviceCapabilities = [
   'update',
   'delete',
   'deploy',
+  'reveal',
 ] as const
 export interface ServiceGrant {
   capability: (typeof serviceCapabilities)[number]
@@ -186,7 +188,7 @@ export async function adminSession(section: string) {
   return user
 }
 
-export interface Connector {
+export interface Connector extends ServerAddresses {
   id: string
   name: string
   host: string | null

@@ -1,4 +1,17 @@
-# GitHub push deployments
+# Legacy GitHub deployment reference
+
+For current setup, use [repository connections](REPOSITORIES.md),
+[readiness-gated releases](ROLLOUTS.md), and
+[implementation status](FEATURE_IMPLEMENTATION.md). New repository onboarding uses
+App installation/repository/branch selection or Repository URL + PAT. Existing
+manual configurations can be reviewed into versioned drafts; legacy connector-token
+use requires an administrator-approved app/repository/host binding. Workers without
+`rollout-v1` cannot claim release jobs. Unreviewed legacy replacement is blocked.
+
+The older stable-container and stop-first implementation described below is retained
+as a compatibility reference, not the default rollout policy or a production
+availability guarantee. Current blue/green ordering, timeout, queue and recovery
+rules in ROLLOUTS.md supersede those historical descriptions.
 
 Create a Dockerfile application or Docker Compose service from **Compute / Services**.
 Open the service to select a host, GitHub `owner/repo`, branch, repository-relative
