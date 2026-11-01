@@ -220,6 +220,17 @@ export async function migrate() {
         INSERT INTO migrations(version) VALUES(9);
       `)
     }
+    if (
+      !(await db.query('SELECT version FROM migrations WHERE version=10'))
+        .rowCount
+    ) {
+      await db.query(`
+        ALTER TABLE users DROP CONSTRAINT users_capabilities_check;
+        ALTER TABLE users ADD CONSTRAINT users_capabilities_check CHECK
+          (capabilities <@ ARRAY['dns.manage','users.manage','projects.create','projects.manage','connectors.manage','connectors.operate','inventory.manage']::text[]);
+        INSERT INTO migrations(version) VALUES(10);
+      `)
+    }
   })
 }
 if (

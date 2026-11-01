@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Check, ChevronsUpDown, FolderKanban, Plus } from 'lucide-react'
-import { api, hasServer, type Project, type User } from '../api'
+import { Check, ChevronsUpDown, FolderKanban, Plus, Server } from 'lucide-react'
+import { api, hasServer, type Project, type User, type Connector } from '../api'
 import { Button } from './ui/controls'
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import {
@@ -43,10 +43,18 @@ export function ProjectPicker({
   user,
   projects,
   project,
+  connector,
+  connectors = [],
+  connectorError = '',
+  showConnectors = false,
 }: {
   user: User
   projects: Project[]
   project?: string
+  connector?: Connector
+  connectors?: Connector[]
+  connectorError?: string
+  showConnectors?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -69,6 +77,13 @@ export function ProjectPicker({
   const canCreate = hasServer(user, 'projects.create')
   const filtered = projects.filter((p) =>
     `${p.name}\n${p.slug}`.toLowerCase().includes(query.toLowerCase().trim()),
+  )
+  const filteredConnectors = connectors.filter((c) =>
+    [c.name, c.host, c.id]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(query.toLowerCase().trim()),
   )
   const navigate = (slug: string) =>
     location.assign(`/projects/${encodeURIComponent(slug)}/services`)
@@ -105,16 +120,24 @@ export function ProjectPicker({
           <Button
             ref={trigger}
             type="button"
-            aria-label="Project"
+            aria-label={showConnectors ? 'Project or connector' : 'Project'}
             className="project-picker-trigger w-full min-w-0 bg-background text-foreground"
           >
-            <ProjectMark project={current} />
+            {connector ? (
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
+                <Server className="size-4" aria-hidden="true" />
+              </span>
+            ) : (
+              <ProjectMark project={current} />
+            )}
             <span className="grid min-w-0 flex-1 gap-1 text-left leading-tight">
               <span className="truncate text-sm font-semibold">
-                {current?.name ?? 'Select project'}
+                {connector?.name ?? current?.name ?? 'Select project'}
               </span>
               <span className="truncate text-xs font-normal text-muted-foreground">
-                {current?.slug ?? 'Projects'}
+                {connector
+                  ? (connector.host ?? 'Connector')
+                  : (current?.slug ?? 'Projects')}
               </span>
             </span>
             <ChevronsUpDown
@@ -124,7 +147,9 @@ export function ProjectPicker({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          aria-label="Select project"
+          aria-label={
+            showConnectors ? 'Select project or connector' : 'Select project'
+          }
           className="project-picker-popover"
           side={mobile ? 'bottom' : 'right'}
           sideOffset={8}
@@ -134,20 +159,34 @@ export function ProjectPicker({
         >
           <Command shouldFilter={false}>
             <CommandInput
-              aria-label="Search projects"
-              placeholder="Search projects…"
+              aria-label={
+                showConnectors
+                  ? 'Search projects and connectors'
+                  : 'Search projects'
+              }
+              placeholder={
+                showConnectors
+                  ? 'Search projects and connectors…'
+                  : 'Search projects…'
+              }
               value={query}
               onValueChange={setQuery}
             />
-            <CommandList label="Projects">
+            <CommandList
+              label={showConnectors ? 'Projects and connectors' : 'Projects'}
+            >
               <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
                 Projects
               </div>
-              <CommandEmpty>No projects found</CommandEmpty>
+              <CommandEmpty>
+                {showConnectors
+                  ? 'No projects or connectors found'
+                  : 'No projects found'}
+              </CommandEmpty>
               {filtered.map((p) => (
                 <CommandItem
                   key={p.slug}
-                  value={p.slug}
+                  value={'project:' + p.slug}
                   disabled={p.slug === project}
                   aria-current={p.slug === project ? 'true' : undefined}
                   onSelect={() => {
@@ -170,6 +209,53 @@ export function ProjectPicker({
                   )}
                 </CommandItem>
               ))}
+              {showConnectors && (
+                <>
+                  <div className="px-2 pt-3 pb-1 text-xs font-medium text-muted-foreground">
+                    Connectors
+                  </div>
+                  {connectorError && (
+                    <p
+                      role="alert"
+                      className="px-2 py-2 text-xs text-muted-foreground"
+                    >
+                      {connectorError}
+                    </p>
+                  )}
+                  {filteredConnectors.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      value={'connector:' + c.id}
+                      disabled={c.id === connector?.id}
+                      aria-current={c.id === connector?.id ? 'true' : undefined}
+                      onSelect={() => {
+                        setOpen(false)
+                        location.assign(
+                          '/connectors/' +
+                            encodeURIComponent(c.id) +
+                            '/compute/containers',
+                        )
+                      }}
+                    >
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
+                        <Server className="size-4" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{c.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {c.host ?? 'Not connected'}
+                        </span>
+                      </span>
+                      {c.id === connector?.id && (
+                        <Check
+                          className="size-4 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                      )}
+                    </CommandItem>
+                  ))}
+                </>
+              )}
             </CommandList>
           </Command>
           {canCreate && (

@@ -35,10 +35,14 @@ test('searches names and slugs, preserves order, navigates with keyboard and res
   page,
 }, testInfo) => {
   await fixtures(page)
-  const picker = page.getByRole('button', { name: 'Project', exact: true })
+  const picker = page.getByRole('button', {
+    name: /^Project(?: or connector)?$/,
+  })
   await expect(picker).toContainText('Alpha project')
   await picker.click()
-  const search = page.getByRole('combobox', { name: 'Search projects' })
+  const search = page.getByRole('combobox', {
+    name: /^Search projects(?: and connectors)?$/,
+  })
   await expect(search).toBeFocused()
   await page.screenshot({ path: testInfo.outputPath('project-picker.png') })
   await expect(page.getByRole('option')).toContainText([
@@ -49,12 +53,14 @@ test('searches names and slugs, preserves order, navigates with keyboard and res
     page.getByRole('option', { name: 'Alpha project alpha' }),
   ).toBeDisabled()
   await expect(
-    page.getByRole('dialog', { name: 'Select project' }),
+    page.getByRole('dialog', { name: /^Select project(?: or connector)?$/ }),
   ).toHaveAttribute('data-side', 'right')
   await search.fill('ALPHA')
   await expect(page.getByRole('option')).toHaveCount(1)
   await search.fill('no-match')
-  await expect(page.getByText('No projects found')).toBeVisible()
+  await expect(
+    page.getByText(/^No projects(?: or connectors)? found$/),
+  ).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Create project', exact: true }),
   ).toBeVisible()
@@ -78,7 +84,9 @@ for (const [label, admin, capabilities, visible] of [
 ] as const) {
   test(`creation permission: ${label}`, async ({ page }) => {
     await fixtures(page, admin, [...capabilities])
-    await page.getByRole('button', { name: 'Project', exact: true }).click()
+    await page
+      .getByRole('button', { name: /^Project(?: or connector)?$/ })
+      .click()
     await expect(
       page.getByRole('button', { name: 'Create project', exact: true }),
     ).toHaveCount(visible ? 1 : 0)
@@ -100,12 +108,18 @@ test('long project lists scroll and keep the creation action visible', async ({
       })),
     ],
   )
-  await page.getByRole('button', { name: 'Project', exact: true }).click()
-  const list = page.getByRole('listbox', { name: 'Projects' })
+  await page
+    .getByRole('button', { name: /^Project(?: or connector)?$/ })
+    .click()
+  const list = page.getByRole('listbox', {
+    name: /^Projects(?: and connectors)?$/,
+  })
   expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(
     true,
   )
-  await page.getByRole('combobox', { name: 'Search projects' }).press('End')
+  await page
+    .getByRole('combobox', { name: /^Search projects(?: and connectors)?$/ })
+    .press('End')
   await expect(list.getByRole('option').last()).toBeInViewport()
   await expect(
     page.getByRole('button', { name: 'Create project', exact: true }),
@@ -133,7 +147,9 @@ test('member cannot create projects', async ({ page }) => {
     [],
     [{ ...projects[0]!, role: 'member', can_manage_access: false }],
   )
-  await page.getByRole('button', { name: 'Project', exact: true }).click()
+  await page
+    .getByRole('button', { name: /^Project(?: or connector)?$/ })
+    .click()
   await expect(
     page.getByRole('button', { name: 'Create project', exact: true }),
   ).toHaveCount(0)
@@ -161,7 +177,9 @@ test('dialog validates, preserves failures, blocks duplicate submission and open
     })
     await route.fulfill({ status: 201, json: { ok: true } })
   })
-  const picker = page.getByRole('button', { name: 'Project', exact: true })
+  const picker = page.getByRole('button', {
+    name: /^Project(?: or connector)?$/,
+  })
   await picker.click()
   await page
     .getByRole('button', { name: 'Create project', exact: true })
@@ -198,7 +216,9 @@ for (const entry of ['picker', 'administration'] as const) {
   }) => {
     await fixtures(page)
     if (entry === 'picker') {
-      await page.getByRole('button', { name: 'Project', exact: true }).click()
+      await page
+        .getByRole('button', { name: /^Project(?: or connector)?$/ })
+        .click()
       await page
         .getByRole('button', { name: 'Create project', exact: true })
         .click()
@@ -250,13 +270,17 @@ test('empty picker and mobile dialog reset on cancellation', async ({
   await page.setViewportSize({ width: 390, height: 844 })
   await fixtures(page, true, [], [])
   await page.getByRole('button', { name: 'Toggle navigation' }).click()
-  const picker = page.getByRole('button', { name: 'Project', exact: true })
+  const picker = page.getByRole('button', {
+    name: /^Project(?: or connector)?$/,
+  })
   await expect(picker).toContainText('Select project')
   await picker.click()
   await expect(
-    page.getByRole('dialog', { name: 'Select project' }),
+    page.getByRole('dialog', { name: /^Select project(?: or connector)?$/ }),
   ).toHaveAttribute('data-side', 'bottom')
-  await expect(page.getByText('No projects found')).toBeVisible()
+  await expect(
+    page.getByText(/^No projects(?: or connectors)? found$/),
+  ).toBeVisible()
   await page
     .getByRole('button', { name: 'Create project', exact: true })
     .click()

@@ -1,22 +1,10 @@
 import { Card, FormCard } from './components/ui/card'
 import { StatusBadge } from './components/ui/status-badge'
-import { Container, Terminal } from 'lucide-react'
-import { ContainerTerminal } from './components/container-terminal'
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from './components/ui/dialog'
+import { Container } from 'lucide-react'
+import { ConnectorControls } from './components/connector-controls'
 import { InventoryCard } from './components/inventory-card'
 import { ProjectFields, projectFormValues } from './components/project-fields'
-import {
-  Button,
-  Input,
-  NativeSelect,
-  Label,
-  Checkbox,
-} from './components/ui/controls'
+import { Button, Input, NativeSelect, Label } from './components/ui/controls'
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   api,
@@ -24,20 +12,12 @@ import {
   type User,
   type Project,
   type ContainerRow,
+  type Connector,
 } from './api'
 import { Shell, usePolling, ErrorMessage, Notice, Icon } from './components'
 import { Users } from './components/users'
 import { DnsProviders } from './dns'
 import { Pm2Inventory } from './pm2'
-type Connector = {
-  capabilities: string[]
-  id: string
-  name: string
-  host: string | null
-  discovery: boolean
-  revoked: boolean
-  stale: boolean
-}
 export function Admin({
   user,
   projects,
@@ -236,19 +216,6 @@ function Connectors({
   const { data, error } = usePolling<Connector[]>(
     `/admin/connectors?revision=${revision}`,
   )
-  const [pending, setPending] = useState<Record<string, boolean>>({})
-  const [terminal, setTerminal] = useState<Connector | null>(null)
-  const [terminalError, setTerminalError] = useState('')
-  useEffect(() => {
-    if (data)
-      setPending((p) =>
-        Object.fromEntries(
-          Object.entries(p).filter(
-            ([id, value]) => data.find((c) => c.id === id)?.discovery !== value,
-          ),
-        ),
-      )
-  }, [data])
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     void action('/admin/connectors', 'POST', {
@@ -289,61 +256,7 @@ function Connectors({
               </StatusBadge>
             </small>
           </div>
-          <div className="row-actions">
-            <Button
-              disabled={c.revoked || !c.capabilities?.includes('host-terminal')}
-              title={
-                c.capabilities?.includes('host-terminal')
-                  ? 'Open host SSH terminal'
-                  : 'Enable HOST_TERMINAL_ENABLED and configure SSH on the connector'
-              }
-              onClick={() => {
-                setTerminalError('')
-                setTerminal(c)
-              }}
-            >
-              <Terminal size={14} /> Host terminal
-            </Button>
-            <Label className="checkbox">
-              <Checkbox
-                checked={pending[c.id] ?? c.discovery}
-                disabled={c.revoked}
-                onCheckedChange={(value) => {
-                  const checked = value === true
-                  setPending((p) => ({ ...p, [c.id]: checked }))
-                  void action(`/admin/connectors/${c.id}`, 'PUT', {
-                    discovery: checked,
-                    revoked: false,
-                  }).then((success) => {
-                    if (!success)
-                      setPending((p) => {
-                        const next = { ...p }
-                        delete next[c.id]
-                        return next
-                      })
-                  })
-                }}
-              />
-              Discover unassigned containers
-            </Label>
-            <Button
-              disabled={c.revoked}
-              className="danger"
-              onClick={() => {
-                if (
-                  confirm(
-                    `Revoke ${c.name}? Its token will stop working permanently.`,
-                  )
-                )
-                  void action(`/admin/connectors/${c.id}`, 'PUT', {
-                    discovery: c.discovery,
-                    revoked: true,
-                  })
-              }}
-            >
-              Revoke token
-            </Button>
-          </div>
+          <ConnectorControls connector={c} action={action} showOpen />
         </Card>
       ))}
       {data?.length === 0 && (
@@ -351,31 +264,6 @@ function Connectors({
           Create a token to get started.
         </Notice>
       )}
-      <Dialog
-        open={!!terminal}
-        onOpenChange={(open) => {
-          if (!open) setTerminal(null)
-        }}
-      >
-        <DialogContent className="max-w-5xl">
-          <DialogTitle>Host terminal — {terminal?.name}</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            SSH shell on the configured host, using the connector's SSH account.
-          </DialogDescription>
-          <ErrorMessage message={terminalError} />
-          {terminal && (
-            <ContainerTerminal
-              key={terminal.id}
-              path={`/admin/connectors/${terminal.id}/terminal`}
-              onError={setTerminalError}
-              label="Host SSH terminal"
-            />
-          )}
-          <Button type="button" onClick={() => setTerminal(null)}>
-            Disconnect
-          </Button>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

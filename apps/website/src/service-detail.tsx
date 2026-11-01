@@ -388,7 +388,10 @@ export function ServiceDetail({
                   {c.connector_name} · {c.stale ? 'Stale' : c.data.state}
                 </p>
               </div>
-              <ContainerOperations project={project} container={c} />
+              <ContainerOperations
+                scope={{ kind: 'project', project }}
+                container={c}
+              />
             </Card>
           ))}
         </div>

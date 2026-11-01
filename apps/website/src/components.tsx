@@ -33,6 +33,9 @@ import {
   api,
   hasServer,
   adminCapabilities,
+  canBrowseConnectors,
+  canBrowseConnectorResources,
+  type Connector,
   type Project,
   type User,
 } from './api'
@@ -112,6 +115,7 @@ export function Shell({
   user,
   projects,
   project,
+  connector,
   active = 'services',
   title,
   children,
@@ -119,10 +123,18 @@ export function Shell({
   user: User
   projects: Project[]
   project?: string
+  connector?: Connector
   active?: string
   title: string
   children: ReactNode
 }) {
+  const { data: connectors, error: connectorError } = usePolling<Connector[]>(
+    canBrowseConnectors(user) ? '/connectors' : null,
+  )
+  const currentConnector =
+    (Array.isArray(connectors)
+      ? connectors.find((c) => c.id === connector?.id)
+      : undefined) ?? connector
   const [open, setOpen] = useState(false),
     [account, setAccount] = useState(false),
     [error, setError] = useState('')
@@ -146,8 +158,45 @@ export function Shell({
       <aside
         className={`sidebar bg-sidebar border-sidebar-border ${open ? 'open' : ''}`}
       >
-        <ProjectPicker user={user} projects={projects} project={project} />
+        <ProjectPicker
+          user={user}
+          projects={projects}
+          project={project}
+          connector={currentConnector}
+          connectors={Array.isArray(connectors) ? connectors : []}
+          connectorError={connectorError}
+          showConnectors={canBrowseConnectors(user)}
+        />
         <nav aria-label="Main navigation">
+          {currentConnector && (
+            <div className="nav-group">
+              <p>CONNECTOR</p>
+              {[
+                ['Overview', 'overview', 'network'],
+                ...(canBrowseConnectorResources(user)
+                  ? [
+                      ['Containers', 'compute/containers', 'box'],
+                      ['PM2', 'compute/pm2', 'activity'],
+                    ]
+                  : []),
+              ].map(([label, path, icon]) => (
+                <a
+                  key={path}
+                  className={active === path ? 'nav-item active' : 'nav-item'}
+                  aria-current={active === path ? 'page' : undefined}
+                  href={
+                    '/connectors/' +
+                    encodeURIComponent(currentConnector.id) +
+                    '/' +
+                    path
+                  }
+                >
+                  <Icon name={icon} />
+                  {label}
+                </a>
+              ))}
+            </div>
+          )}
           {project && (
             <>
               <div className="nav-group">
@@ -262,7 +311,9 @@ export function Shell({
               ))}
             </>
           )}
-          {(user.admin || !!user.capabilities?.length) && (
+          {Object.values(adminCapabilities).some((capability) =>
+            hasServer(user, capability),
+          ) && (
             <div className="nav-group">
               <p>ADMINISTRATION</p>
               {[
@@ -334,20 +385,25 @@ export function Shell({
         <header className="topbar border-border text-muted-foreground">
           <Breadcrumb className="min-w-0">
             <BreadcrumbList className="text-xs">
-              {title.split(' / ').map((part, index, parts) => (
-                <Fragment key={index}>
-                  {index > 0 && <BreadcrumbSeparator />}
-                  <BreadcrumbItem>
-                    {index === parts.length - 1 ? (
-                      <BreadcrumbPage className="break-all">
-                        {part}
-                      </BreadcrumbPage>
-                    ) : (
-                      <span>{part}</span>
-                    )}
-                  </BreadcrumbItem>
-                </Fragment>
-              ))}
+              {(currentConnector
+                ? currentConnector.name + ' / ' + title
+                : title
+              )
+                .split(' / ')
+                .map((part, index, parts) => (
+                  <Fragment key={index}>
+                    {index > 0 && <BreadcrumbSeparator />}
+                    <BreadcrumbItem>
+                      {index === parts.length - 1 ? (
+                        <BreadcrumbPage className="break-all">
+                          {part}
+                        </BreadcrumbPage>
+                      ) : (
+                        <span>{part}</span>
+                      )}
+                    </BreadcrumbItem>
+                  </Fragment>
+                ))}
             </BreadcrumbList>
           </Breadcrumb>
           <span className="topbar-brand">KLOUD</span>

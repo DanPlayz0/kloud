@@ -60,7 +60,9 @@ for (const creatorOnly of [false, true]) {
         await expect(
           page.getByRole('link', { name: 'Projects', exact: true }),
         ).toHaveCount(0)
-      await page.getByRole('button', { name: 'Project', exact: true }).click()
+      await page
+        .getByRole('button', { name: /^Project(?: or connector)?$/ })
+        .click()
       await page
         .getByRole('button', { name: 'Create project', exact: true })
         .last()
@@ -73,7 +75,7 @@ for (const creatorOnly of [false, true]) {
         .click()
       await expect(page).toHaveURL(`/projects/${slug}/services`)
       await expect(
-        page.getByRole('button', { name: 'Project', exact: true }),
+        page.getByRole('button', { name: /^Project(?: or connector)?$/ }),
       ).toContainText('Picker project')
       await expect(
         page.getByRole('heading', { name: 'Services', exact: true }),
@@ -138,10 +140,12 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
   await page.getByLabel('Project slug').fill(project)
   await page.getByRole('button', { name: 'Create project' }).click()
   await expect(page.getByRole('status')).toContainText('Changes saved')
-  await page.getByRole('button', { name: 'Project', exact: true }).click()
+  await page
+    .getByRole('button', { name: /^Project(?: or connector)?$/ })
+    .click()
   await expect(
     page
-      .getByRole('listbox', { name: 'Projects' })
+      .getByRole('listbox', { name: /^Projects(?: and connectors)?$/ })
       .getByRole('option', { name: /Miki/ }),
   ).toBeVisible()
   await page.keyboard.press('Escape')
@@ -200,9 +204,11 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
     await page.getByLabel('Application slug for worker').fill('worker')
     await page.getByRole('button', { name: 'Assign', exact: true }).click()
     await expect(page.getByRole('status')).toContainText('Changes saved')
-    await page.getByRole('button', { name: 'Project', exact: true }).click()
     await page
-      .getByRole('listbox', { name: 'Projects' })
+      .getByRole('button', { name: /^Project(?: or connector)?$/ })
+      .click()
+    await page
+      .getByRole('listbox', { name: /^Projects(?: and connectors)?$/ })
       .getByRole('option', { name: /Miki/ })
       .click()
     await page.getByRole('link', { name: 'Containers', exact: true }).click()
@@ -256,9 +262,17 @@ test('enrollment, two-factor login, administration, live inventory and responsiv
         .getByRole('navigation', { name: 'Main navigation' })
         .getByRole('link', { name: 'Containers', exact: true }),
     ).toBeVisible()
-    await page
-      .getByRole('button', { name: 'Close navigation', exact: true })
-      .click()
+    const backdrop = page.getByRole('button', {
+      name: 'Close navigation',
+      exact: true,
+    })
+    const backdropBounds = await backdrop.boundingBox()
+    await backdrop.click({
+      position: {
+        x: backdropBounds!.width - 12,
+        y: backdropBounds!.height / 2,
+      },
+    })
     await page.screenshot({
       path: testInfo.outputPath('containers-mobile.png'),
       fullPage: true,

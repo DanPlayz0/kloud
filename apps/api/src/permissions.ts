@@ -10,6 +10,7 @@ export const serverCapabilities = [
   'projects.create',
   'projects.manage',
   'connectors.manage',
+  'connectors.operate',
   'inventory.manage',
 ] as const
 export type ServerCapability = (typeof serverCapabilities)[number]

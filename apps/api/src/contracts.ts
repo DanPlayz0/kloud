@@ -97,9 +97,11 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
       tags: [
         path.includes('/admin/')
           ? 'Administration'
-          : path.includes('/auth/')
-            ? 'Authentication'
-            : 'Projects',
+          : path.startsWith('/connectors')
+            ? 'Connectors'
+            : path.includes('/auth/')
+              ? 'Authentication'
+              : 'Projects',
       ],
       security: authenticated ? [{ session: [] }] : [],
       request: {
@@ -132,6 +134,84 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
         409: { description: 'Conflict' },
         429: { description: 'Rate limited' },
         503: { description: 'Dependency unavailable' },
+      },
+    })
+  }
+  const connector = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    host: z.string().nullable(),
+    seen: z.string().nullable(),
+    discovery: z.boolean(),
+    revoked: z.boolean(),
+    stale: z.boolean(),
+    capabilities: z.array(z.string()),
+  })
+  route(
+    'get',
+    '/connectors',
+    'List connectors (connector management, inventory management, or connector operation permission)',
+    z.array(connector),
+  )
+  route('get', '/connectors/{connector}', 'Read connector metadata', connector)
+  for (const [collection, output, operation] of [
+    ['containers', row, runtimeRequestSchema],
+    ['pm2', pm2Row, pm2OperationSchema],
+  ] as const) {
+    const base = '/connectors/{connector}/' + collection
+    const target = base + '/{resource}'
+    route(
+      'get',
+      base,
+      'Browse connector inventory (inventory.manage or connectors.operate)',
+      z.array(output),
+    )
+    route(
+      'get',
+      target + '/permissions',
+      'Read connector resource operation permissions',
+      z.record(z.string(), z.boolean()),
+    )
+    route(
+      'post',
+      target + '/operation',
+      'Operate connector resource (connectors.operate)',
+      collection === 'pm2' ? pm2ResultSchema : flexible,
+      operation,
+    )
+    registry.registerPath({
+      method: 'get',
+      path: target + '/logs',
+      summary:
+        'Stream resource logs (connectors.operate); authorization rechecked per event',
+      tags: ['Connectors'],
+      security: [{ session: [] }],
+      request: {
+        params: z.object({
+          connector: z.string().uuid(),
+          resource: z.string(),
+        }),
+        ...(collection === 'pm2'
+          ? {
+              query: z.object({
+                stream: z.enum(['combined', 'stdout', 'stderr']).optional(),
+                worker: z
+                  .string()
+                  .regex(/^[0-9]+$/)
+                  .optional(),
+              }),
+            }
+          : {}),
+      },
+      responses: {
+        200: {
+          description: 'Bounded log snapshots; unavailable event ends access',
+          content: { 'text/event-stream': { schema: z.string() } },
+        },
+        401: { description: 'Authentication required' },
+        403: { description: 'Connector operation permission required' },
+        404: { description: 'Connector or resource not found' },
+        409: { description: 'Host inventory stale or runtime unavailable' },
       },
     })
   }

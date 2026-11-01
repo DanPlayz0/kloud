@@ -8,6 +8,7 @@ import { registerContracts } from './contracts.js'
 import { deploymentHooks, deployments } from './deployments.js'
 import { platform, platformWorker } from './platform.js'
 import { pm2 } from './pm2.js'
+import { connectorWorkspace } from './connector-workspace.js'
 
 export const app = new OpenAPIHono<Env>()
 app.use('*', (c, next) =>
@@ -85,6 +86,7 @@ app.route('/', platformWorker)
 app.route('/', deployments)
 app.route('/', platform)
 app.route('/', pm2)
+app.route('/', connectorWorkspace)
 app.route('/', dashboard)
 
 app.use('/openapi.json', requireUser)

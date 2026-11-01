@@ -123,11 +123,15 @@ for (const width of [320, 390, 768, 1280]) {
         ).toBeLessThanOrEqual(width)
         continue
       }
-      await expect(page.locator('.admin-row').first()).toBeVisible()
-      await expectContained(page, '.admin-row,.inline-form')
+      await expect(
+        page
+          .locator(section === 'containers' ? '.inventory-card' : '.admin-row')
+          .first(),
+      ).toBeVisible()
+      await expectContained(page, '.admin-row,.inline-form,.inventory-card')
       if (section === 'containers') {
         for (const control of await page
-          .locator('.assignment-row input,.assignment-row select')
+          .locator('.inventory-card-form input,.inventory-card-form select')
           .all()) {
           expect(
             await control.evaluate((el) => el.getBoundingClientRect().width),

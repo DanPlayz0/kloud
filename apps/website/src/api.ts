@@ -11,6 +11,7 @@ export const serverCapabilities = [
   'projects.create',
   'projects.manage',
   'connectors.manage',
+  'connectors.operate',
   'inventory.manage',
 ] as const
 export type ServerCapability = (typeof serverCapabilities)[number]
@@ -20,6 +21,7 @@ export const serverCapabilityLabels: Record<ServerCapability, string> = {
   'projects.create': 'Create projects',
   'projects.manage': 'Manage all projects and project access',
   'connectors.manage': 'Manage connectors',
+  'connectors.operate': 'Operate connector resources',
   'inventory.manage': 'Manage inventory assignments',
 }
 export const hasServer = (user: User, capability: ServerCapability) =>
@@ -175,4 +177,47 @@ export async function adminSession(section: string) {
   )
     throw new Error('Server permission required')
   return user
+}
+
+export interface Connector {
+  id: string
+  name: string
+  host: string | null
+  seen: string | null
+  discovery: boolean
+  revoked: boolean
+  stale: boolean
+  capabilities: string[]
+}
+export type ResourceScope =
+  | { kind: 'project'; project: string }
+  | { kind: 'connector'; connector: string }
+export function resourceBase(scope: ResourceScope) {
+  return scope.kind === 'project'
+    ? '/projects/' + encodeURIComponent(scope.project)
+    : '/connectors/' + encodeURIComponent(scope.connector)
+}
+export const canBrowseConnectors = (user: User) =>
+  ['connectors.manage', 'inventory.manage', 'connectors.operate'].some((cap) =>
+    hasServer(user, cap as ServerCapability),
+  )
+export const canBrowseConnectorResources = (user: User) =>
+  hasServer(user, 'inventory.manage') || hasServer(user, 'connectors.operate')
+export async function connectorSession(id: string) {
+  const user = await session()
+  const [projects, connector] = await Promise.all([
+    api<Project[]>('/projects'),
+    api<Connector>('/connectors/' + encodeURIComponent(id)),
+  ])
+  return { user, projects, connector }
+}
+
+export async function connectorResourceSession(id: string) {
+  const data = await connectorSession(id)
+  if (!canBrowseConnectorResources(data.user))
+    throw redirect({
+      to: '/connectors/$connectorId/overview',
+      params: { connectorId: id },
+    })
+  return data
 }

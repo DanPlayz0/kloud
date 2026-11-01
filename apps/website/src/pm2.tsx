@@ -10,7 +10,14 @@ import {
   type Pm2Result,
   type Pm2Worker,
 } from '@kloud/protocol/pm2'
-import { api, type Project, type User } from './api'
+import {
+  api,
+  resourceBase,
+  type ResourceScope,
+  type Connector,
+  type Project,
+  type User,
+} from './api'
 import { Shell, usePolling, ErrorMessage, Notice, bytes } from './components'
 import { Button, Checkbox, Label, NativeSelect } from './components/ui/controls'
 import {
@@ -71,14 +78,19 @@ export function Pm2Page({
   user,
   projects,
   project,
+  connector,
 }: {
   user: User
   projects: Project[]
-  project: string
+  project?: string
+  connector?: Connector
 }) {
+  const scope: ResourceScope = connector
+    ? { kind: 'connector', connector: connector.id }
+    : { kind: 'project', project: project! }
   const [revision, setRevision] = useState(0)
   const { data, error } = usePolling<Pm2App[]>(
-    `/projects/${project}/pm2`,
+    resourceBase(scope) + '/pm2',
     revision,
   )
   return (
@@ -86,8 +98,9 @@ export function Pm2Page({
       user={user}
       projects={projects}
       project={project}
+      connector={connector}
       title="Compute / PM2"
-      active="pm2"
+      active={connector ? 'compute/pm2' : 'pm2'}
     >
       <section className="compute-content space-y-4">
         <div className="page-heading">
@@ -102,9 +115,16 @@ export function Pm2Page({
         <ErrorMessage message={error} />
         {!data && !error && <p role="status">Loading PM2 applications…</p>}
         {data?.length === 0 && (
-          <Notice title="No PM2 applications assigned">
-            Enable PM2 and discovery on your connector, then assign apps in
-            Administration / Inventory.
+          <Notice
+            title={
+              connector
+                ? 'No PM2 applications discovered'
+                : 'No PM2 applications assigned'
+            }
+          >
+            {connector
+              ? 'Enable PM2 and discovery on this connector to collect unassigned applications.'
+              : 'Enable PM2 and discovery on your connector, then assign apps in Administration / Inventory.'}
           </Notice>
         )}
         {data && data.length > 0 && (
@@ -114,7 +134,7 @@ export function Pm2Page({
                 <tr>
                   {[
                     'Application',
-                    'Host',
+                    connector ? 'Project' : 'Host',
                     'Status',
                     'Workers',
                     'CPU',
@@ -133,7 +153,8 @@ export function Pm2Page({
                   <Pm2Row
                     key={app.id}
                     app={app}
-                    project={project}
+                    scope={scope}
+                    projects={projects}
                     refresh={() => setRevision((v) => v + 1)}
                   />
                 ))}
@@ -148,11 +169,13 @@ export function Pm2Page({
 
 function Pm2Row({
   app,
-  project,
+  scope,
+  projects,
   refresh,
 }: {
   app: Pm2App
-  project: string
+  scope: ResourceScope
+  projects: Project[]
   refresh: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -182,7 +205,28 @@ function Pm2Row({
           </Button>
           <p className="mt-1 text-xs text-muted-foreground">{app.namespace}</p>
         </td>
-        <td className="p-3">{app.host ?? app.connector_name}</td>
+        <td className="p-3">
+          {scope.kind === 'connector' ? (
+            app.project_slug &&
+            projects.some((p) => p.slug === app.project_slug) ? (
+              <a
+                onClick={(event) => event.stopPropagation()}
+                className="hover:underline"
+                href={
+                  '/projects/' +
+                  encodeURIComponent(app.project_slug) +
+                  '/compute/pm2'
+                }
+              >
+                {projects.find((p) => p.slug === app.project_slug)?.name}
+              </a>
+            ) : (
+              (app.project_slug ?? 'Unassigned')
+            )
+          ) : (
+            (app.host ?? app.connector_name)
+          )}
+        </td>
         <td className="p-3">
           <StatusBadge>{status(app)}</StatusBadge>
         </td>
@@ -196,7 +240,7 @@ function Pm2Row({
       </tr>
       <Pm2Operations
         app={app}
-        project={project}
+        scope={scope}
         refresh={refresh}
         open={open}
         onOpenChange={setOpen}
@@ -208,14 +252,14 @@ function Pm2Row({
 
 function Pm2Operations({
   app,
-  project,
+  scope,
   refresh,
   open,
   onOpenChange,
   trigger,
 }: {
   app: Pm2App
-  project: string
+  scope: ResourceScope
   refresh: () => void
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -229,7 +273,7 @@ function Pm2Operations({
   const submitting = useRef(false)
   const title = useRef<HTMLHeadingElement>(null)
   const current = app.present && !stale(app)
-  const base = `/projects/${project}/pm2/${app.id}`
+  const base = resourceBase(scope) + '/pm2/' + app.id
   useEffect(() => {
     if (!open) return
     setError('')
@@ -344,7 +388,9 @@ function Pm2Operations({
         {!permissions && !error && <p role="status">Loading permissions…</p>}
         {permissions && !available && (
           <p className="text-muted-foreground">
-            PM2 host or application unavailable. Actions and logs are disabled.
+            {scope.kind === 'connector' && !permissions.manage
+              ? 'Operate connector resources permission required. Actions and logs are disabled.'
+              : 'PM2 host or application unavailable. Actions and logs are disabled.'}
           </p>
         )}
         <div className="flex flex-wrap gap-2">
@@ -358,7 +404,9 @@ function Pm2Operations({
                 portal
                 content={
                   !allowed
-                    ? `PM2 ${action === 'delete' ? 'Delete' : 'Manage'} permission required`
+                    ? scope.kind === 'connector'
+                      ? 'Operate connector resources permission required'
+                      : `PM2 ${action === 'delete' ? 'Delete' : 'Manage'} permission required`
                     : `${action} all workers in this application`
                 }
               >
@@ -419,7 +467,9 @@ function Pm2Operations({
         ) : (
           permissions && (
             <p className="text-muted-foreground">
-              PM2 Logs permission required to read output.
+              {scope.kind === 'connector'
+                ? 'Operate connector resources permission required to read output.'
+                : 'PM2 Logs permission required to read output.'}
             </p>
           )
         )}

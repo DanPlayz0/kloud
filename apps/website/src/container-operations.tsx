@@ -7,7 +7,7 @@ import {
   ScrollText,
   Settings2,
 } from 'lucide-react'
-import { api, type ContainerRow } from './api'
+import { api, resourceBase, type ResourceScope, type ContainerRow } from './api'
 import { usePolling, ErrorMessage } from './components'
 import { Button } from './components/ui/controls'
 import {
@@ -19,10 +19,10 @@ import {
 import { ContainerTerminal } from './components/container-terminal'
 
 export function ContainerOperations({
-  project,
+  scope,
   container,
 }: {
-  project: string
+  scope: ResourceScope
   container: ContainerRow
 }) {
   const [open, setOpen] = useState(false),
@@ -30,7 +30,11 @@ export function ContainerOperations({
     [output, setOutput] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
-  const base = `/projects/${project}/containers/${container.connector_id}/${container.container_id}`
+  const base =
+    resourceBase(scope) +
+    '/containers/' +
+    (scope.kind === 'project' ? container.connector_id + '/' : '') +
+    container.container_id
   const { data: permissions } = usePolling<Record<string, boolean>>(
     open ? `${base}/permissions` : null,
   )
@@ -151,7 +155,8 @@ export function ContainerOperations({
           </div>
           {!permissions?.available && (
             <p className="text-muted-foreground">
-              Host unavailable or runtime operations disabled.
+              Host unavailable, runtime operations disabled, or operation
+              permission required.
             </p>
           )}
           <ErrorMessage message={error} />
