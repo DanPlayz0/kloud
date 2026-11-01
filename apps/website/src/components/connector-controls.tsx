@@ -31,7 +31,7 @@ export function ConnectorControls({
   const [busy, setBusy] = useState(false)
   const [terminal, setTerminal] = useState(false)
   const [error, setError] = useState('')
-  const [confirmation, setConfirmation] = useState<'revoke' | 'rotate'>()
+  const [confirmation, setConfirmation] = useState<'delete' | 'rotate'>()
   const [mutationError, setMutationError] = useState('')
   const cancel = useRef<HTMLButtonElement>(null)
   const credentialTrigger = useRef<HTMLButtonElement | null>(null)
@@ -111,10 +111,10 @@ export function ConnectorControls({
           onClick={(event) => {
             credentialTrigger.current = event.currentTarget
             setMutationError('')
-            setConfirmation('revoke')
+            setConfirmation('delete')
           }}
         >
-          Revoke token
+          Delete connector
         </Button>
       </div>
       <Dialog
@@ -134,12 +134,13 @@ export function ConnectorControls({
           }}
         >
           <DialogTitle>
-            {confirmation === 'revoke' ? 'Revoke' : 'Rotate'} token for {c.name}
-            ?
+            {confirmation === 'delete'
+              ? `Delete connector ${c.name}?`
+              : `Rotate token for ${c.name}?`}
           </DialogTitle>
           <DialogDescription className="mt-2">
-            {confirmation === 'revoke'
-              ? 'This permanently revokes the token and disconnects this host. This connector cannot reconnect or be restored.'
+            {confirmation === 'delete'
+              ? 'This removes the connector from the dashboard, disconnects the host, and permanently invalidates its token. This cannot be undone. Workloads on the host continue running.'
               : 'This invalidates the current token and disconnects this host. Save the new token, update CONNECTOR_TOKEN on the host, and recreate the connector to reconnect.'}
           </DialogDescription>
           {mutationError && (
@@ -164,7 +165,7 @@ export function ConnectorControls({
                 setMutationError('')
                 try {
                   const ok =
-                    confirmation === 'revoke'
+                    confirmation === 'delete'
                       ? await action('/admin/connectors/' + c.id, 'PUT', {
                           discovery: c.discovery,
                           revoked: true,
@@ -177,21 +178,21 @@ export function ConnectorControls({
                   if (ok) setConfirmation(undefined)
                   else
                     setMutationError(
-                      'Unable to update the connector token. Try again.',
+                      'Unable to update the connector. Try again.',
                     )
                 } catch {
-                  setMutationError(
-                    'Unable to update the connector token. Try again.',
-                  )
+                  setMutationError('Unable to update the connector. Try again.')
                 } finally {
                   setBusy(false)
                 }
               }}
             >
               {busy
-                ? 'Updating token…'
-                : confirmation === 'revoke'
-                  ? 'Revoke token'
+                ? confirmation === 'delete'
+                  ? 'Deleting connector…'
+                  : 'Rotating token…'
+                : confirmation === 'delete'
+                  ? 'Delete connector'
                   : 'Rotate token'}
             </Button>
           </div>

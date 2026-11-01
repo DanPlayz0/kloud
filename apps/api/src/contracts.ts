@@ -492,7 +492,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
   route(
     'put',
     '/admin/connectors/{id}',
-    'Set discovery or permanently revoke credential (connectors.manage)',
+    'Set discovery or soft-delete connector and invalidate its credential using revoked=true (connectors.manage)',
     ok,
     z.object({ discovery: z.boolean(), revoked: z.boolean() }),
   )

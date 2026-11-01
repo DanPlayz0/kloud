@@ -19,7 +19,6 @@ export function ConnectorToken({
   const [copied, setCopied] = useState(false)
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      input.current?.focus({ preventScroll: true })
       input.current?.closest('[data-slot="alert"]')?.scrollIntoView({
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
           ? 'instant'
@@ -30,9 +29,11 @@ export function ConnectorToken({
     return () => cancelAnimationFrame(frame)
   }, [])
 
-  async function copy() {
+  async function copy(source: HTMLElement, pointer: boolean) {
     try {
       await navigator.clipboard.writeText(token)
+      input.current?.setSelectionRange(0, 0)
+      if (pointer && document.activeElement === source) source.blur()
       setCopied(true)
       setStatus('Token copied to clipboard.')
     } catch {
@@ -71,13 +72,17 @@ export function ConnectorToken({
               aria-describedby={descriptionId}
               title="Click to copy connector token"
               className="min-w-0 flex-1 cursor-copy font-mono"
-              onFocus={(event) => event.currentTarget.select()}
               onClick={(event) => {
-                event.currentTarget.select()
-                void copy()
+                void copy(event.currentTarget, event.detail > 0)
               }}
             />
-            <Button type="button" variant="primary" onClick={() => void copy()}>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={(event) =>
+                void copy(event.currentTarget, event.detail > 0)
+              }
+            >
               {copied ? (
                 <Check data-icon="inline-start" aria-hidden="true" />
               ) : (

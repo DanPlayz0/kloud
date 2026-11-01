@@ -138,11 +138,18 @@ for (const width of [390, 1600]) {
     await expect
       .poll(() => page.evaluate(() => (window as any).copiedToken))
       .toBe('new-secret')
+    await expect(token).not.toBeFocused()
+    const copyButton = card.getByRole('button', { name: 'Copied', exact: true })
+    await copyButton.click()
+    await expect(copyButton).not.toBeFocused()
+    await copyButton.focus()
+    await copyButton.press('Enter')
+    await expect(copyButton).toBeFocused()
     await card
-      .getByRole('button', { name: 'Revoke token', exact: true })
+      .getByRole('button', { name: 'Delete connector', exact: true })
       .click()
     const dialog = page.getByRole('dialog')
-    await expect(dialog).toContainText('permanently revokes')
+    await expect(dialog).toContainText('permanently invalidates its token')
     expect(revokeRequests).toBe(0)
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
     await dialog.getByRole('button', { name: 'Cancel' }).click()
@@ -169,10 +176,10 @@ for (const width of [390, 1600]) {
     )
     expect(overflow).toBe(false)
     await card
-      .getByRole('button', { name: 'Revoke token', exact: true })
+      .getByRole('button', { name: 'Delete connector', exact: true })
       .click()
     await dialog
-      .getByRole('button', { name: 'Revoke token', exact: true })
+      .getByRole('button', { name: 'Delete connector', exact: true })
       .click()
     await expect(card).toHaveCount(0)
     expect(revokeRequests).toBe(1)

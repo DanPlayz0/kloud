@@ -92,7 +92,8 @@ To replace a connector credential, choose **Rotate token** on its card in
 invalidated and the host is disconnected. Copy the new token shown beneath that
 connector's controls, update `CONNECTOR_TOKEN` in the host's `.env`, then run the
 recreate command above. The connector keeps its identity and resource assignments.
-**Revoke token** instead permanently disables the connector after confirmation.
+**Delete connector** removes the connector from the dashboard and permanently
+invalidates its token after confirmation. Host workloads continue running.
 
 Feature flags do not add host mounts. For PM2, add `-f compose.connector.pm2.yaml`
 and configure `PM2_HOME`, `PM2_UID`, and `PM2_GID` as described in
