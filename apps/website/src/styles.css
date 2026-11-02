@@ -1,6 +1,14 @@
 /* Resolve sources from the workspace root, not the Vite process's cwd. */
 @import 'tailwindcss' source('../../../');
 
+@layer base {
+  button:not(:disabled),
+  [role='button']:not(:disabled),
+  [data-slot='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
 @theme {
   --color-background: #0b0b0b;
   --color-foreground: #e8e8e8;

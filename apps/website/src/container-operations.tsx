@@ -137,6 +137,7 @@ export function ContainerOperations({
       )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
+          showCloseButton={false}
           className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"
           onCloseAutoFocus={
             trigger
