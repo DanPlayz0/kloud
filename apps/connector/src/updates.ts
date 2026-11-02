@@ -19,7 +19,11 @@ export function updateConfig(env: NodeJS.ProcessEnv = process.env) {
     )
   if (env.CONNECTOR_AUTO_UPDATE === 'true' && !command)
     throw new Error('Automatic updates require CONNECTOR_UPDATE_COMMAND')
-  return { command, enabled: env.CONNECTOR_AUTO_UPDATE === 'true', interval }
+  return {
+    command,
+    enabled: !!command && env.CONNECTOR_AUTO_UPDATE !== 'false',
+    interval,
+  }
 }
 
 export function runningVersion(env: NodeJS.ProcessEnv = process.env) {

@@ -6,6 +6,12 @@ For an opt-in browser SSH shell on the host, see
 For prebuilt GHCR images and a standalone Compose deployment on a separate server,
 see [published container images](../../docs/CONTAINER_IMAGES.md).
 
+For servers, use `compose.connector.auto.yaml`, which includes a trusted updater
+and enables automatic image updates every 15 minutes by default. See
+[connector updates](../../docs/CONNECTOR_UPDATES.md) for setup and existing
+installation migration. A saved dashboard policy or explicit host opt-out is
+preserved.
+
 The connector also supports existing Linux PM2 instances, independently of Docker.
 See [PM2 setup](../../docs/PM2.md) for `PM2_ENABLED`, `PM2_HOME`, PM2-only hosts,
 Docker socket/log mounts, and project permissions.

@@ -47,6 +47,13 @@ for package permissions and authentication.
 
 ## Run the connector on a separate Linux server
 
+The recommended deployment is `compose.connector.auto.yaml`: one Compose file
+with its updater embedded, plus a dedicated `.env`. Automatic updates are enabled
+by default. Follow [single-file connector setup](CONNECTOR_UPDATES.md#single-file-installation)
+for the host directory and existing Compose project settings. It requires no
+repository checkout or separate update script. The manual-update installation
+below remains available for hosts with their own update management.
+
 Only Docker with Compose, `compose.connector.yaml`, and a `.env` file are needed
 on the server. Copy the Compose file from this repository into a dedicated folder.
 Create a token in **Administration > Connectors**, then copy

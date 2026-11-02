@@ -1,9 +1,9 @@
-# Opt-in updater overlay. See docs/CONNECTOR_UPDATES.md before enabling.
+# Updater overlay; automatic updates are enabled by default. See docs/CONNECTOR_UPDATES.md.
 services:
   connector:
     environment:
       CONNECTOR_UPDATE_COMMAND: /opt/kloud-updates/update-connector-docker.sh
-      CONNECTOR_AUTO_UPDATE: ${CONNECTOR_AUTO_UPDATE:-false}
+      CONNECTOR_AUTO_UPDATE: ${CONNECTOR_AUTO_UPDATE:-true}
       CONNECTOR_UPDATE_INTERVAL_MS: ${CONNECTOR_UPDATE_INTERVAL_MS:-900000}
       KLOUD_UPDATE_DIRECTORY: ${KLOUD_UPDATE_DIRECTORY:?Set the absolute connector Compose directory on this Docker host}
       KLOUD_UPDATE_PROJECT: ${KLOUD_UPDATE_PROJECT:?Set the existing Docker Compose project name}

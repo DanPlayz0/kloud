@@ -2,11 +2,42 @@
 
 The connector overview shows the **running** release name, commit hash, start time, update policy, and last check. `/health` on the connector host also returns that status. Newly published connector images embed the source commit and release name during CI. Existing images must be replaced once before they can report this information; `unknown` means the running artifact did not contain a commit. For source installations set `CONNECTOR_REVISION` to `git rev-parse HEAD` when starting the process. Version reports describe the authenticated connector, not a remotely attested build.
 
-Only organization administrators or members with connector management permission can request an update check or change its automatic update policy. The selected policy survives reconnects. Updates are disabled by default. The operator must first configure an absolute `CONNECTOR_UPDATE_COMMAND` executable path on the connector host. Dashboard requests cannot supply commands, arguments, image names, repository URLs, or environment variables. Automatic checks run every 15 minutes; `CONNECTOR_UPDATE_INTERVAL_MS` permits 60 seconds to 24 hours. Only one local check runs at a time, with a 10-minute limit. Restarting the connector briefly interrupts inventory and host operations.
+Only organization administrators or members with connector management permission can request an update check or change its automatic update policy. The selected policy survives reconnects. Automatic updates are enabled by default whenever a trusted updater is configured. The recommended single-file Compose installation includes that updater. Source installations must configure an absolute `CONNECTOR_UPDATE_COMMAND` executable path on the connector host; without one, automatic updates are unavailable. Set `CONNECTOR_AUTO_UPDATE=false` to explicitly opt out. An existing saved dashboard policy takes precedence over the host default and is not reset by upgrading. Dashboard requests cannot supply commands, arguments, image names, repository URLs, or environment variables. Automatic checks run every 15 minutes; `CONNECTOR_UPDATE_INTERVAL_MS` permits 60 seconds to 24 hours. Only one local check runs at a time, with a 10-minute limit. Restarting the connector briefly interrupts inventory and host operations.
 
 The executable must be owned and writable only by the trusted host operator. It runs as the connector's OS user, with its environment. Keep update output free of secrets. The dashboard reports generic errors; inspect the host's update log for details. A completed check means the configured executable exited successfully; the running commit after reconnection establishes which build actually started. An updater that schedules background work acknowledges scheduling, not successful replacement.
 
 ## Docker Compose installations
+
+### Single-file installation
+
+Use the recommended `compose.connector.auto.yaml` to run the connector and its embedded updater
+without downloading a separate script or update overlay. Requires Docker Compose
+2.23.1 or newer. Place it beside your existing `.env` and set:
+
+```dotenv
+CONNECTOR_IMAGE=ghcr.io/ashmwtech/kloud-connector:latest
+KLOUD_UPDATE_DIRECTORY=/absolute/path/to/your/kloud
+KLOUD_UPDATE_COMPOSE_FILES=compose.connector.auto.yaml
+CONNECTOR_AUTO_UPDATE=true
+```
+
+Find the absolute directory with `pwd -P`; do not use `~` in `.env`. Keep your
+existing `API_URL`, `CONNECTOR_TOKEN`, `CONNECTOR_HOST`, and `DOCKER_GID` settings.
+For an existing installation, find its project name with `docker compose ls` and
+reuse it when starting:
+
+```sh
+docker compose -p YOUR_EXISTING_PROJECT -f compose.connector.auto.yaml up -d
+```
+
+The updater uses that same Compose project name automatically. If you rename the
+file, update `KLOUD_UPDATE_COMPOSE_FILES` to match. Include any additional required
+overlays in that colon-separated setting and pass them with `-f` when starting.
+The image must be anonymously pullable; private registry authentication requires
+the custom updater described below. This updates the connector image, not the
+host Compose file.
+
+### Separate updater overlay
 
 Use the supplied `compose.connector.updates.yaml` overlay and `scripts/update-connector-docker.sh`. Put the scripts and **all** selected Compose files plus `.env` in the same host directory. In `.env`, set:
 
