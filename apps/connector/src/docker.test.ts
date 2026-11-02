@@ -21,6 +21,7 @@ test('collector excludes dashboard infrastructure, sanitizes labels, handles sto
     {
       Id: 'a'.repeat(64),
       Names: ['/worker'],
+      Image: 'docker.io/library/postgres:17-alpine',
       State: 'running',
       Labels: {
         'kloud.project': 'your-project-slug',
@@ -48,6 +49,14 @@ test('collector excludes dashboard infrastructure, sanitizes labels, handles sto
     throw new Error('disappeared')
   })
   assert.equal(result.containers.length, 2)
+  assert.equal(
+    result.containers.find((c) => c.name === 'worker')?.image,
+    'docker.io/library/postgres:17-alpine',
+  )
+  assert.equal(
+    result.containers.find((c) => c.name === 'stopped')?.image,
+    undefined,
+  )
   assert.equal(result.containers[0]?.memory, null)
   assert.equal(
     result.containers.find((c) => c.name === 'stopped')?.project,

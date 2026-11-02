@@ -24,26 +24,41 @@ import {
 import QuickTip from './components/quickTip'
 import { ContainerOperations } from './container-operations'
 import { ContainerAssignment } from './components/container-assignment'
+import { storageEngine } from './storage-images'
 
 export function Compute({
   user,
   projects,
   project,
   connector,
+  storage,
 }: {
   user: User
   projects: Project[]
   project?: string
   connector?: Connector
+  storage?: 'all' | 'cache'
 }) {
   const scope: ResourceScope = connector
     ? { kind: 'connector', connector: connector.id }
     : { kind: 'project', project: project! }
   const [revision, setRevision] = useState(0)
-  const { data, error, now } = usePolling<ContainerRow[]>(
-    resourceBase(scope) + '/containers',
-    revision,
-  )
+  const {
+    data: inventory,
+    error,
+    now,
+  } = usePolling<ContainerRow[]>(resourceBase(scope) + '/containers', revision)
+  const data = inventory?.filter((row) => {
+    if (!storage) return true
+    const engine = storageEngine(row.data.image)
+    return engine !== null && (storage === 'all' || engine.kind === 'cache')
+  })
+  const title =
+    storage === 'all'
+      ? 'Databases'
+      : storage === 'cache'
+        ? 'Cache'
+        : 'Containers'
   const isStale = (row: ContainerRow) =>
     row.stale || !row.seen || now - Date.parse(row.seen) > 20000
   const stale = data?.some(isStale)
@@ -52,9 +67,26 @@ export function Compute({
       <section className="compute-content flex flex-col gap-4">
         <div className="page-heading">
           <div>
-            <p className="eyebrow">COMPUTE</p>
-            <h1>Containers</h1>
+            <p className="eyebrow">{storage ? 'STORAGE' : 'COMPUTE'}</p>
+            <h1>{title}</h1>
+            {storage && (
+              <p className="text-muted-foreground">
+                {storage === 'cache' ? 'Caches' : 'Databases and caches'}{' '}
+                detected from container images. Deploy and configure them
+                through Services.
+              </p>
+            )}
           </div>
+          {storage && project && (
+            <Button variant="outline" asChild>
+              <Link
+                to="/projects/$projectSlug/services"
+                params={{ projectSlug: project }}
+              >
+                Manage services
+              </Link>
+            </Button>
+          )}
           <span className="text-sm text-muted-foreground" role="status">
             {error
               ? 'Connection interrupted'
@@ -65,17 +97,23 @@ export function Compute({
         </div>
         <ErrorMessage message={error} />
         {data === undefined && !error && (
-          <p role="status">Loading containers…</p>
+          <p role="status">Loading {title.toLowerCase()}…</p>
         )}
         {data?.length === 0 && (
           <Notice
             title={
-              connector ? 'No containers discovered' : 'No containers assigned'
+              storage
+                ? `No ${storage === 'cache' ? 'caches' : 'databases'} detected`
+                : connector
+                  ? 'No containers discovered'
+                  : 'No containers assigned'
             }
           >
-            {connector
-              ? 'This connector has no visible container inventory. Enable discovery to include unassigned containers.'
-              : 'Add project and application labels to your containers, or ask an administrator to assign them.'}
+            {storage
+              ? 'Deploy a service using a database or cache image. Recognized containers appear here automatically once reported by the host.'
+              : connector
+                ? 'This connector has no visible container inventory. Enable discovery to include unassigned containers.'
+                : 'Add project and application labels to your containers, or ask an administrator to assign them.'}
           </Notice>
         )}
         {data && data.length > 0 && (
@@ -168,6 +206,13 @@ function ContainerInventoryRow({
           <p className="mt-1 text-xs text-muted-foreground">
             {row.container_id.slice(0, 12)}
           </p>
+          {row.data.image && (
+            <p className="mt-1 text-xs text-muted-foreground break-all">
+              {storageEngine(row.data.image)?.name &&
+                `${storageEngine(row.data.image)!.name} · `}
+              {row.data.image}
+            </p>
+          )}
           {scope.kind === 'project' && row.application && (
             <Link
               className="mt-1 block text-xs text-muted-foreground hover:underline"

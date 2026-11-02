@@ -82,6 +82,7 @@ export function registerContracts(registry: OpenAPIHono['openAPIRegistry']) {
       data: z.object({
         id: z.string(),
         name: z.string(),
+        image: z.string().optional(),
         state: z.string(),
         project: z.string().nullable(),
         application: z.string().nullable(),

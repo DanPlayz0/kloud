@@ -100,6 +100,7 @@ export const containerSchema = z
   .object({
     id: z.string().regex(/^[a-f0-9]{64}$/),
     name: z.string().min(1).max(256),
+    image: z.string().min(1).max(1024).optional(),
     state: z.enum([
       'created',
       'running',

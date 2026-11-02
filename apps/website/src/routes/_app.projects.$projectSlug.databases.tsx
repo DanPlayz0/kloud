@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { projectSession } from '../api'
-import { ProjectDatabases } from '../project-databases'
+import { Compute } from '../compute'
 export const Route = createFileRoute('/_app/projects/$projectSlug/databases')({
   remountDeps: ({ params }) => params,
   staticData: { shell: { title: 'Storage / Databases', active: 'databases' } },
@@ -11,7 +11,7 @@ function Page() {
   const project = Route.useParams().projectSlug
   return (
     <>
-      <ProjectDatabases project={project} />
+      <Compute {...Route.useLoaderData()} project={project} storage="all" />
     </>
   )
 }

@@ -121,6 +121,9 @@ export async function collect(
         output.push({
           id: item.Id,
           name: item.Names?.[0]?.replace(/^\//, '') ?? item.Id.slice(0, 12),
+          ...(typeof item.Image === 'string' && item.Image
+            ? { image: item.Image }
+            : {}),
           state: item.State,
           ...(/\((healthy|unhealthy|health: starting)\)/.test(item.Status ?? '')
             ? {

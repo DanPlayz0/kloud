@@ -183,6 +183,7 @@ export interface ContainerRow {
   assignment: 'label' | 'manual' | null
   data: {
     name: string
+    image?: string
     state: string
     health?: 'healthy' | 'unhealthy' | 'starting'
     cpu: number | null

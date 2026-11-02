@@ -37,6 +37,7 @@ async function fixtures(page: Page) {
         can_create: true,
       },
       '/api/connectors': [],
+      [`/api/projects/${project.slug}/containers`]: [],
       [`/api/projects/${project.slug}/databases`]: {
         resources: [],
         can_create: false,
@@ -230,7 +231,7 @@ for (const width of [390, 1280]) {
     })
     await storage.getByRole('link', { name: 'Databases', exact: true }).click()
     await expect(
-      page.getByRole('heading', { name: 'PostgreSQL', exact: true }),
+      page.getByRole('heading', { name: 'Databases', exact: true }),
     ).toBeVisible()
     await expect(page.locator('.topbar')).toHaveText('StorageDatabasesKLOUD')
     if (width < 720)
@@ -254,6 +255,59 @@ for (const width of [390, 1280]) {
     ).toHaveCount(1)
   })
 }
+
+test('storage tabs detect images and reuse normal container controls', async ({
+  page,
+}) => {
+  await fixtures(page)
+  const containers = [
+    ['db', 'docker.io/library/postgres:17'],
+    ['cache', 'valkey/valkey:8'],
+    ['web', 'nginx:alpine'],
+    ['exporter', 'postgres-exporter:latest'],
+    ['legacy', undefined],
+  ].map(([name, image], index) => ({
+    ...row,
+    project: project.slug,
+    application: 'stack',
+    container_id: String(index).repeat(64),
+    data: { ...row.data, name, image },
+  }))
+  await page.route(`**/api/projects/${project.slug}/containers`, (route) =>
+    route.fulfill({ json: containers }),
+  )
+  await page.goto(`/projects/${project.slug}/databases`)
+  await expect(
+    page.getByRole('button', { name: 'Manage db', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Manage cache', exact: true }),
+  ).toBeVisible()
+  for (const name of ['web', 'exporter', 'legacy']) {
+    await expect(
+      page.getByRole('button', { name: `Manage ${name}`, exact: true }),
+    ).toHaveCount(0)
+  }
+  await expect(
+    page.getByText('docker.io/library/postgres:17', { exact: false }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('link', { name: 'Manage services' }),
+  ).toHaveAttribute('href', `/projects/${project.slug}/services`)
+  await expect(
+    page.getByRole('link', { name: 'View stack application' }),
+  ).toHaveCount(2)
+  await page.getByRole('button', { name: 'Manage db', exact: true }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('button', { name: 'Close container details' }).click()
+  await page.goto(`/projects/${project.slug}/cache`)
+  await expect(
+    page.getByRole('button', { name: 'Manage cache', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Manage db', exact: true }),
+  ).toHaveCount(0)
+})
 
 async function expectContained(page: Page, selector: string) {
   const violations = await page.locator(selector).evaluateAll((elements) =>

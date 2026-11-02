@@ -1,8 +1,16 @@
 # Managed PostgreSQL and recovery
 
-Enable `DATABASES_ENABLED=true` on a Docker-enabled connector. It advertises the
+The project **Databases** tab lists database and cache containers detected from
+their image repositories in the existing project container inventory. **Cache**
+shows only cache engines. Deploy these containers through **Services**; both tabs
+reuse the normal container controls and permissions. Update connectors to report
+image names; older inventory without an image cannot be classified. Custom image
+names that do not match a recognized repository remain in Services/Containers.
+
+The dedicated PostgreSQL recovery API remains available for existing managed
+resources. Enable `DATABASES_ENABLED=true` on a Docker-enabled connector. It advertises the
 `postgres` capability; older connectors continue to collect inventory and cannot
-accept database work. The project **PostgreSQL** page creates PostgreSQL 17.6
+accept database work. The recovery API creates PostgreSQL 17.6
 resources, imports custom archives, configures backup policies, runs backups and
 restores into new resources. Image version `postgres:17.6-alpine` is fixed in the
 worker; upgrading database majors is not performed automatically.
